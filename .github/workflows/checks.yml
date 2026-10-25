@@ -1,0 +1,40 @@
+name: Checks
+on: [push, pull_request]
+
+jobs:
+  text-analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: bash -n .devcontainer/post-create.sh
+      - run: sudo apt-get update && sudo apt-get install -y tesseract-ocr
+      - run: python -m json.tool .devcontainer/devcontainer.json > /dev/null
+      - run: python -m json.tool .vscode/tasks.json > /dev/null
+      - run: bash .devcontainer/post-create.sh
+      - run: ../.venv/bin/python -m pytest -q
+        working-directory: backend
+      - run: ../.venv/bin/python export_openapi.py --check
+        working-directory: backend
+      - name: Real Korean OCR (separate from fake adapter tests)
+        run: RUN_REAL_OCR=1 ../.venv/bin/python -m pytest -q tests/test_ocr_real.py
+        working-directory: backend
+      - run: npm run api:check && npm test && npm run build
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm run test:e2e
+        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-results
+          path: frontend/test-results/
+          retention-days: 7

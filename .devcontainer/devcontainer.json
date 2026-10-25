@@ -1,0 +1,38 @@
+{
+  "name": "PtoS · React + FastAPI",
+  "build": { "dockerfile": "Dockerfile" },
+  "features": {
+    "ghcr.io/devcontainers/features/node:2": {
+      "version": "24"
+    }
+  },
+  "remoteUser": "vscode",
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "waitFor": "postCreateCommand",
+  "forwardPorts": [5173],
+  "portsAttributes": {
+    "5173": {
+      "label": "PtoS 화면",
+      "protocol": "http",
+      "onAutoForward": "notify"
+    },
+    "8000": {
+      "label": "PtoS 내부 API (전달 불필요)",
+      "onAutoForward": "ignore"
+    }
+  },
+  "otherPortsAttributes": {
+    "onAutoForward": "ignore"
+  },
+  "customizations": {
+    "codespaces": {
+      "openFiles": ["docs/CODESPACES.md"]
+    },
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "${containerWorkspaceFolder}/.venv/bin/python"
+      },
+      "extensions": ["ms-python.python"]
+    }
+  }
+}

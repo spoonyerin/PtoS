@@ -1,0 +1,895 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "PtoS 규칙·URL·OCR 개발 API",
+    "version": "0.5.0"
+  },
+  "paths": {
+    "/api/v1/health/live": {
+      "get": {
+        "summary": "Live",
+        "operationId": "live_api_v1_health_live_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health/ready": {
+      "get": {
+        "summary": "Ready",
+        "operationId": "ready_api_v1_health_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ocr/review": {
+      "post": {
+        "summary": "Review Ocr",
+        "operationId": "review_ocr_api_v1_ocr_review_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OcrReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OcrReviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ocr": {
+      "post": {
+        "summary": "Recognize",
+        "operationId": "recognize_api_v1_ocr_post",
+        "requestBody": {
+          "content": {
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OcrResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Gateway Timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analyses": {
+      "post": {
+        "summary": "Analyze",
+        "operationId": "analyze_api_v1_analyses_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalysisRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Gateway Timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AnalysisRequest": {
+        "properties": {
+          "input_type": {
+            "type": "string",
+            "enum": [
+              "text",
+              "url",
+              "ocr_text"
+            ],
+            "title": "Input Type"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Content"
+          },
+          "ocr_confirmed": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "const": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocr Confirmed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "input_type",
+          "content"
+        ],
+        "title": "AnalysisRequest",
+        "description": "개발용 결과 선택을 받지 않는다. 입력만으로 분석한다."
+      },
+      "AnalysisResponse": {
+        "properties": {
+          "risk_level": {
+            "$ref": "#/components/schemas/RiskLevel"
+          },
+          "confidence": {
+            "type": "null",
+            "title": "Confidence"
+          },
+          "risk_factors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Risk Factors"
+          },
+          "explanation": {
+            "type": "string",
+            "title": "Explanation"
+          },
+          "action_guidance": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Action Guidance"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Limitations"
+          },
+          "analysis_version": {
+            "type": "string",
+            "title": "Analysis Version"
+          },
+          "is_demo": {
+            "type": "boolean",
+            "const": false,
+            "title": "Is Demo",
+            "default": false
+          },
+          "analysis_mode": {
+            "type": "string",
+            "const": "rules",
+            "title": "Analysis Mode",
+            "default": "rules"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/Evidence"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "input_assessment": {
+            "$ref": "#/components/schemas/InputAssessment"
+          },
+          "analysis_stages": {
+            "items": {
+              "$ref": "#/components/schemas/AnalysisStage"
+            },
+            "type": "array",
+            "title": "Analysis Stages"
+          },
+          "policy_reason": {
+            "type": "string",
+            "title": "Policy Reason"
+          },
+          "urls": {
+            "items": {
+              "$ref": "#/components/schemas/UrlFinding"
+            },
+            "type": "array",
+            "title": "Urls"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "risk_level",
+          "risk_factors",
+          "explanation",
+          "action_guidance",
+          "limitations",
+          "analysis_version",
+          "evidence",
+          "input_assessment",
+          "analysis_stages",
+          "policy_reason",
+          "urls",
+          "request_id"
+        ],
+        "title": "AnalysisResponse"
+      },
+      "AnalysisStage": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "rules",
+              "lightweight_model",
+              "url_reputation"
+            ],
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "not_implemented",
+              "not_connected",
+              "not_applicable",
+              "unavailable"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "status"
+        ],
+        "title": "AnalysisStage"
+      },
+      "ErrorDetail": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "retryable": {
+            "type": "boolean",
+            "title": "Retryable"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "retryable"
+        ],
+        "title": "ErrorDetail"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error",
+          "request_id"
+        ],
+        "title": "ErrorResponse"
+      },
+      "Evidence": {
+        "properties": {
+          "factor_code": {
+            "$ref": "#/components/schemas/FactorCode"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "rule",
+              "url_reputation"
+            ],
+            "title": "Source",
+            "default": "rule"
+          },
+          "rule_id": {
+            "type": "string",
+            "title": "Rule Id"
+          },
+          "snippet": {
+            "type": "string",
+            "title": "Snippet"
+          },
+          "start": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Start"
+          },
+          "end": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "End"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "factor_code",
+          "label",
+          "rule_id",
+          "snippet",
+          "start",
+          "end"
+        ],
+        "title": "Evidence"
+      },
+      "FactorCode": {
+        "type": "string",
+        "enum": [
+          "IMPERSONATION",
+          "MONEY_REQUEST",
+          "CREDENTIAL_REQUEST",
+          "LINK_CLICK",
+          "APP_INSTALL",
+          "URGENCY_THREAT",
+          "URL_REPUTATION_MATCH"
+        ],
+        "title": "FactorCode"
+      },
+      "InputAssessment": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "action_identified",
+              "sentence_present",
+              "fragment",
+              "url_only"
+            ],
+            "title": "Status"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "reasons"
+        ],
+        "title": "InputAssessment"
+      },
+      "OcrResponse": {
+        "properties": {
+          "urls": {
+            "items": {
+              "$ref": "#/components/schemas/UrlPreview"
+            },
+            "type": "array",
+            "title": "Urls"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "engine": {
+            "type": "string",
+            "const": "tesseract-5",
+            "title": "Engine",
+            "default": "tesseract-5"
+          },
+          "ocr_confidence": {
+            "type": "null",
+            "title": "Ocr Confidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "urls",
+          "request_id",
+          "text",
+          "warnings"
+        ],
+        "title": "OcrResponse"
+      },
+      "OcrReviewRequest": {
+        "properties": {
+          "content": {
+            "type": "string",
+            "maxLength": 10000,
+            "title": "Content"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "title": "OcrReviewRequest"
+      },
+      "OcrReviewResponse": {
+        "properties": {
+          "urls": {
+            "items": {
+              "$ref": "#/components/schemas/UrlPreview"
+            },
+            "type": "array",
+            "title": "Urls"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "urls",
+          "request_id"
+        ],
+        "title": "OcrReviewResponse"
+      },
+      "RiskLevel": {
+        "type": "string",
+        "enum": [
+          "normal",
+          "suspicious",
+          "dangerous",
+          "insufficient_information"
+        ],
+        "title": "RiskLevel"
+      },
+      "UrlFinding": {
+        "properties": {
+          "original_url": {
+            "type": "string",
+            "title": "Original Url"
+          },
+          "normalized_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normalized Url"
+          },
+          "ascii_host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ascii Host"
+          },
+          "validation_status": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "invalid"
+            ],
+            "title": "Validation Status"
+          },
+          "validation_message": {
+            "type": "string",
+            "title": "Validation Message"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "occurrences": {
+            "items": {
+              "$ref": "#/components/schemas/UrlOccurrence"
+            },
+            "type": "array",
+            "title": "Occurrences"
+          },
+          "reputation": {
+            "$ref": "#/components/schemas/UrlReputation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "original_url",
+          "normalized_url",
+          "ascii_host",
+          "validation_status",
+          "validation_message",
+          "warnings",
+          "occurrences",
+          "reputation"
+        ],
+        "title": "UrlFinding"
+      },
+      "UrlOccurrence": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "start": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Start"
+          },
+          "end": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "start",
+          "end"
+        ],
+        "title": "UrlOccurrence"
+      },
+      "UrlPreview": {
+        "properties": {
+          "original_url": {
+            "type": "string",
+            "title": "Original Url"
+          },
+          "normalized_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normalized Url"
+          },
+          "ascii_host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ascii Host"
+          },
+          "validation_status": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "invalid"
+            ],
+            "title": "Validation Status"
+          },
+          "validation_message": {
+            "type": "string",
+            "title": "Validation Message"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "occurrences": {
+            "items": {
+              "$ref": "#/components/schemas/UrlOccurrence"
+            },
+            "type": "array",
+            "title": "Occurrences"
+          }
+        },
+        "type": "object",
+        "required": [
+          "original_url",
+          "normalized_url",
+          "ascii_host",
+          "validation_status",
+          "validation_message",
+          "warnings",
+          "occurrences"
+        ],
+        "title": "UrlPreview"
+      },
+      "UrlReputation": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "not_connected",
+              "not_requested",
+              "malicious",
+              "benign",
+              "unknown",
+              "unavailable",
+              "timeout",
+              "auth_error",
+              "rate_limited"
+            ],
+            "title": "Status"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "full_hash_verified": {
+            "type": "boolean",
+            "title": "Full Hash Verified",
+            "default": false
+          },
+          "threat_types": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "MALWARE",
+                "SOCIAL_ENGINEERING",
+                "UNWANTED_SOFTWARE",
+                "POTENTIALLY_HARMFUL_APPLICATION"
+              ]
+            },
+            "type": "array",
+            "title": "Threat Types"
+          },
+          "cache_expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Expires At"
+          },
+          "cache_hit": {
+            "type": "boolean",
+            "title": "Cache Hit",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "UrlReputation"
+      }
+    }
+  }
+}
