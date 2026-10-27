@@ -7,11 +7,13 @@ from fastapi.testclient import TestClient
 
 from app.contracts import AnalysisInput
 from app.main import create_app
+from app.model_adapter import ModelState
 
 
 @pytest.fixture
 def client():
-    with TestClient(create_app()) as client:
+    # 실행 환경의 PTOS_MODEL_PATH와 무관하게 모델 없는 기본 앱을 검증한다.
+    with TestClient(create_app(model_loader=lambda: ModelState("not_configured"))) as client:
         yield client
 
 
@@ -30,8 +32,9 @@ def test_input_drives_rule_results(client, text, level):
     assert body["confidence"] is None
     assert body["explanation"] and body["action_guidance"]
     assert "규칙 기반 개발 버전" in body["limitations"][0]
-    assert body["analysis_version"] == "rules-reputation-dev-v2"
-    assert body["analysis_stages"][1] == {"name": "lightweight_model", "status": "not_implemented"}
+    assert "규칙 결과만" in body["limitations"][1]
+    assert body["analysis_version"] == "rules-model-dev-v1"
+    assert body["analysis_stages"][1] == {"name": "lightweight_model", "status": "not_connected"}
     for evidence in body["evidence"]:
         assert text[evidence["start"]:evidence["end"]] == evidence["snippet"]
     UUID(body["request_id"])

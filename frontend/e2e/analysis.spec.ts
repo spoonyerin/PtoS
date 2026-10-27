@@ -24,7 +24,7 @@ for (const item of cases) {
     expect(body.risk_level).toBe(item.level)
     expect(body.confidence).toBeNull()
     expect(body.is_demo).toBe(false)
-    expect(body.analysis_stages[1].status).toBe('not_implemented')
+    expect(body.analysis_stages[1]).toEqual({ name: 'lightweight_model', status: 'not_connected' })
     expect(body.evidence.length > 0).toBe(item.evidence)
     await expect(page.getByRole('heading', { name: item.label, exact: true })).toBeVisible()
     await expect(page.getByText('규칙 기반 개발 버전', { exact: true })).toHaveCount(2)
