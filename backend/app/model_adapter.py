@@ -72,7 +72,7 @@ def file_sha256(path: Path) -> str:
 class JoblibTextModel:
     """predict_proba와 classes_를 가진 학습 파이프라인(예: TF-IDF + 로지스틱 회귀)을 감싼다."""
 
-    def __init__(self, pipeline, version: str, threshold: float):
+    def __init__(self, pipeline, version: str, threshold: float, info: dict | None = None):
         classes = list(getattr(pipeline, "classes_", []))
         if not hasattr(pipeline, "predict_proba") or 1 not in classes:
             raise ModelLoadError("MODEL_INTERFACE_INVALID")
@@ -80,6 +80,8 @@ class JoblibTextModel:
         self._positive = classes.index(1)
         self.version = version
         self.threshold = threshold
+        # 재현 기록용 manifest 일부 (모델·학습 CSV SHA-256, 임계값 상태). 원문은 없다.
+        self.info = dict(info or {})
 
     def score(self, text: str) -> float:
         return float(self._pipeline.predict_proba([text])[0][self._positive])
@@ -131,7 +133,9 @@ def load_model(directory: Path) -> TextRiskModel:
         raise ModelLoadError("MODEL_LOAD_ERROR") from None
     # dev 교차검증에서 임계값을 찾지 못한 모델은 신호를 내지 않는다.
     threshold = float(manifest["threshold"]) if manifest.get("threshold_found", True) is not False else math.inf
-    return JoblibTextModel(pipeline, manifest["model_version"], threshold)
+    info = {"model_sha256": manifest["model_sha256"].lower(), "data_sha256": manifest.get("data_sha256"),
+            "threshold_status": manifest.get("threshold_status"), "threshold_found": manifest.get("threshold_found", True)}
+    return JoblibTextModel(pipeline, manifest["model_version"], threshold, info)
 
 
 def load_configured_model(env: dict[str, str] | None = None) -> ModelState:
