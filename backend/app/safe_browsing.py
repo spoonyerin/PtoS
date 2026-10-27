@@ -121,6 +121,11 @@ class SafeBrowsingV5Provider:
         self._calls: deque[float] = deque()
         self._lock = asyncio.Lock()
 
+    async def aclose(self) -> None:
+        close = getattr(self._transport, "aclose", None)
+        if close is not None:
+            await close()
+
     @staticmethod
     def _verdict(hashes, entries: list[CacheEntry], cache_hit: bool) -> UrlReputation:
         threats = sorted({threat for entry in entries for digest, kinds in entry.hashes.items()

@@ -11,7 +11,7 @@ from .reputation_policy import combine_reputation
 from .urls import extract_urls
 from .model_adapter import ModelState, prepare_model_text
 from .model_policy import BASE_LIMITATION, MODEL_LIMITATIONS, STAGE_STATUS, ModelOutcome, combine_model
-from .url_reputation import configured_reputation_provider, UrlReputationProvider
+from .url_reputation import DisconnectedReputationProvider, UrlReputationProvider
 
 
 RULES_ONLY_LIMITATION = "규칙 기반 개발 버전: 경량 모델의 문맥 분석은 아직 없어요. 결과는 안전을 보장하지 않아요."
@@ -23,7 +23,8 @@ class Analyzer(Protocol):
 
 class RuleBasedAnalyzer:
     def __init__(self, reputation_provider: UrlReputationProvider | None = None):
-        self.reputation_provider = reputation_provider if reputation_provider is not None else configured_reputation_provider()
+        # 실제 평판 조회는 create_app에서 앱당 한 번만 만든다. 직접 생성한 분석기는 외부로 조회하지 않는다.
+        self.reputation_provider = reputation_provider if reputation_provider is not None else DisconnectedReputationProvider("not_configured")
 
     async def analyze(self, data: AnalysisInput) -> AnalysisResult:
         extraction = extract_urls(data.content, direct=data.input_type == "url")

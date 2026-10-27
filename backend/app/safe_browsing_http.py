@@ -26,20 +26,27 @@ class HttpxHashSearchTransport:
             raise ValueError("API key required")
         if timeout <= 0:
             raise ValueError("Invalid timeout")
-        self._client = httpx.AsyncClient(
-            # alt=json is the documented default for REST; the reference overview
-            # also mentions protobuf bodies, so the Content-Type is checked below.
-            headers={"X-Goog-Api-Key": api_key.strip(), "Accept": "application/json"},
-            timeout=timeout, follow_redirects=False, trust_env=False, transport=transport,
-        )
+        self._key, self._timeout, self._transport = api_key.strip(), timeout, transport
+        self._client: httpx.AsyncClient | None = None
 
     def __repr__(self) -> str:
         return "HttpxHashSearchTransport()"
 
+    def _get_client(self) -> httpx.AsyncClient:
+        # Created on first use inside the running event loop; aclose() allows a fresh one later.
+        if self._client is None:
+            self._client = httpx.AsyncClient(
+                # alt=json is the documented default for REST; the reference overview
+                # also mentions protobuf bodies, so the Content-Type is checked below.
+                headers={"X-Goog-Api-Key": self._key, "Accept": "application/json"},
+                timeout=self._timeout, follow_redirects=False, trust_env=False, transport=self._transport,
+            )
+        return self._client
+
     async def search(self, hash_prefixes: tuple[str, ...]) -> SearchResponse:
         params = [*(("hashPrefixes", prefix) for prefix in hash_prefixes), ("alt", "json")]
         try:
-            async with self._client.stream("GET", SEARCH_ENDPOINT, params=params) as response:
+            async with self._get_client().stream("GET", SEARCH_ENDPOINT, params=params) as response:
                 if response.status_code != 200:
                     # Error bodies are not read or returned: they may echo request data.
                     return SearchResponse(response.status_code, {})
@@ -65,4 +72,6 @@ class HttpxHashSearchTransport:
         return SearchResponse(200, body)
 
     async def aclose(self) -> None:
-        await self._client.aclose()
+        client, self._client = self._client, None
+        if client is not None:
+            await client.aclose()
