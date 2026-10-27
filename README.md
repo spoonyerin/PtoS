@@ -149,7 +149,7 @@ Codespaces는 해당 환경의 전달 호스트만 허용합니다. `allowedHost
 { "input_type": "text", "content": "은행 담당자입니다. 인증번호를 알려주세요." }
 ```
 
-응답은 `request_id`, `risk_level`, `confidence: null`, `risk_factors`, `explanation`, `action_guidance`, `limitations`, `analysis_version: rules-reputation-dev-v1`, `analysis_mode: rules`, `is_demo: false`와 다음을 포함합니다.
+응답은 `request_id`, `risk_level`, `confidence: null`, `risk_factors`, `explanation`, `action_guidance`, `limitations`, `analysis_version: rules-reputation-dev-v2`, `analysis_mode: rules`, `is_demo: false`와 다음을 포함합니다.
 
 - `evidence`: 코드·표시 이름·규칙 ID·`source: rule | url_reputation`·원문 구절·`start`/`end`. URL 근거는 검증된 전체 해시와 위협 유형 일치가 있어야 하며 기본 미연결 앱에서는 생성하지 않습니다. 좌표는 원문 유니코드 코드포인트의 시작 포함·끝 제외입니다. JS에서는 `Array.from(content).slice(start, end)`가 같은 구절이어야 합니다. 현재 화면은 좌표로 강조하지 않고 받은 구절을 그대로 표시합니다.
 - `input_assessment`: `action_identified` / `sentence_present` / `fragment` / `url_only`와 이유. 글자 수만으로 충분성을 정하지 않습니다.

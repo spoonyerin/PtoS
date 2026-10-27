@@ -66,6 +66,7 @@ cd backend
 | --- | --- |
 | `--data` | 평가 CSV 경로 (필수) |
 | `--analyzer` | 등록된 분석기 이름. 현재 `rules`(평판 미연결로 고정한 `RuleBasedAnalyzer`)만 있다. |
+| `--split` | `dev` / `test` / `all`(기본). 고른 split의 행만 분석기에 넘기고 리포트에도 그 split만 낸다. 규칙 개발 중에는 `dev`만 쓰고, `test`는 마지막 전후 비교에 한 번만 쓴다. |
 | `--review-status` | 이 값의 행만 평가. 없으면 전체를 평가하고 값별 행 수만 표시한다. |
 | `--timeout` | 행당 분석 제한 시간(초). 기본 5초(API 기본값과 같음). |
 | `--output` | 리포트 저장 경로. 없으면 표준 출력. |
@@ -74,13 +75,13 @@ cd backend
 
 ## 리포트 내용
 
-- 맨 위: 코드 커밋 해시, 작업 트리 변경 여부, 평가 CSV의 SHA-256, 분석기 이름, `analysis_version`, 실행 시각, `review_status` 필터. 같은 해시끼리만 결과를 비교한다.
+- 맨 위: 코드 커밋 해시, 작업 트리 변경 여부, 평가 CSV의 SHA-256, 분석기 이름, `analysis_version`, 실행 시각, `review_status` 필터, split 필터. 같은 해시끼리만 결과를 비교한다.
 - 데이터 구성: 실제·합성 행 수, `review_status`별 행 수, 합성만 있을 때 "탐지 성능 아님" 표시, campaign 누출 경고.
 - `dev`, `test` 각각에 대해 **전체 / text 입력 / url 입력**으로 나눠:
   - 4단계 혼동행렬. 입력 오류(`input_error`, 예: 10,000자 초과·URL 형식 오류), 시간 초과(`timeout`), 분석 오류(`analysis_error`)는 별도 열이며 정보 부족으로 합치지 않는다.
   - 클래스별 Precision/Recall/F1. 오류 행은 해당 클래스를 맞히지 못한 것으로 재현율 분모에 포함한다. 판정 수 0이면 Precision, expected 수 0이면 Recall이 `N/A`이고, 둘 중 하나가 `N/A`이면 F1도 `N/A`다.
   - 위험 → 정상·의심 미탐 수, 위험 → 정보 부족 수(별도), 정보 부족 판정 중 expected=dangerous 비율.
-- `expected=normal` 사례 표: id, 입력 종류, 판정, `policy_reason`, 근거 신호 코드. 현재 분석기는 `normal`을 반환하지 않으므로 이 사례들의 실제 판정을 따로 본다.
+- `expected=normal` 사례 표: 실제·합성별 판정 분포 한 줄씩(방어선 확인용)과 id, 입력 종류, 판정, `policy_reason`, 근거 신호 코드. 현재 분석기는 `normal`을 반환하지 않으므로 이 사례들의 실제 판정을 따로 본다.
 - 불일치 id 목록 (expected와 판정이 다른 행).
 
 리포트에는 원문, URL, `label_reason`, campaign 값을 넣지 않는다.
