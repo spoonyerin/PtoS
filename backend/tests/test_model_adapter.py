@@ -3,6 +3,7 @@ import json
 import logging
 
 import pytest
+import sklearn
 
 from app.model_adapter import (
     MANIFEST_FORMAT, MODEL_PATH_ENV, REPO_ROOT, URL_PLACEHOLDER, JoblibTextModel, ModelLoadError,
@@ -17,6 +18,7 @@ def write_model_dir(directory, payload=b"not a real model", **overrides):
     manifest = {
         "format": MANIFEST_FORMAT, "model_version": "fake-v1", "model_file": "model.joblib",
         "model_sha256": hashlib.sha256(payload).hexdigest(), "threshold": 0.5,
+        "sklearn_version": sklearn.__version__,
     } | overrides
     (directory / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     return directory
@@ -52,7 +54,8 @@ def test_path_inside_repo_is_rejected():
     (lambda d: write_model_dir(d, model_version=""), "MANIFEST_INVALID"),
     (lambda d: write_model_dir(d, model_file="other.joblib"), "MODEL_FILE_MISSING"),
     (lambda d: write_model_dir(d, model_sha256="0" * 64), "MODEL_SHA256_MISMATCH"),
-    # SHA는 맞지만 joblib 파일이 아니다 (joblib 미설치여도 같은 코드).
+    (lambda d: write_model_dir(d, sklearn_version="0.0.0"), "MODEL_LIBRARY_MISMATCH"),
+    # SHA는 맞지만 joblib 파일이 아니다.
     (lambda d: write_model_dir(d), "MODEL_LOAD_ERROR"),
 ])
 def test_load_failures_are_reported_without_path(tmp_path, caplog, prepare, reason):

@@ -119,10 +119,19 @@ def load_model(directory: Path) -> TextRiskModel:
         raise ModelLoadError("MODEL_SHA256_MISMATCH")
     try:
         import joblib
+        import sklearn
+    except Exception:
+        raise ModelLoadError("MODEL_LOAD_ERROR") from None
+    # pickle은 학습 때와 다른 scikit-learn 버전에서 조용히 다르게 동작할 수 있다.
+    if manifest.get("sklearn_version") != sklearn.__version__:
+        raise ModelLoadError("MODEL_LIBRARY_MISMATCH")
+    try:
         pipeline = joblib.load(model_path)
     except Exception:
         raise ModelLoadError("MODEL_LOAD_ERROR") from None
-    return JoblibTextModel(pipeline, manifest["model_version"], float(manifest["threshold"]))
+    # dev 교차검증에서 임계값을 찾지 못한 모델은 신호를 내지 않는다.
+    threshold = float(manifest["threshold"]) if manifest.get("threshold_found", True) is not False else math.inf
+    return JoblibTextModel(pipeline, manifest["model_version"], threshold)
 
 
 def load_configured_model(env: dict[str, str] | None = None) -> ModelState:
