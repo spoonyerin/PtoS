@@ -1,20 +1,20 @@
 # Windows Git Bash에서 OCR 앱 확인하기
 
-이 문서는 Windows용 Git Bash 기준이다. PowerShell의 역슬래시 명령과 섞지 않는다. 현재 클라우드에서는 Linux의 실제 Tesseract 5로 검증했으며 Windows 기기 실행은 수행하지 않았다. Windows에서는 OS용 실행 파일과 Python의 subprocess 지원 이벤트 루프가 필요하다.
+이 문서는 Windows용 Git Bash 기준이다. PowerShell의 역슬래시 명령과 섞지 않는다. Windows에서는 OS용 실행 파일과 Python의 subprocess 지원 이벤트 루프가 필요하다.
 
-## 1. PR 브랜치 받기
+## 1. main 브랜치 받기
 
 기존 두 서버를 각각 `Ctrl+C`로 종료한다. PtoS 폴더에서 Git Bash를 열고:
 
 ```bash
 git fetch origin
-git switch feat/safe-browsing-v5
+git switch main
 git pull --ff-only
 ```
 
-필요한 도구는 Git, Python 3.12, Node.js 22.12 이상(검증은 24), Tesseract 5다. Python/Node가 이미 설치되어 있다면 유지한다. `py -3.12 --version`, `node --version`으로 확인한다.
+필요한 도구는 Git, Python 3.12 또는 3.13, Node.js 22.12 이상(검증은 24), Tesseract 5다. Python/Node가 이미 설치되어 있다면 유지한다. `py -0`, `node --version`으로 확인한다. 2026-10-26에 Windows 11 / Python 3.13.15 / Tesseract v5.5.3에서 백엔드, 실제 OCR, Playwright를 실행했다 (`docs/HANDOVER.md` 9절).
 
-현재 PR은 Safe Browsing의 **키 없는 어댑터**를 추가한다. 실행·OCR 설치는 기존과 같고 API 키 발급·결제 등록은 필요 없다. 실제 평판은 미연결이며 키를 설정해도 이용 조건 확인 전에는 조회하지 않는다. [공식 조건 확인 결과·로컬 확인 순서](SAFE_BROWSING.md)를 참고한다.
+현재 main에는 Safe Browsing의 **키 없는 어댑터**가 있다. 실행·OCR 설치는 기존과 같고 API 키 발급·결제 등록은 필요 없다. 실제 평판은 미연결이며 키를 설정해도 이용 조건 확인 전에는 조회하지 않는다. [공식 조건 확인 결과·로컬 확인 순서](SAFE_BROWSING.md)를 참고한다.
 
 ## 2. 무료 Tesseract 설치
 
@@ -27,7 +27,7 @@ git pull --ff-only
 ```bash
 export TESSERACT_CMD='C:/Program Files/Tesseract-OCR/tesseract.exe'
 "$TESSERACT_CMD" --version
-py -3.12 -m venv .venv
+py -3 -m venv .venv
 ./.venv/Scripts/python.exe -m pip install -r backend/requirements-dev.txt
 ./.venv/Scripts/python.exe scripts/setup_ocr.py
 ```
@@ -82,7 +82,7 @@ npm run dev
 - Tesseract 경로 오류: `"$TESSERACT_CMD" --version`부터 확인한다. 경로·따옴표를 고치고 같은 터미널에서 백엔드를 재시작한다.
 - 한국어 OCR 미준비: 저장소 최상위에서 `./.venv/Scripts/python.exe scripts/setup_ocr.py`를 다시 실행한다. kor만 빠져도 영어 OCR로 몰래 대체하지 않는다.
 - OCR 실패/NotImplementedError: Windows 백엔드에 `--reload`/여러 workers를 사용하지 않았는지 확인한다. 개인정보가 담긴 원문·OCR stderr를 공유하지 않고 설치 상태/오류 코드만 확인한다.
-- API 연결 오류: 두 서버와 포트 5173/8000을 확인한다. 백엔드 버전이 이전 main이면 종료 후 PR 브랜치로 재시작한다.
+- API 연결 오류: 두 서버와 포트 5173/8000을 확인한다. 백엔드가 다른 브랜치나 이전 코드로 떠 있으면 종료 후 현재 브랜치에서 재시작한다.
 - 프로그램 종료: 두 터미널에서 각각 `Ctrl+C`. 브라우저를 새로고침하면 입력·추출 결과는 복구되지 않는다.
 
 정책과 교체 지점은 [OCR_POLICY.md](OCR_POLICY.md), Linux·Codespaces 및 전체 테스트 명령은 [README](../README.md)를 참고한다.

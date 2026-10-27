@@ -8,28 +8,30 @@
 
 실제 피싱 AI·경량 모델·LLM, 외부 URL 조회, DB, 배포, PWA 설치와 디자인 개편은 이번 범위에 없습니다. OCR에는 무료 로컬 Tesseract 5를 사용합니다. 최종 PRD 필수 범위와 미확정 사항은 [AGENTS.md](AGENTS.md)를 참고하세요.
 
-이번 증분은 **Google Safe Browsing v5 hashes.search의 키 없는 어댑터**입니다. 정규화·해시·전체 해시 대조·응답 캐시·개발 호출 예산·종합 판정을 가짜 응답으로 검증합니다. **무료/무결제·할당량·필수 표시 조건은 정책 사이트 차단으로 미확인**이므로 실제 HTTP 전송기는 연결하지 않았습니다. 키가 있어도 `policy_pending`으로 외부 호출을 하지 않습니다. 키 발급·결제·추가 패키지 설치는 필요 없습니다. [공식 출처·확인 수준·정책·Windows 확인 순서](docs/SAFE_BROWSING.md)를 읽어주세요. 실제 화면의 평판은 계속 **미연결**입니다.
+문서 역할: [AGENTS.md](AGENTS.md)는 사람과 모든 코딩 에이전트의 공통 지침, [DEVELOPMENT.md](DEVELOPMENT.md)는 개발 작업 방식, [docs/HANDOVER.md](docs/HANDOVER.md)는 현황·로드맵·실행 기록입니다.
+
+URL 평판은 **Google Safe Browsing v5 hashes.search의 키 없는 어댑터**까지 구현했습니다. 정규화·해시·전체 해시 대조·응답 캐시·개발 호출 예산·종합 판정을 가짜 응답으로 검증합니다. **무료/무결제·할당량·필수 표시 조건은 정책 사이트 차단으로 미확인**이므로 실제 HTTP 전송기는 연결하지 않았습니다. 키가 있어도 `policy_pending`으로 외부 호출을 하지 않습니다. 키 발급·결제·추가 패키지 설치는 필요 없습니다. [공식 출처·확인 수준·정책·Windows 확인 순서](docs/SAFE_BROWSING.md)를 읽어주세요. 실제 화면의 평판은 계속 **미연결**입니다.
 
 [이번 검증 기록](docs/SAFE_BROWSING_VALIDATION.md)은 가짜 평판 응답 테스트, 실제 한국어 OCR, 실제 Google API 미실행을 구분합니다.
 
 **Windows Git Bash 사용자는 [설치·실행·화면 확인 순서](docs/WINDOWS_GIT_BASH.md)를 따라주세요.** Tesseract 설치와 한국어 데이터 준비가 추가되며, Windows 백엔드에서는 `--reload` 없이 실행합니다.
 
-## 로컬에서 최신 PR 브랜치 실행하기
+## 로컬에서 실행하기
 
-필요한 도구: **Python 3.12 이상**, **Node.js 22.12 이상**, Git. 검증 환경은 Python 3.12 / Node.js 24입니다. 기존 main의 앱을 실행 중이면 먼저 두 서버 터미널에서 각각 `Ctrl+C`로 종료하세요.
+필요한 도구: **Python 3.12 또는 3.13**, **Node.js 22.12 이상**, Git. 확인한 환경은 Python 3.12 / Node.js 24 (Linux)와 Python 3.13 / Node.js 24 (Windows Git Bash)입니다. 이미 실행 중인 PtoS 서버가 있으면 먼저 두 서버 터미널에서 각각 `Ctrl+C`로 종료하세요.
 
 이미 저장소를 받았다면 저장소 최상위에서:
 
 ```bash
 git fetch origin
-git switch feat/safe-browsing-v5
+git switch main
 git pull --ff-only
 ```
 
 처음 받는다면:
 
 ```bash
-git clone --branch feat/safe-browsing-v5 https://github.com/spoonyerin/PtoS.git
+git clone https://github.com/spoonyerin/PtoS.git
 cd PtoS
 ```
 
@@ -116,9 +118,9 @@ PC의 주소창에 `http://localhost:5173`을 입력합니다. 문자 입력 →
 
 ## Codespaces 또는 클라우드에서 확인
 
-[Codespaces 단계별 안내](docs/CODESPACES.md)에 PR 브랜치 선택, 설치, **Tasks: Run Task → PtoS: 앱 실행**, **PORTS의 Private 5173 → Open in Browser**, 종료 순서를 정리했습니다. 8000 백엔드는 내부 프록시로 연결하므로 공개하지 않습니다. Codespace 생성·유료 배포·PR 병합은 사용자의 별도 선택이며 이 작업에서는 하지 않습니다.
+[Codespaces 단계별 안내](docs/CODESPACES.md)에 브랜치 선택, 설치, **Tasks: Run Task → PtoS: 앱 실행**, **PORTS의 Private 5173 → Open in Browser**, 종료 순서를 정리했습니다. 8000 백엔드는 내부 프록시로 연결하므로 공개하지 않습니다. Codespace 생성·유료 배포·PR 병합은 사용자의 별도 선택이며 이 작업에서는 하지 않습니다.
 
-이 채팅의 클라우드 localhost는 PC와 다르며 채팅 웹 시각화에 서버를 연결하는 기능은 없습니다. PC 실행이나 실제 IDE의 포트 전달로 확인하세요. Codespaces는 해당 환경의 전달 호스트만 허용합니다. `allowedHosts: true`로 호스트 검증을 해제하지 마세요.
+Codespaces는 해당 환경의 전달 호스트만 허용합니다. `allowedHosts: true`로 호스트 검증을 해제하지 마세요.
 
 ## 분석 정책과 교체 지점
 
@@ -186,7 +188,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-이 클라우드에서는 마지막 두 명령 대신 시스템 Chromium으로 실행합니다.
+Playwright가 받은 Chromium 대신 시스템 Chromium을 쓰려면 실행 파일 경로를 지정합니다.
 
 ```bash
 PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium npm run test:e2e
@@ -196,7 +198,7 @@ Playwright는 필요한 서버를 시작하고 자신이 시작한 서버만 종
 
 기본 pytest의 OCR은 **가짜 어댑터**로 제어 흐름을 검증하며 실제 인식 2개는 skip으로 표시합니다. 별도의 `RUN_REAL_OCR=1 ... tests/test_ocr_real.py`는 Tesseract로 고정 한국어 PNG/JPEG를 실제로 인식합니다. Playwright OCR 성공 시나리오 1개도 실제 서버·Tesseract이며 실패/빈 추출/시간 초과는 가짜 응답입니다. [실제 실행 관찰 기록](docs/OCR_VALIDATION.md)과 구분해 읽어주세요. 테스트는 규칙 회귀·연결 검증이지 실제 피싱 정확도·일반 OCR 정확도·최종 MVP 인수 검증이 아닙니다.
 
-Windows에서는 Python 경로를 `..\.venv\Scripts\python.exe`로 바꾸세요. Playwright 자동 서버 실행은 POSIX 경로이므로 Windows에서는 두 서버를 먼저 실행하고 테스트하세요.
+Windows에서는 Python 경로를 `..\.venv\Scripts\python.exe`로 바꾸세요. Windows Git Bash용 명령은 [DEVELOPMENT.md](DEVELOPMENT.md)의 "실행과 테스트"에 있습니다. Playwright는 Windows에서 `..\.venv\Scripts\python.exe`로 백엔드를 자동 실행합니다. 실제 OCR 시나리오를 위해 먼저 `TESSERACT_CMD`를 export하세요.
 
 계약 변경 시 Pydantic(`backend/app/contracts.py`)을 수정한 뒤 아래 생성물을 함께 커밋합니다. 생성 파일을 직접 고치지 마세요.
 

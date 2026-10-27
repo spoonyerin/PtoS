@@ -2,19 +2,19 @@
 
 PC에 개발 도구를 설치하지 않고 GitHub 안에서 서버를 실행하는 방법입니다. **채팅 미리보기는 사용하지 않습니다.** Codespace 생성은 아래 단계에서 사용자가 직접 선택합니다. 설정 준비 과정에서 Codespace 생성, 유료 서비스 배포, PR 병합을 수행하지 않았습니다.
 
-## 1. PR의 자동 검사 확인
+## 1. 자동 검사 확인
 
-1. GitHub에 로그인하고 [열린 PR 목록](https://github.com/spoonyerin/PtoS/pulls)에서 스크린샷 OCR PR을 엽니다.
-2. PR 상단의 **Checks** 탭을 누릅니다. 현재 최신 커밋의 `Checks / text-analysis`가 초록색 **Success**인지 확인합니다. 대기 중이면 완료될 때까지 기다립니다.
-3. PR 하단의 **Merge pull request**는 누르지 마세요. PR 브랜치에서 바로 앱을 실행할 수 있습니다.
+1. GitHub에 로그인하고 [저장소](https://github.com/spoonyerin/PtoS)를 엽니다. 기능 브랜치를 확인한다면 [열린 PR 목록](https://github.com/spoonyerin/PtoS/pulls)에서 해당 PR을 엽니다.
+2. 확인할 커밋의 `Checks / text-analysis`가 초록색 **Success**인지 확인합니다. 대기 중이면 완료될 때까지 기다립니다.
+3. PR을 확인하는 경우 **Merge pull request**는 누르지 마세요. PR 브랜치에서 바로 앱을 실행할 수 있습니다.
 
-## 2. PR 브랜치에서 Codespace 만들기
+## 2. 브랜치를 골라 Codespace 만들기
 
-1. [PR 브랜치의 저장소 화면](https://github.com/spoonyerin/PtoS/tree/feat/screenshot-ocr)을 엽니다. 이 링크를 여는 것만으로 Codespace가 만들어지지는 않습니다.
-2. 파일 목록 위의 브랜치 선택에 **`feat/screenshot-ocr`**가 표시되는지 확인합니다. `main`이면 선택 메뉴에서 이 브랜치를 검색해 선택하세요.
+1. [저장소 화면](https://github.com/spoonyerin/PtoS)을 엽니다. 이 링크를 여는 것만으로 Codespace가 만들어지지는 않습니다.
+2. 파일 목록 위의 브랜치 선택에서 실행할 브랜치를 고릅니다. 기본은 **`main`**이고, PR을 확인한다면 그 PR의 브랜치를 검색해 선택하세요.
 3. 초록색 **Code** 버튼 → **Codespaces** 탭을 누릅니다. **Local** 탭이나 **Download ZIP**은 사용하지 않습니다.
 4. 생성 전 창 하단의 비용 부담 주체와 계정의 남은 무료 사용량을 확인하세요. [GitHub 청구 설정](https://github.com/settings/billing)에서 확인할 수 있으며 계정·조직별 조건이 다릅니다. 무료 사용을 보장하지 않습니다. 별도의 유료 요금제나 배포 서비스 등록은 필요하지 않습니다.
-5. 직접 진행하기로 했다면 **Create codespace on feat/screenshot-ocr** 또는 같은 브랜치를 대상으로 한 **＋** 생성 버튼을 누릅니다. 옵션을 고르는 경우 **… → New with options**에서 Branch가 위 브랜치인지 확인하고 기본/가장 작은 사용 가능한 머신으로 시작하세요.
+5. 직접 진행하기로 했다면 **Create codespace on <선택한 브랜치>** 또는 같은 브랜치를 대상으로 한 **＋** 생성 버튼을 누릅니다. 옵션을 고르는 경우 **… → New with options**에서 Branch가 위 브랜치인지 확인하고 기본/가장 작은 사용 가능한 머신으로 시작하세요.
 6. 브라우저에서 VS Code와 비슷한 편집기가 열릴 때까지 기다립니다. Python 3.12, Node.js 24, 백엔드·프론트엔드 의존성을 자동으로 준비합니다. **설치가 끝나기 전에 앱 실행 작업을 시작하지 마세요.** 설치 완료 메시지는 `PtoS 설치 완료`입니다. 안내 파일 `docs/CODESPACES.md`도 자동으로 열립니다.
 
 이미 이 브랜치의 Codespace가 있다면 기존 항목을 클릭해 다시 열 수 있습니다. 설정 추가 전에 만든 환경은 명령 팔레트에서 **Codespaces: Rebuild Container**가 필요할 수 있습니다. 재빌드는 기존 서버를 종료하므로 저장하지 않은 파일을 먼저 저장하세요.
@@ -87,7 +87,7 @@ API 키, DB, `.env` 파일은 필요하지 않습니다. Tesseract OS 패키지�
 
 - **Codespaces 탭/생성 버튼 없음**: 로그인, 저장소 접근 권한, 조직의 Codespaces 허용 정책과 계정 사용량을 확인하세요. `github.dev` 웹 편집기는 서버를 실행하는 Codespace와 다릅니다.
 - **설치 실패**: 생성 로그/터미널을 확인하고 저장소 최상위에서 `bash .devcontainer/post-create.sh`로 다시 실행합니다. 성공 후 앱 실행 작업을 선택하세요. 스크립트는 의존성을 다시 설치하며 소스·잠금 파일을 바꾸지 않습니다.
-- **Blocked request / host is not allowed**: 자신의 PORTS 탭의 5173 주소인지, 최신 PR 브랜치인지 확인하세요. 환경 변수를 임의로 바꾸거나 `allowedHosts: true`로 전체 허용하지 마세요. 설정 변경 후에는 프론트엔드 작업을 종료하고 다시 실행합니다.
+- **Blocked request / host is not allowed**: 자신의 PORTS 탭의 5173 주소인지, 실행하려던 브랜치의 최신 커밋인지 확인하세요. 환경 변수를 임의로 바꾸거나 `allowedHosts: true`로 전체 허용하지 마세요. 설정 변경 후에는 프론트엔드 작업을 종료하고 다시 실행합니다.
 - **페이지 없음/연결 거부/502**: 두 서버 터미널이 실행 중인지, 5173 행이 있는지 확인하세요. 내부 백엔드 주소를 외부 브라우저 주소창에 붙여넣지 마세요.
 - **API 연결 오류**: 8000 백엔드 작업의 로그를 확인하세요. 새 터미널에서 아래 세 요청이 모두 HTTP 200인지 확인합니다. 첫 두 요청은 `mode: rules`, 마지막은 `risk_level: dangerous`, `is_demo: false`여야 합니다.
 

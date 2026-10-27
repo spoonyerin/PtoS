@@ -85,7 +85,7 @@
 
 ```bash
 git fetch origin
-git switch feat/safe-browsing-v5
+git switch main
 git pull --ff-only
 ./.venv/Scripts/python.exe -m pip install -r backend/requirements-dev.txt
 ```
