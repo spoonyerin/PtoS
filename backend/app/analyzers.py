@@ -73,7 +73,7 @@ class RuleBasedAnalyzer:
             risk_level=level, confidence=None,
             risk_factors=list(dict.fromkeys(item.label for item in evidence)),
             explanation=explanation, action_guidance=actions,
-            limitations=limitations, analysis_version="rules-reputation-dev-v1",
+            limitations=limitations, analysis_version="rules-reputation-dev-v2",
             evidence=evidence, input_assessment=scan.assessment,
             analysis_stages=[
                 AnalysisStage(name="rules", status="completed"),

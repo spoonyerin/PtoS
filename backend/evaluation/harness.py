@@ -26,6 +26,8 @@ REQUIRED_COLUMNS = (
 )
 LEVELS = tuple(level.value for level in RiskLevel)
 SPLITS = ("dev", "test")
+# 개발 중에는 dev만 돌리고 test는 마지막 비교에만 쓴다.
+SPLIT_FILTERS = ("all", *SPLITS)
 INPUT_TYPES = ("text", "url")
 # 오류는 정보 부족으로 합치지 않고 별도 열로 센다.
 ERROR_KINDS = ("input_error", "timeout", "analysis_error")
@@ -207,6 +209,7 @@ class RunInfo:
     analyzer: str
     run_at: str
     review_status_filter: str | None = None
+    split_filter: str = "all"
 
 
 def file_sha256(path: Path) -> str:
@@ -226,12 +229,13 @@ def git_state(repo: Path) -> tuple[str, bool | None]:
     return commit, bool(status.strip())
 
 
-def run_info(data_path: Path, analyzer: str, review_status_filter: str | None = None, repo: Path | None = None) -> RunInfo:
+def run_info(data_path: Path, analyzer: str, review_status_filter: str | None = None, repo: Path | None = None,
+             split_filter: str = "all") -> RunInfo:
     commit, dirty = git_state(repo or Path(__file__).resolve().parents[2])
     return RunInfo(
         commit=commit, worktree_dirty=dirty, data_sha256=file_sha256(data_path), analyzer=analyzer,
         run_at=datetime.now().astimezone().isoformat(timespec="seconds"),
-        review_status_filter=review_status_filter,
+        review_status_filter=review_status_filter, split_filter=split_filter,
     )
 
 
@@ -272,7 +276,7 @@ def _metrics_section(title: str, outcomes: list[Outcome]) -> list[str]:
 
 
 def render_report(outcomes: list[Outcome], info: RunInfo, excluded_by_filter: int = 0,
-                  review_status_counts: Counter | None = None) -> str:
+                  review_status_counts: Counter | None = None, excluded_by_split: int = 0) -> str:
     dirty = {True: "변경 있음 (커밋되지 않은 코드로 실행)", False: "변경 없음", None: "확인 불가"}[info.worktree_dirty]
     versions = sorted({o.analysis_version for o in outcomes if o.analysis_version})
     synthetic = sum(o.row.is_synthetic for o in outcomes)
@@ -287,6 +291,7 @@ def render_report(outcomes: list[Outcome], info: RunInfo, excluded_by_filter: in
             ["analysis_version", ", ".join(versions) or "없음"],
             ["실행 시각", info.run_at],
             ["review_status 필터", info.review_status_filter or "없음 (전체)"],
+            ["split 필터", "없음 (전체)" if info.split_filter == "all" else info.split_filter],
         ]),
         "",
         "리포트에는 원문·URL·라벨 근거를 넣지 않는다. 행은 id로만 표시한다.",
@@ -297,6 +302,8 @@ def render_report(outcomes: list[Outcome], info: RunInfo, excluded_by_filter: in
     ]
     if excluded_by_filter:
         lines.append(f"- review_status 필터로 제외: {excluded_by_filter}건")
+    if excluded_by_split:
+        lines.append(f"- split 필터로 제외: {excluded_by_split}건")
     if review_status_counts:
         lines.append("- review_status별 행 수 (필터 전): " + ", ".join(
             f"{status or '(빈 값)'} {count}" for status, count in sorted(review_status_counts.items())))
@@ -309,7 +316,7 @@ def render_report(outcomes: list[Outcome], info: RunInfo, excluded_by_filter: in
     if leaked:
         lines.append(f"- **경고: campaign_id {len(leaked)}개가 dev와 test에 함께 있다. 분할 누출 가능성.**")
     lines.append("")
-    for split in SPLITS:
+    for split in (SPLITS if info.split_filter == "all" else (info.split_filter,)):
         split_outcomes = [o for o in outcomes if o.row.split == split]
         lines += [f"## split: {split}", ""]
         if split == "test":
@@ -323,6 +330,12 @@ def render_report(outcomes: list[Outcome], info: RunInfo, excluded_by_filter: in
             "현재 분석기는 normal을 반환하지 않는다 (AGENTS.md 판정 계약). normal 기대 사례가 무엇으로 판정됐는지 따로 본다.", "",
         ]
         if normal:
+            # 정상 기대 사례가 위험으로 올라가는지 매 평가에서 실제·합성을 나눠 본다.
+            for label, group in (("실제", [o for o in normal if not o.row.is_synthetic]), ("합성", [o for o in normal if o.row.is_synthetic])):
+                spread = Counter(o.predicted for o in group)
+                lines.append(f"- 판정 분포 ({label} {len(group)}건): " + (", ".join(
+                    f"{column} {spread[column]}" for column in PREDICTION_COLUMNS if spread[column]) or "없음"))
+            lines.append("")
             lines += _table(
                 ["id", "입력", "판정", "policy_reason", "근거 신호"],
                 ([o.row.id, o.row.input_type, o.predicted, o.policy_reason or "-", ", ".join(o.factor_codes) or "-"] for o in normal),
@@ -337,13 +350,17 @@ def render_report(outcomes: list[Outcome], info: RunInfo, excluded_by_filter: in
 
 
 def run(data_path: Path, analyzer_name: str = "rules", review_status: str | None = None,
-        timeout: float = 5.0, analyzers: dict[str, Callable[[], Analyzer]] | None = None) -> str:
+        timeout: float = 5.0, analyzers: dict[str, Callable[[], Analyzer]] | None = None, split: str = "all") -> str:
     registry = analyzers if analyzers is not None else ANALYZERS
     if analyzer_name not in registry:
         raise DatasetError(f"알 수 없는 분석기예요: {analyzer_name}")
-    info = run_info(data_path, analyzer_name, review_status)
+    if split not in SPLIT_FILTERS:
+        raise DatasetError(f"split 필터는 {'/'.join(SPLIT_FILTERS)} 중 하나여야 해요.")
+    info = run_info(data_path, analyzer_name, review_status, split_filter=split)
     rows = load_rows(data_path)
     status_counts = Counter(row.review_status for row in rows)
-    selected = rows if review_status is None else [row for row in rows if row.review_status == review_status]
+    in_split = rows if split == "all" else [row for row in rows if row.split == split]
+    selected = in_split if review_status is None else [row for row in in_split if row.review_status == review_status]
+    # split 밖의 행은 분석기에 넘기지 않는다.
     outcomes = evaluate(selected, registry[analyzer_name](), timeout)
-    return render_report(outcomes, info, len(rows) - len(selected), status_counts)
+    return render_report(outcomes, info, len(in_split) - len(selected), status_counts, len(rows) - len(in_split))

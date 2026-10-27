@@ -232,7 +232,7 @@ def test_run_with_rule_analyzer_offline_and_without_raw_text(tmp_path, no_networ
     path = write_csv(tmp_path / "fake.csv", SAMPLE)
     report = run(path, "rules", review_status=None)
     assert hashlib.sha256(path.read_bytes()).hexdigest() in report
-    assert "| 분석기 | rules |" in report and "rules-reputation-dev-v1" in report
+    assert "| 분석기 | rules |" in report and "rules-reputation-dev-v2" in report
     assert "평가 행: 7건 (실제 0건, 합성 7건)" in report
     assert "expected=normal 사례 (1건)" in report
     assert "campaign_id 1개가 dev와 test에 함께" in report
@@ -270,3 +270,53 @@ def test_cli_writes_report_and_hides_csv_errors(tmp_path):
     done = subprocess.run([sys.executable, "evaluate.py", "--data", str(bad)],
                           cwd=BACKEND, capture_output=True, text=True, encoding="utf-8")
     assert done.returncode != 0 and "expected_level" in done.stderr and "비밀원문" not in done.stderr
+
+
+def test_run_split_filter_evaluates_only_selected_split(tmp_path, no_network):
+    seen = []
+
+    class Recording(ScriptedAnalyzer):
+        async def analyze(self, data):
+            seen.append(data.content)
+            return await super().analyze(data)
+
+    path = write_csv(tmp_path / "fake.csv", SAMPLE)
+    report = run(path, "recording", analyzers={"recording": Recording}, split="dev")
+    assert len(seen) == 4 and all("송금" not in content for content in seen)
+    assert "| split 필터 | dev |" in report and "split 필터로 제외: 3건" in report
+    assert "## split: dev" in report and "## split: test" not in report
+    seen.clear()
+    report = run(path, "recording", analyzers={"recording": Recording}, split="test")
+    assert len(seen) == 3 and "## split: dev" not in report and "## split: test" in report
+
+
+def test_run_split_defaults_to_all_and_rejects_unknown(tmp_path, no_network):
+    path = write_csv(tmp_path / "fake.csv", SAMPLE)
+    report = run(path, "scripted", analyzers={"scripted": ScriptedAnalyzer})
+    assert "| split 필터 | 없음 (전체) |" in report and "split 필터로 제외" not in report
+    assert "## split: dev" in report and "## split: test" in report
+    with pytest.raises(DatasetError, match="split"):
+        run(path, "scripted", analyzers={"scripted": ScriptedAnalyzer}, split="train")
+
+
+def test_report_shows_normal_distribution_by_real_and_synthetic():
+    outcomes = [
+        outcome("normal", "suspicious", synthetic=False),
+        outcome("normal", "insufficient_information", synthetic=False),
+        outcome("normal", "dangerous"),
+    ]
+    info = RunInfo("abc", False, "0" * 64, "fake", "2026-01-01T00:00:00+09:00")
+    report = render_report(outcomes, info)
+    assert "판정 분포 (실제 2건): suspicious 1, insufficient_information 1" in report
+    assert "판정 분포 (합성 1건): dangerous 1" in report
+
+
+def test_cli_split_option(tmp_path):
+    data, out = write_csv(tmp_path / "fake.csv", SAMPLE), tmp_path / "report.md"
+    done = subprocess.run([sys.executable, "evaluate.py", "--data", str(data), "--split", "dev", "--output", str(out)],
+                          cwd=BACKEND, capture_output=True, text=True, encoding="utf-8")
+    assert done.returncode == 0, done.stderr
+    assert "| split 필터 | dev |" in out.read_text(encoding="utf-8")
+    done = subprocess.run([sys.executable, "evaluate.py", "--data", str(data), "--split", "train"],
+                          cwd=BACKEND, capture_output=True, text=True, encoding="utf-8")
+    assert done.returncode != 0

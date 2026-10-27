@@ -8,6 +8,9 @@ from .contracts import FactorCode as F
 BLANK_LINE = re.compile(r"\r?\n[ \t]*(?:\r?\n[ \t]*)+")
 # 명시된 화자/발신자 라벨, 메신저 대괄호 헤더, 인용/메시지 구분선을 경계로 둔다.
 MESSAGE_MARKER = re.compile(r"(?m)^[ \t]*(?:[^\s:：\[\]\r\n]+(?:[ \t]+[^\s:：\[\]\r\n]+)*[ \t]*[:：]|\[[^\]\r\n]+\]|>|[-=]{2,})|(?<!\S)(?:[A-Za-z가-힣][\w-]*[ \t]*[:：]|\[[^\]\r\n]+\]|>|[-=]{2,})")
+# "확인: 주소", "납부기한: ..." 같은 안내 항목 이름은 화자 라벨이 아니므로 경계로 쓰지 않는다.
+FIELD_LABEL = re.compile(r"[ \t]*(?:확인|조회|접속|바로\s*가기|상세\s*보기|자세히\s*보기|링크|URL|주소|기한|납부\s*기한|마감|기간"
+                         r"|금액|청구\s*금액|미납\s*금액|일시|일자|날짜|사유|내용|문의|안내|참고|대상|상태)[ \t]*[:：]", re.IGNORECASE)
 QUOTE_CHARS = frozenset('"\'“”‘’「」')
 INTRO_ACTIONS = {F.CREDENTIAL_REQUEST, F.MONEY_REQUEST, F.APP_INSTALL}
 
@@ -15,7 +18,9 @@ INTRO_ACTIONS = {F.CREDENTIAL_REQUEST, F.MONEY_REQUEST, F.APP_INSTALL}
 def message_contexts(prose: str, signals: list[tuple[F, int, int]], *, identity, urgency, meta, quotes):
     """빈 줄은 기본 경계. 순수 명의 도입→인접 직접 요구만 예외적으로 연결한다."""
     blanks = list(BLANK_LINE.finditer(prose))
-    markers = list(MESSAGE_MARKER.finditer(prose))
+    # URL은 공백으로 가려져 있으므로, 라벨 뒤 줄 끝까지 공백뿐이면 화자 라벨이 아니라 주소 항목 이름이다.
+    markers = [m for m in MESSAGE_MARKER.finditer(prose) if not FIELD_LABEL.fullmatch(m.group())
+               and not (m.group().rstrip().endswith((":", "：")) and not prose[m.end():].split("\n", 1)[0].strip())]
     quoted = list(quotes.finditer(prose))
     boundaries = sorted({0, *(m.end() for m in blanks), *(m.start() for m in markers),
                          *(edge for m in quoted for edge in m.span())})
