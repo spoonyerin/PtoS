@@ -31,7 +31,7 @@
 
 1. `normal`을 반환할 수 있는 조건과 종합 판정 정책
 2. 위험 점수 경계, 모델 신뢰도의 의미와 `confidence` 처리
-3. 경량 모델 선택 (KoBERT는 유력 후보일 뿐 확정 아님)
+3. 경량 모델 선택 (중간점검은 TF-IDF 기준선. KoELECTRA·KoBERT 등 트랜스포머 비교는 이후이며 어느 것도 확정 아님)
 4. LLM 공급자, 전송 범위, 마스킹 방식, 비용 상한
 5. 실제 URL 평판 API 연결 시점 (이용 조건 확인 후)
 6. 담당자와 이번 제출 범위
@@ -56,6 +56,7 @@
 - `confidence`는 항상 `null`이다. 모델 점수를 안전 확률로 노출하지 않는다.
 - 임시 위험 조합(같은 문맥 안, `rules-dev-v3`, **임시, 팀 확정 필요**): 명의 주장 + (금전 | 민감정보 | 앱 설치) / 금전 + (민감정보 | 앱 설치) / 긴급성 + 민감정보 + 링크 / (규칙 A) 명의(대괄호 기관 머리말 포함) + 불이익·청구 + 링크 요구 + 임박 기한 / (규칙 B) 가족 호칭 + 금전 요구 + 링크 요구. 구체적 요구만 있으면 의심, 그 외는 정보 부족.
 - 대괄호 머리말과 가족 호칭은 약한 명의 신호다. 단독으로 판정을 올리지 않고 첫 번째 조합(명의 + 금전/민감정보/앱)의 명의로도 치지 않는다. 임박 기한은 당일·금일·오늘·내일·익일 + 기한 표현, 자정까지, 24시간 이내, 1일 남음이며 2일 이상 남은 기한과 날짜만 적힌 기한은 임박으로 해석하지 않는다. 답장 유도 신호는 없다(규칙 B의 한계).
+- 모델 종합(`rules-model-dev-v1`, **임시, 팀 확정 필요**, `docs/MODEL_POLICY.md`): 규칙 결과가 정보 부족이고 모델 점수가 임시 임계값 이상이면 의심(`policy_reason: MODEL_SIGNAL_ONLY`). 의심·위험은 유지하고 모델로 판정을 내리지 않는다. 모델 점수는 응답에 넣지 않고, 원문 구절 근거가 아니므로 `evidence`·`FactorCode`로 표현하지 않는다. 임계값은 dev 그룹 교차검증 OOF 점수에서 normal 신호 0건을 지키며 사기 재현율 최대로 정한 임시값(`provisional-dev-cv`)이다.
 - 입력 한도: 10,000 코드포인트. 422 = 입력 오류, 503 = 분석 불가, 504 = 분석 시간 초과.
 
 ## 구조와 경계
@@ -64,7 +65,7 @@
 - 외부 연동은 어댑터(`UrlReputationProvider` 등)로 두고 성공, 조회 없음, 시간 초과, 장애를 구분해 반환한다.
 - 화면(frontend)에 분석 규칙이나 공급자 키를 넣지 않는다. 비밀키는 백엔드 환경 변수로만 쓰고 `VITE_` 변수에 넣지 않는다.
 - 근거 좌표는 유니코드 코드포인트(시작 포함, 끝 제외)다. JS의 UTF-16 인덱스와 다르므로 프론트는 `Array.from(content)` 기준으로 계산한다.
-- 목표 구조 (아직 미구현): 규칙 검사, URL 평판 조회, 경량 모델 분석을 근거로 서버가 종합하고, 충돌 또는 불확실할 때만 조건부 LLM을 호출한다.
+- 목표 구조 (일부 구현): 규칙 검사, URL 평판 조회, 경량 모델 분석을 근거로 서버가 종합하고, 충돌 또는 불확실할 때만 조건부 LLM을 호출한다. 현재는 `CompositeAnalyzer`가 규칙(평판 포함)과 TF-IDF 기준선 모델을 둘 다 실행해 종합한다. 실제 평판 조회와 조건부 LLM은 없다.
   "규칙에 걸리면 경량 모델을 생략한다"는 정책은 확정되지 않았으므로 순차 단락(short-circuit) 구조로 구현하지 않는다.
 
 ## 현재 구현 규칙
@@ -74,7 +75,7 @@
 - OCR은 `docs/OCR_POLICY.md`를 따른다. 무료 CPU Tesseract 5/kor+eng, 교체 가능한 `OcrEngine`이다. 현재 서버로 이미지가 업로드됨을 화면에 표시한다. 별도 OCR 공급자 전송·실행 중 다운로드·유료 계정은 없다. Windows Git Bash 안내는 `docs/WINDOWS_GIT_BASH.md`이며 Windows에서 subprocess 호환성을 위해 Uvicorn `--reload`를 쓰지 않는다.
 - JPG/PNG 실제 형식·전체 디코딩·최대 10 MiB·2,000만 화소를 검증한다. 이 제한과 엔진 15초·브라우저 25초·프로세스당 OCR 동시 1개는 개발 제안이다. PRD 확정값/응답 보장으로 설명하지 않는다. 빈 추출·실패·시간 초과는 구분한다. 글자·URL을 추측해 복원하지 않는다.
 - 이미지/OCR 원문은 로그·장기 저장소·서버 임시파일에 남기지 않는다. 제한된 메모리와 Tesseract stdin/stdout을 사용하고 성공·실패·취소 시 객체/파이프/자식 프로세스를 정리한다. Blob URL은 교체·해제 시 revoke한다. 설치 언어 데이터와 고정 합성 테스트 이미지는 사용자 업로드와 구분한다.
-- 문자 정책 원본은 `docs/RULE_POLICY.md`의 `rules-dev-v3`(T4 임시 보강, 팀 확정 필요), 종합 정책은 `docs/SAFE_BROWSING.md`의 종합 판정(응답 `analysis_version: rules-reputation-dev-v2`). PRD 확정 임계값이 아니며 숫자 점수 합산을 하지 않는다. 규칙 부재·단편 입력·미구현 분석에 의한 정보 부족을 구분한다. 원문의 줄바꿈은 보존하고, 순수 명의 도입 → 인접 직접 요구만 제한적으로 연결하며 화자·인용·교육 경계는 분리한다.
+- 문자 정책 원본은 `docs/RULE_POLICY.md`의 `rules-dev-v3`(T4 임시 보강, 팀 확정 필요), 종합 정책은 `docs/SAFE_BROWSING.md`의 종합 판정(`RuleBasedAnalyzer`의 `analysis_version: rules-reputation-dev-v2`)과 `docs/MODEL_POLICY.md`의 모델 종합(API 응답 `analysis_version: rules-model-dev-v1`). PRD 확정 임계값이 아니며 숫자 점수 합산을 하지 않는다. 규칙 부재·단편 입력·미구현 분석에 의한 정보 부족을 구분한다. 원문의 줄바꿈은 보존하고, 순수 명의 도입 → 인접 직접 요구만 제한적으로 연결하며 화자·인용·교육 경계는 분리한다.
 - 명의 주장과 금전/민감정보/앱 설치 등 문서화한 조합만 임시 위험으로 경고한다. 단일 요구는 의심, 명의·긴급·불이익 단어나 대괄호 머리말만으로 위험 확정하지 않는다. 새 신호는 기존 `FactorCode` 안에서 `rule_id`(예: `impersonation-header-v1`, `urgency_threat-penalty-v1`)로 구분하며 계약 enum을 늘리지 않았다. 실제 사칭/악성 URL 여부를 검증한 것처럼 쓰지 않는다.
 - URL은 `docs/URL_POLICY.md`를 따른다. 직접 입력은 HTTP(S) 한 개, 문자 후보는 중복 제거 후 최대 10개다. IDNA·구두점·괄호를 처리하고 원문 위치를 보존한다. 주소·평판 상태는 일반 텍스트로 표시한다. URL 존재/형식/IDN만으로 위험도를 올리거나 정상으로 승격하지 않는다.
 - `UrlReputationProvider`의 기본 어댑터는 `not_connected`다. 무효 후보는 `not_requested`, 유효 URL이 없는 단계는 `not_applicable`로 구분한다. Safe Browsing v5는 키 없는 어댑터/가짜 전송기 테스트만 구현했다. 실제 HTTP 전송기는 없으며 키가 있어도 `policy_pending`으로 통신하지 않는다. 사용자 확인 및 실제 연결 요청 전에는 켜지 않는다.
@@ -83,6 +84,9 @@
 - 원문 근거는 코드포인트 시작 포함·끝 제외 좌표와 snippet을 함께 반환한다. 화면에서는 일반 텍스트로 표시하며 UTF-16 인덱스로 강조하지 않는다.
 - 부정·교육 인용 처리의 한계를 표시하고 관련 회귀 사례를 유지한다. 확인한 신호의 템플릿만 선택하며 근거 없는 요구·외부 사실을 생성하지 않는다.
 - `confidence: null`, `analysis_mode: rules`, `is_demo: false`. 모델/평판의 실제 수행 상태를 `analysis_stages`에 표시한다. 없는 단계를 성공으로 간주하지 않는다.
+- 경량 모델은 `docs/MODEL_POLICY.md`를 따른다. 교체 가능한 `TextRiskModel`, 서버 시작 시 한 번 로드, 백엔드 환경 변수 `PTOS_MODEL_PATH`(저장소 밖 manifest.json + model.joblib). 저장소 안 경로·SHA-256 불일치·scikit-learn 버전 불일치는 로드를 거부한다. 모델 단계는 `completed` / 미설정 `not_connected` / 로드 실패·시간 초과(1초, 개발 제안)·오류 `unavailable` / URL 직접 입력 `not_applicable`이고, 실패해도 규칙 결과와 근거를 그대로 낸다. 화면 문장에 "경량 모델"·"학습 자료" 같은 내부 용어를 쓰지 않는다.
+- 모델 학습은 split=dev 행만 쓰고 test는 학습·임계값에 쓰지 않는다. 모델 파일·manifest·학습 리포트는 저장소에 커밋하지 않는다(학습 데이터 CC BY-NC 4.0).
+- **알려진 한계 (중간점검 이후 B안 검토):** 모델이 함께 돌아도 `analysis_mode`는 계약상 `"rules"`로 남고, 모델 단계의 로드 실패·시간 초과·오류는 모두 `unavailable`이다(limitations 문장으로만 구분). B안은 `analysis_mode: "rules+model"`과 단계 상태 `timeout`·`load_failed`를 추가하는 계약 변경이다.
 - 빈 입력·길이·중복 제출·오류/시간 초과·재시도 처리를 유지한다. 서비스 오류를 정보 부족으로 숨기지 않는다.
 
 ## 미확정 사항
@@ -111,11 +115,16 @@
 | `backend/app/url_reputation.py` | UrlReputationProvider, 기본 미연결 처리 |
 | `backend/app/safe_browsing_urls.py`, `safe_browsing.py` | Safe Browsing URL 표현, 해시, 응답 대조, 캐시, 개발 호출 예산 |
 | `backend/app/reputation_policy.py` | 규칙과 검증된 평판 근거 종합 |
+| `backend/app/model_adapter.py` | TextRiskModel, 모델 manifest·SHA-256 확인과 로드, 모델 입력 전처리 |
+| `backend/app/model_policy.py` | 규칙 결과와 모델 신호의 임시 종합, 모델 단계 표시 문장 |
 | `backend/app/ocr.py` | 이미지 검증, OcrEngine |
 | `backend/evaluation/harness.py` | 평가셋 CSV 검증, Analyzer 실행, 4단계 지표와 리포트 |
-| `backend/evaluate.py` | 평가 하네스 명령줄 진입점 |
+| `backend/evaluate.py` | 평가 하네스 명령줄 진입점 (`rules`, `rules+model`) |
+| `backend/evaluation/model_training.py`, `backend/train_model.py` | dev 전용 TF-IDF 기준선 학습, 그룹 교차검증, 임시 임계값, manifest |
+| `backend/measure_model.py` | 모델 로드·추론 지연과 메모리 측정 |
 | `scripts/convert_kr_mob_smishing.py` | KR-MOB-SMISHING v1 zip → 라벨링 전용 CSV와 별도 case_type 매핑 (데이터는 저장소 밖) |
-| `docs/EVALUATION.md` | 평가셋 스키마, 저장 위치와 개인정보 가리기, 실행 방법 |
+| `docs/EVALUATION.md` | 평가셋 스키마, 저장 위치와 개인정보 가리기, 실행·학습·측정 방법 |
+| `docs/MODEL_POLICY.md` | 경량 모델 연결, 임시 종합 정책, 학습·임계값 기준 |
 | `frontend/src/components` | 입력, OCR 확인, 결과 화면 |
 | `frontend/src/hooks` | 요청 상태, 취소, 편집 후 결과 해제 |
 | `frontend/src/api` | HTTP 요청, 응답 검증, 생성 타입 |

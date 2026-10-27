@@ -2,11 +2,11 @@
 
 문자 또는 URL을 입력하면 FastAPI가 규칙 기반 위험 신호와 URL 형식·평판 연결 상태를 반환합니다. 스크린샷은 **미리보기 → OCR → 사용자 확인·수정 → 명시적인 확인 후 분석**을 거칩니다. OCR 직후 자동 위험 분석하지 않습니다. React/TypeScript 화면과 Python/FastAPI 분석기를 한 저장소에서 관리합니다.
 
-> **경량 모델과 URL 평판 조회가 없는 규칙 기반 개발 버전**입니다. 신원·사기 여부를 확정하거나 안전을 보장하지 않습니다. `confidence`는 항상 `null`입니다. 실제 개인정보 대신 연습용 문장을 입력하세요.
+> **규칙 기반 개발 버전**입니다. 경량 모델은 TF-IDF 기준선만 선택적으로 연결하며(모델 파일을 직접 학습해 `PTOS_MODEL_PATH`로 줄 때만), URL 평판 조회는 없습니다. 신원·사기 여부를 확정하거나 안전을 보장하지 않습니다. `confidence`는 항상 `null`입니다. 실제 개인정보 대신 연습용 문장을 입력하세요.
 
 이번 정책은 [RULE_POLICY.md](docs/RULE_POLICY.md)에 먼저 정리했습니다. 수치 점수나 PRD 확정 임계값을 만들지 않습니다. **현재는 `normal`을 반환하지 않습니다.** 규칙에 걸리지 않은 정상 안내문도 미구현 분석 때문에 **정보 부족**으로 표시하며 사기라고 단정하지 않습니다. 최종 MVP의 네 결과 열거형은 계약에 유지합니다.
 
-실제 피싱 AI·경량 모델·LLM, 외부 URL 조회, DB, 배포, PWA 설치와 디자인 개편은 이번 범위에 없습니다. OCR에는 무료 로컬 Tesseract 5를 사용합니다. 최종 PRD 필수 범위와 미확정 사항은 [AGENTS.md](AGENTS.md)를 참고하세요.
+트랜스포머 등 실제 피싱 AI 모델·LLM, 외부 URL 조회, DB, 배포, PWA 설치와 디자인 개편은 이번 범위에 없습니다. OCR에는 무료 로컬 Tesseract 5를 사용합니다. 최종 PRD 필수 범위와 미확정 사항은 [AGENTS.md](AGENTS.md)를 참고하세요.
 
 문서 역할: [AGENTS.md](AGENTS.md)는 사람과 모든 코딩 에이전트의 공통 지침, [DEVELOPMENT.md](DEVELOPMENT.md)는 개발 작업 방식, [docs/HANDOVER.md](docs/HANDOVER.md)는 현황·로드맵·실행 기록입니다.
 
@@ -149,11 +149,11 @@ Codespaces는 해당 환경의 전달 호스트만 허용합니다. `allowedHost
 { "input_type": "text", "content": "은행 담당자입니다. 인증번호를 알려주세요." }
 ```
 
-응답은 `request_id`, `risk_level`, `confidence: null`, `risk_factors`, `explanation`, `action_guidance`, `limitations`, `analysis_version: rules-reputation-dev-v2`, `analysis_mode: rules`, `is_demo: false`와 다음을 포함합니다.
+응답은 `request_id`, `risk_level`, `confidence: null`, `risk_factors`, `explanation`, `action_guidance`, `limitations`, `analysis_version: rules-model-dev-v1`, `analysis_mode: rules`(모델이 함께 돌아도 계약상 `rules`, 알려진 한계), `is_demo: false`와 다음을 포함합니다.
 
 - `evidence`: 코드·표시 이름·규칙 ID·`source: rule | url_reputation`·원문 구절·`start`/`end`. URL 근거는 검증된 전체 해시와 위협 유형 일치가 있어야 하며 기본 미연결 앱에서는 생성하지 않습니다. 좌표는 원문 유니코드 코드포인트의 시작 포함·끝 제외입니다. JS에서는 `Array.from(content).slice(start, end)`가 같은 구절이어야 합니다. 현재 화면은 좌표로 강조하지 않고 받은 구절을 그대로 표시합니다.
 - `input_assessment`: `action_identified` / `sentence_present` / `fragment` / `url_only`와 이유. 글자 수만으로 충분성을 정하지 않습니다.
-- `analysis_stages`: rules는 `completed`, lightweight_model은 `not_implemented`, url_reputation은 유효한 URL에 기본 어댑터를 쓰면 `not_connected`, 유효한 URL이 없으면 `not_applicable`입니다.
+- `analysis_stages`: rules는 `completed`, lightweight_model은 모델 미설정 시 `not_connected`·실행 시 `completed`·로드 실패/시간 초과/오류 시 `unavailable`·URL 직접 입력 시 `not_applicable`([모델 정책](docs/MODEL_POLICY.md)), url_reputation은 유효한 URL에 기본 어댑터를 쓰면 `not_connected`, 유효한 URL이 없으면 `not_applicable`입니다.
 - `urls`: 원문/정규화 URL·ASCII 호스트, `validation_status: valid | invalid`, 형식 안내·경계 경고, 모든 `occurrences`(원문 구절·코드포인트 좌표), `reputation`을 포함합니다. 현재 유효 URL의 평판은 `not_connected`, 무효 후보는 `not_requested`이며 provider/checked_at은 null입니다. 형식 확인은 정상/안전 판정이 아닙니다.
 - `policy_reason`: 어떤 임시 조합/보류 기준을 적용했는지 나타내는 개발용 식별자입니다. 확정 위험 점수가 아닙니다.
 
