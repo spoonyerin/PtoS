@@ -6,6 +6,8 @@ Google Safe Browsing v5 hashes.search를 사람이 직접 한 번 확인하는 �
 - --probe official-example은 테스트 URL 대신 공식 개요 예시 접두사(WwuJdQ) 1개만 보낸다. 키 문제와 접두사 형식 문제를 가른다.
 - --variant(no-alt, key-query, padded, official-exact)는 probe의 요청 모양만 바꾼다. 앱 전송기는 그대로다.
   key-query·official-exact는 키가 URL 쿼리에 들어가므로 URL·예외 메시지를 출력하지 않고 httpx 로그를 막는다.
+- 변형 응답이 application/x-protobuf이면 직접 디코더(app/safe_browsing_proto.py)로 해석해 구조(개수·길이·위협 유형)만
+  출력한다. 해석에 실패하면 "해석 실패(형식 오류)"와 본문 크기만 출력한다.
 - 키·접두사·전체 해시는 출력하지 않는다. 앱과 같은 정규화·해시·응답 대조(SafeBrowsingV5Provider)를 거친다.
 - 이 스크립트에서만 HTTP 오류 본문을 최대 16 KiB 읽어 짧은 분류 값(error.status, details[].reason 등)만 출력한다.
   오류 message·description 원문은 출력하지 않는다. 앱의 전송기는 계속 오류 본문을 읽지 않는다.
@@ -18,6 +20,7 @@ v5에서 이 URL이 위협 목록과 일치한다는 보장은 없다.
 
 import argparse
 import asyncio
+import base64
 from collections.abc import Mapping
 from dataclasses import dataclass
 import json
@@ -31,6 +34,7 @@ import httpx
 
 from app.safe_browsing import SEARCH_ENDPOINT, SafeBrowsingV5Provider, SearchResponse, TransportNetworkError, TransportResponseError, TransportTimeout
 from app.safe_browsing_http import MAX_RESPONSE_BYTES, HttpxHashSearchTransport
+from app.safe_browsing_proto import decode_search_response
 from app.url_reputation import API_KEY_ENV, DEFAULT_TIMEOUT, LIVE_MODE, MODE_ENV, TIMEOUT_ENV
 from app.urls import extract_urls
 
@@ -82,6 +86,30 @@ def _short(value, pattern: re.Pattern) -> str | None:
     if value is None:
         return None
     return value if isinstance(value, str) and pattern.fullmatch(value) else OMITTED
+
+
+def describe_protobuf(data: bytes) -> list[str]:
+    """protobuf 응답의 구조만 요약한다. 전체 해시·접두사·원본 바이트(hex, Base64)는 출력하지 않는다."""
+    unknown: list[int] = []
+    try:
+        body = decode_search_response(data, unknown)
+        records = body["fullHashes"]
+        lengths = [len(base64.b64decode(record["fullHash"])) for record in records]
+    except ValueError:
+        return [f"해석 실패(형식 오류) / 본문 크기: {len(data)} 바이트"]
+    lines = [f"protobuf 구조: full_hashes {len(records)}개, cache_duration {body.get('cacheDuration', '(없음)')}, "
+             f"모르는 필드 {len(unknown)}개"]
+    for index, (record, length) in enumerate(list(zip(records, lengths))[:10]):
+        details = record["fullHashDetails"]
+        threats = ", ".join(t if isinstance(t, str) else f"알 수 없는 번호 {t}" for t in (d["threatType"] for d in details)) or "(없음)"
+        attributes = sum(len(d["attributes"]) for d in details)
+        lines.append(f"  [{index}] full_hash 길이 {length}바이트, details {len(details)}개 "
+                     f"(threat_type: {threats}; attributes: {attributes}개)")
+    if len(records) > 10:
+        lines.append(f"  … 외 {len(records) - 10}개")
+    if not records:
+        lines.append("  전체 해시가 없어요: 이 접두사에 대한 결과 없음이에요 (안전 판정 아님).")
+    return lines
 
 
 def summarize_error_body(content_type: str, data: bytes, truncated: bool) -> list[str]:
@@ -251,7 +279,7 @@ async def probe_variant(key: str, name: str, timeout: float, transport=None) -> 
 
     status_code = content_type = cache_duration = error_name = None
     size = full_hash_count = None
-    json_body = None
+    json_body = proto_lines = None
     started = time.perf_counter()
     try:
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=False, trust_env=False, transport=diagnostics) as client:
@@ -266,11 +294,14 @@ async def probe_variant(key: str, name: str, timeout: float, transport=None) -> 
                             if len(data) > MAX_RESPONSE_BYTES:
                                 break
                         size = len(data)
-                        if content_type.split(";")[0].strip().lower() == "application/json" and size <= MAX_RESPONSE_BYTES:
+                        media_type = content_type.split(";")[0].strip().lower()
+                        if media_type == "application/json" and size <= MAX_RESPONSE_BYTES:
                             try:
                                 json_body = json.loads(bytes(data))
                             except ValueError:
                                 json_body = None
+                        elif media_type == "application/x-protobuf" and size <= MAX_RESPONSE_BYTES:
+                            proto_lines = describe_protobuf(bytes(data))
                         data.clear()
     except Exception as error:  # noqa: BLE001 - 메시지에 키가 담긴 URL이 들어갈 수 있어 클래스 이름만 쓴다.
         error_name = type(error).__name__ if TYPE_NAME.fullmatch(type(error).__name__) else "Exception"
@@ -290,7 +321,10 @@ async def probe_variant(key: str, name: str, timeout: float, transport=None) -> 
         print(f"Content-Type: {content_type if CONTENT_TYPE.fullmatch(content_type) else '(없음 또는 형식 밖)'}")
     if size is not None:
         print(f"본문 크기: {size} 바이트{' (상한 초과로 중단)' if size > MAX_RESPONSE_BYTES else ''}")
-    if status_code == 200 and json_body is None:
+    if proto_lines is not None:
+        for line in proto_lines:
+            print(line)
+    elif status_code == 200 and json_body is None:
         print("응답 형식: 200, JSON이 아니에요 (디코딩하지 않았어요)")
     if cache_duration is not None:
         print(f"cacheDuration: {cache_duration}")

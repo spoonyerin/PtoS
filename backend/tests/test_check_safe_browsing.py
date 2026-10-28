@@ -1,6 +1,7 @@
 """수동 확인 스크립트의 동작 검증. httpx.MockTransport만 쓰고 실제 Google은 호출하지 않는다."""
 
 import base64
+from hashlib import sha256
 
 import httpx
 import pytest
@@ -273,12 +274,77 @@ def test_variant_requires_probe(capsys):
     assert "--probe official-example과 함께만" in capsys.readouterr().out
 
 
-def test_variant_non_json_200_is_reported_without_decoding(capsys):
-    code, _ = run(lambda request: httpx.Response(200, headers={"content-type": "application/x-protobuf"}, content=b"\x12\x03\x08\xac\x02"),
+def test_variant_other_non_json_200_is_reported_without_decoding(capsys):
+    code, _ = run(lambda request: httpx.Response(200, headers={"content-type": "text/plain"}, content=b"hello"),
                   argv=variant_argv("no-alt"))
     output = capsys.readouterr().out
-    assert code == 0 and "Content-Type: application/x-protobuf" in output
-    assert "본문 크기: 5 바이트" in output and "200, JSON이 아니에요" in output
+    assert code == 0 and "Content-Type: text/plain" in output
+    assert "본문 크기: 5 바이트" in output and "200, JSON이 아니에요" in output and "protobuf 구조" not in output
+
+
+PROTOBUF = {"content-type": "application/x-protobuf"}
+PROBE_DIGEST = sha256(b"ptos-probe-digest").digest()
+PROTO_49 = (
+    b"\x0a\x2a"                  # 응답 필드 1 full_hashes, LEN, 길이 42
+    + b"\x0a\x20" + PROBE_DIGEST   # FullHash 필드 1 full_hash, LEN, 길이 32
+    + b"\x12\x02\x08\x01"        # full_hash_details LEN 2: threat_type 1 = MALWARE
+    + b"\x12\x02\x08\x02"        # full_hash_details LEN 2: threat_type 2 = SOCIAL_ENGINEERING
+    + b"\x12\x03\x08\xac\x02"    # 응답 필드 2 cache_duration, LEN 3: seconds 300
+)
+
+
+def assert_no_probe_bytes(output: str):
+    for secret in (PROBE_DIGEST.hex(), base64.b64encode(PROBE_DIGEST).decode(), base64.b64encode(PROBE_DIGEST[:4]).decode().rstrip("="),
+                   PROTO_49.hex(), base64.b64encode(PROTO_49).decode(), PROBE_DIGEST[:4].hex()):
+        assert secret not in output
+
+
+@pytest.mark.parametrize("name", ["no-alt", "official-exact"])
+def test_variant_protobuf_49_bytes_structure_summary(name, capsys):
+    assert len(PROTO_49) == 49
+    code, _ = run(lambda request: httpx.Response(200, headers=PROTOBUF, content=PROTO_49), argv=variant_argv(name))
+    output = capsys.readouterr().out
+    assert code == 0 and "본문 크기: 49 바이트" in output
+    assert "protobuf 구조: full_hashes 1개, cache_duration 300s, 모르는 필드 0개" in output
+    assert "[0] full_hash 길이 32바이트, details 2개 (threat_type: MALWARE, SOCIAL_ENGINEERING; attributes: 0개)" in output
+    assert "200, JSON이 아니에요" not in output
+    assert_no_probe_bytes(output)
+    assert KEY not in output
+
+
+def test_variant_protobuf_empty_result(capsys):
+    code, _ = run(lambda request: httpx.Response(200, headers=PROTOBUF, content=b"\x12\x03\x08\xac\x02"),  # cache_duration 300s만
+                  argv=variant_argv("no-alt"))
+    output = capsys.readouterr().out
+    assert code == 0 and "protobuf 구조: full_hashes 0개, cache_duration 300s" in output
+    assert "결과 없음이에요 (안전 판정 아님)" in output
+
+
+def test_variant_protobuf_unknown_threat_and_fields(capsys):
+    entry = (b"\x0a\x20" + PROBE_DIGEST  # full_hash LEN 32
+             + b"\x12\x04"               # full_hash_details LEN 4
+             + b"\x08\x09"               # threat_type 9 = 모르는 번호
+             + b"\x10\x01")              # attributes unpacked 1 = CANARY
+    data = b"\x78\x01" + b"\x0a" + bytes([len(entry)]) + entry + b"\x12\x02\x08\x05"  # 모르는 필드 15 + full_hashes + 5초
+    run(lambda request: httpx.Response(200, headers=PROTOBUF, content=data), argv=variant_argv("no-alt"))
+    output = capsys.readouterr().out
+    assert "full_hashes 1개, cache_duration 5s, 모르는 필드 1개" in output
+    assert "threat_type: 알 수 없는 번호 9; attributes: 1개" in output
+
+
+@pytest.mark.parametrize("content", [
+    b"\x0a\x30" + PROBE_DIGEST,  # full_hashes 길이 48인데 32바이트만 있음
+    b"\x0b",                     # wire type 3 (group) 미지원
+    PROTO_49[:-1],               # 마지막 바이트가 잘림
+])
+def test_variant_protobuf_parse_failure_prints_only_failure_and_size(content, capsys):
+    code, _ = run(lambda request: httpx.Response(200, headers=PROTOBUF, content=content), argv=variant_argv("no-alt"))
+    output = capsys.readouterr().out
+    assert code == 0
+    assert f"해석 실패(형식 오류) / 본문 크기: {len(content)} 바이트" in output
+    assert "protobuf 구조" not in output and "full_hash 길이" not in output
+    assert_no_probe_bytes(output)
+    assert content.hex() not in output and base64.b64encode(content).decode() not in output
 
 
 def _leaky_responses():
