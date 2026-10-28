@@ -93,7 +93,9 @@ def test_rotation_metadata_removal_and_animation_rejection():
         assert error.value.code == "UNSUPPORTED_MEDIA_TYPE"
 
 
-@pytest.mark.parametrize("value,code,status", [("", "OCR_NO_TEXT", 422), (" \n", "OCR_NO_TEXT", 422), ("가" * 10001, "OCR_TEXT_TOO_LONG", 422), (OcrError("OCR_UNAVAILABLE"), "OCR_UNAVAILABLE", 503), (RuntimeError("SECRET OCR output"), "OCR_FAILED", 503)])
+@pytest.mark.parametrize("value,code,status", [("", "OCR_NO_TEXT", 422), (" \n", "OCR_NO_TEXT", 422), ("가" * 10001, "OCR_TEXT_TOO_LONG", 422), (OcrError("OCR_UNAVAILABLE"), "OCR_UNAVAILABLE", 503), (RuntimeError("SECRET OCR output"), "OCR_FAILED", 503)],
+    # 긴 입력이 테스트 ID에 들어가면 Windows 환경변수 한도(32,767자)를 넘는다.
+    ids=["empty", "whitespace", "too_long", "unavailable", "failed"])
 def test_empty_long_unavailable_failed_are_distinct(value, code, status, caplog):
     class Engine:
         async def extract(self, image):

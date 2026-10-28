@@ -30,7 +30,7 @@ def test_input_drives_rule_results(client, text, level):
     assert body["confidence"] is None
     assert body["explanation"] and body["action_guidance"]
     assert "규칙 기반 개발 버전" in body["limitations"][0]
-    assert body["analysis_version"] == "rules-reputation-dev-v1"
+    assert body["analysis_version"] == "rules-reputation-dev-v2"
     assert body["analysis_stages"][1] == {"name": "lightweight_model", "status": "not_implemented"}
     for evidence in body["evidence"]:
         assert text[evidence["start"]:evidence["end"]] == evidence["snippet"]

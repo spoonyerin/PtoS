@@ -1,5 +1,8 @@
 import { defineConfig } from '@playwright/test'
 
+// Windows는 webServer 명령을 cmd로 실행하므로 venv 경로와 구분자가 다르다.
+const python = process.platform === 'win32' ? '..\\.venv\\Scripts\\python.exe' : '../.venv/bin/python'
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
@@ -13,7 +16,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: '../.venv/bin/python -m uvicorn app.main:app --app-dir ../backend --host 127.0.0.1 --port 8000 --no-access-log',
+      command: `${python} -m uvicorn app.main:app --app-dir ../backend --host 127.0.0.1 --port 8000 --no-access-log`,
       url: 'http://127.0.0.1:8000/api/v1/health/ready',
       reuseExistingServer: !process.env.CI,
     },

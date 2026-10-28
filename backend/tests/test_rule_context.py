@@ -18,7 +18,7 @@ def test_user_message_is_consistent_across_line_wrapping(kind, separator):
     result = analyze(text, kind)
     assert result.risk_level == "dangerous"
     assert result.policy_reason == "COMBINED_IDENTITY_REQUEST"
-    assert result.analysis_version == "rules-reputation-dev-v1" and result.confidence is None
+    assert result.analysis_version == "rules-reputation-dev-v2" and result.confidence is None
     assert result.urls[0].reputation.status == "not_connected"
     for evidence in result.evidence:
         assert text[evidence.start:evidence.end] == evidence.snippet

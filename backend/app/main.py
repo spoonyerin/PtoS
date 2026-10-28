@@ -24,6 +24,21 @@ from .url_reputation import configured_reputation_provider
 
 logger = logging.getLogger(__name__)
 
+# OpenAPI 설명을 고정한다. 기본값은 Python 버전별 http.HTTPStatus 문구라 3.13에서 422·413이 바뀐다.
+ERROR_DESCRIPTIONS = {
+    409: "Conflict",
+    413: "Request Entity Too Large",
+    415: "Unsupported Media Type",
+    422: "Unprocessable Entity",
+    429: "Too Many Requests",
+    503: "Service Unavailable",
+    504: "Gateway Timeout",
+}
+
+
+def error_responses(*codes: int) -> dict:
+    return {code: {"model": ErrorResponse, "description": ERROR_DESCRIPTIONS[code]} for code in codes}
+
 
 def create_app(
     analyzer_factory: Callable[[], Analyzer] | None = None,
@@ -84,7 +99,7 @@ def create_app(
     async def ready():
         return {"status": "ready", "mode": "rules"}
 
-    @app.post("/api/v1/ocr/review", response_model=OcrReviewResponse, responses={422: {"model": ErrorResponse}})
+    @app.post("/api/v1/ocr/review", response_model=OcrReviewResponse, responses=error_responses(422))
     async def review_ocr(body: OcrReviewRequest, request: Request):
         try:
             return OcrReviewResponse(urls=url_previews(body.content), request_id=request.state.request_id)
@@ -92,7 +107,7 @@ def create_app(
             return error_response(request, 422, error.code, PUBLIC_ERRORS[error.code], False)
 
     @app.post("/api/v1/ocr", response_model=OcrResponse,
-        responses={code: {"model": ErrorResponse} for code in (409, 413, 415, 422, 429, 503, 504)},
+        responses=error_responses(409, 413, 415, 422, 429, 503, 504),
         openapi_extra={"requestBody": {"required": True, "content": {mime: {"schema": {"type": "string", "format": "binary"}} for mime in ("image/jpeg", "image/png")}}},
     )
     async def recognize(request: Request):
@@ -141,7 +156,7 @@ def create_app(
 
     @app.post(
         "/api/v1/analyses", response_model=AnalysisResponse,
-        responses={422: {"model": ErrorResponse}, 503: {"model": ErrorResponse}, 504: {"model": ErrorResponse}},
+        responses=error_responses(422, 503, 504),
     )
     async def analyze(body: AnalysisRequest, request: Request):
         try:

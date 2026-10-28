@@ -15,3 +15,6 @@ test-results/
 !.env.example
 *.log
 .DS_Store
+# 평가 데이터·리포트 (실수 방지용. 실제로는 저장소·동기화 폴더 밖에 둔다. docs/EVALUATION.md)
+/eval-data/
+/eval-reports/
