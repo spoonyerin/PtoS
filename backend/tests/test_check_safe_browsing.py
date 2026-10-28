@@ -215,5 +215,132 @@ def test_app_transport_still_does_not_read_error_bodies():
     assert response.status_code == 400 and response.body == {}
 
 
+def test_details_summary_line(capsys):
+    details = [{"@type": "type.googleapis.com/google.rpc.ErrorInfo", "reason": "SOMETHING"},
+               {"@type": "type.googleapis.com/google.rpc.BadRequest"}, "not a dict"]
+    run(lambda request: httpx.Response(400, json=google_error(details=details)))
+    output = capsys.readouterr().out
+    assert "error.details: 3개 (@type: ErrorInfo, BadRequest, (없음))" in output
+    run(lambda request: httpx.Response(400, json=google_error(details=[])))
+    assert "error.details: 없음" in capsys.readouterr().out
+    run(lambda request: httpx.Response(400, json={"error": {"code": 400, "status": "INVALID_ARGUMENT"}}))
+    assert "error.details: 없음" in capsys.readouterr().out
+
+
+# ---- --probe official-example --variant ----
+
+def variant_argv(name):
+    return ("--live", "--probe", "official-example", "--variant", name)
+
+
+@pytest.mark.parametrize("name,expected_params,key_header,accept", [
+    ("no-alt", [("hashPrefixes", "WwuJdQ")], True, "*/*"),
+    ("key-query", [("key", KEY), ("hashPrefixes", "WwuJdQ"), ("alt", "json")], False, "application/json"),
+    ("padded", [("hashPrefixes", "WwuJdQ=="), ("alt", "json")], True, "application/json"),
+    ("official-exact", [("key", KEY), ("hashPrefixes", "WwuJdQ")], False, "*/*"),
+])
+def test_variant_request_shapes(name, expected_params, key_header, accept, capsys):
+    code, requests = run(lambda request: httpx.Response(200, headers=JSON, json={"cacheDuration": "60s"}), argv=variant_argv(name))
+    output = capsys.readouterr().out
+    assert code == 0 and len(requests) == 1
+    request = requests[0]
+    assert request.method == "GET" and request.content == b""
+    assert f"{request.url.scheme}://{request.url.host}{request.url.path}" == "https://safebrowsing.googleapis.com/v5/hashes:search"
+    assert request.url.params.multi_items() == expected_params
+    assert (request.headers.get("x-goog-api-key") == KEY) is key_header
+    if not key_header:
+        assert "x-goog-api-key" not in request.headers
+    assert request.headers["accept"] == accept
+    if name == "padded":
+        assert b"hashPrefixes=WwuJdQ%3D%3D" in request.url.raw_path
+    assert f"요청 변형 {name}" in output and "보낸 접두사 개수: 1개" in output
+    assert "HTTP 상태: 200" in output and "cacheDuration: 60s" in output and "[확인]" in output
+    assert KEY not in output
+
+
+def test_unknown_variant_is_rejected_before_any_call(capsys):
+    _, requests = None, []
+    with pytest.raises(SystemExit) as exit_info:
+        check_safe_browsing.main(list(variant_argv("other")), env=LIVE_ENV,
+                                 transport=httpx.MockTransport(lambda request: requests.append(request)))
+    assert exit_info.value.code == 2 and requests == []
+    assert "invalid choice" in capsys.readouterr().err
+
+
+def test_variant_requires_probe(capsys):
+    code, requests = run(lambda request: httpx.Response(200), argv=("--live", "--variant", "no-alt"))
+    assert code == 2 and requests == []
+    assert "--probe official-example과 함께만" in capsys.readouterr().out
+
+
+def test_variant_non_json_200_is_reported_without_decoding(capsys):
+    code, _ = run(lambda request: httpx.Response(200, headers={"content-type": "application/x-protobuf"}, content=b"\x12\x03\x08\xac\x02"),
+                  argv=variant_argv("no-alt"))
+    output = capsys.readouterr().out
+    assert code == 0 and "Content-Type: application/x-protobuf" in output
+    assert "본문 크기: 5 바이트" in output and "200, JSON이 아니에요" in output
+
+
+def _leaky_responses():
+    leak = f"https://safebrowsing.googleapis.com/v5/hashes:search?key={KEY}&hashPrefixes=WwuJdQ"
+    def connect_error(request):
+        raise httpx.ConnectError(f"cannot connect {request.url}", request=request)
+    def read_timeout(request):
+        raise httpx.ReadTimeout(f"timed out {request.url}", request=request)
+    def runtime_error(request):
+        raise RuntimeError(f"unexpected {request.url} {KEY}")
+    return [
+        lambda request: httpx.Response(200, headers=JSON, json={"cacheDuration": "60s", "echo": str(request.url)}),
+        lambda request: httpx.Response(400, json=google_error(message=f"bad {request.url}", details=[
+            {"@type": "type.googleapis.com/google.rpc.BadRequest", "fieldViolations": [{"field": "key", "description": str(request.url)}]}])),
+        lambda request: httpx.Response(400, headers={"content-type": "text/html"}, content=str(request.url).encode()),
+        lambda request: httpx.Response(302, headers={"location": leak}),
+        connect_error, read_timeout, runtime_error,
+    ]
+
+
+@pytest.mark.parametrize("name", ["key-query", "official-exact"])
+@pytest.mark.parametrize("handler", _leaky_responses())
+def test_key_in_query_never_leaks_to_output_exceptions_or_logs(name, handler, capsys, caplog):
+    import logging
+    records = []
+    class Capture(logging.Handler):
+        def emit(self, record):
+            records.append(record.getMessage())
+    direct = Capture(level=logging.DEBUG)
+    for logger_name in ("httpx", "httpcore"):
+        logging.getLogger(logger_name).addHandler(direct)
+    caplog.set_level(logging.DEBUG)
+    try:
+        code, requests = run(handler, argv=variant_argv(name))
+    finally:
+        for logger_name in ("httpx", "httpcore"):
+            logging.getLogger(logger_name).removeHandler(direct)
+    captured = capsys.readouterr()
+    assert len(requests) == 1 and requests[0].url.params["key"] == KEY  # the key really was in the URL
+    for text in (captured.out, captured.err, caplog.text, "\n".join(records)):
+        assert KEY not in text and "key=" not in text and "hashPrefixes=" not in text
+        assert "safebrowsing.googleapis.com/v5" not in text
+    assert code in (0, 1)
+    if code == 1 and "전송 단계 문제" in captured.out:
+        assert any(f"전송 단계 문제: {name_}" in captured.out for name_ in ("ConnectError", "ReadTimeout", "RuntimeError"))
+
+
+def test_variant_timeout_reports_class_name_only(capsys):
+    import asyncio
+    async def hang(request):
+        await asyncio.Event().wait()
+    code, _ = run(hang, argv=(*variant_argv("official-exact"), "--timeout", "0.05"))
+    output = capsys.readouterr().out
+    assert code == 1 and "전송 단계 문제: TimeoutError" in output and KEY not in output
+
+
+def test_script_locks_down_httpx_logging():
+    import logging
+    for logger_name in ("httpx", "httpcore"):
+        logger = logging.getLogger(logger_name)
+        assert logger.level == logging.WARNING and logger.propagate is False
+
+
 def test_script_uses_the_app_transport():
     assert check_safe_browsing.HttpxHashSearchTransport is safe_browsing_http.HttpxHashSearchTransport
