@@ -33,7 +33,7 @@ import time
 import httpx
 
 from app.safe_browsing import SEARCH_ENDPOINT, SafeBrowsingV5Provider, SearchResponse, TransportNetworkError, TransportResponseError, TransportTimeout
-from app.safe_browsing_http import MAX_RESPONSE_BYTES, HttpxHashSearchTransport
+from app.safe_browsing_http import MAX_RESPONSE_BYTES, PROTOBUF, HttpxHashSearchTransport
 from app.safe_browsing_proto import decode_search_response
 from app.url_reputation import API_KEY_ENV, DEFAULT_TIMEOUT, LIVE_MODE, MODE_ENV, TIMEOUT_ENV
 from app.urls import extract_urls
@@ -88,17 +88,29 @@ def _short(value, pattern: re.Pattern) -> str | None:
     return value if isinstance(value, str) and pattern.fullmatch(value) else OMITTED
 
 
+def parse_failure(size: int | None) -> list[str]:
+    return [f"해석 실패(형식 오류) / 본문 크기: {size if size is not None else '(알 수 없음)'} 바이트"]
+
+
 def describe_protobuf(data: bytes) -> list[str]:
     """protobuf 응답의 구조만 요약한다. 전체 해시·접두사·원본 바이트(hex, Base64)는 출력하지 않는다."""
     unknown: list[int] = []
     try:
         body = decode_search_response(data, unknown)
+    except ValueError:
+        return parse_failure(len(data))
+    return describe_body(body, len(unknown))
+
+
+def describe_body(body: dict, unknown_count: int | None = None) -> list[str]:
+    """디코더가 만든 dict의 구조(개수·길이·위협 유형)만 요약한다. 해시 값은 길이로만 쓴다."""
+    try:
         records = body["fullHashes"]
         lengths = [len(base64.b64decode(record["fullHash"])) for record in records]
-    except ValueError:
-        return [f"해석 실패(형식 오류) / 본문 크기: {len(data)} 바이트"]
-    lines = [f"protobuf 구조: full_hashes {len(records)}개, cache_duration {body.get('cacheDuration', '(없음)')}, "
-             f"모르는 필드 {len(unknown)}개"]
+    except (ValueError, KeyError, TypeError):
+        return ["해석 실패(형식 오류)"]
+    unknown = f", 모르는 필드 {unknown_count}개" if unknown_count is not None else ""
+    lines = [f"protobuf 구조: full_hashes {len(records)}개, cache_duration {body.get('cacheDuration', '(없음)')}{unknown}"]
     for index, (record, length) in enumerate(list(zip(records, lengths))[:10]):
         details = record["fullHashDetails"]
         threats = ", ".join(t if isinstance(t, str) else f"알 수 없는 번호 {t}" for t in (d["threatType"] for d in details)) or "(없음)"
@@ -108,7 +120,7 @@ def describe_protobuf(data: bytes) -> list[str]:
     if len(records) > 10:
         lines.append(f"  … 외 {len(records) - 10}개")
     if not records:
-        lines.append("  전체 해시가 없어요: 이 접두사에 대한 결과 없음이에요 (안전 판정 아님).")
+        lines.append("  전체 해시가 없어요: 요청한 접두사에 대한 결과 없음이에요 (안전 판정 아님).")
     return lines
 
 
@@ -201,6 +213,7 @@ class RecordingTransport:
         self.content_type: str | None = None
         self.cache_duration: str | None = None
         self.full_hash_count: int | None = None
+        self.structure: list[str] = []
         self.error: str | None = None
         self.elapsed_ms: float | None = None
 
@@ -212,6 +225,8 @@ class RecordingTransport:
             response = await self.inner.search(hash_prefixes)
         except TransportResponseError as error:
             self.error, self.content_type = "응답 형식 오류", error.content_type or "(없음)"
+            if error.content_type.split(";")[0].strip().lower() == PROTOBUF:
+                self.structure = parse_failure(error.size)
             raise
         except TransportTimeout:
             self.error = "전송 시간 초과"
@@ -223,10 +238,13 @@ class RecordingTransport:
             self.elapsed_ms = (time.perf_counter() - started) * 1000
         self.status_code = response.status_code
         if response.status_code == 200:
-            self.content_type = "application/json"
+            # 앱 전송기가 알려준 실제 형식 (application/x-protobuf 또는 호환용 application/json).
+            self.content_type = response.content_type or "(알 수 없음)"
             self.cache_duration = response.body.get("cacheDuration")
             records = response.body.get("fullHashes", [])
             self.full_hash_count = len(records) if isinstance(records, list) else None
+            if response.content_type == PROTOBUF:
+                self.structure = describe_body(response.body)
         return response
 
     async def aclose(self) -> None:
@@ -244,11 +262,15 @@ def print_diagnostics(recorder: RecordingTransport, diagnostics: ErrorBodyDiagno
     if recorder.elapsed_ms is not None:
         print(f"응답 시간: {recorder.elapsed_ms:.0f} ms (이번 확인의 제한 {timeout:g}초)")
     print(f"HTTP 상태: {recorder.status_code if recorder.status_code is not None else '(응답 없음)'}")
-    print(f"Content-Type: {recorder.content_type or '(확인 안 됨)'}")
+    content_type = recorder.content_type
+    shown_type = content_type if content_type is None or CONTENT_TYPE.fullmatch(content_type) or content_type.startswith("(") else "(형식 밖 값 생략)"
+    print(f"Content-Type: {shown_type or '(확인 안 됨)'}")
     if recorder.cache_duration is not None:
         print(f"cacheDuration: {recorder.cache_duration}")
     if recorder.full_hash_count is not None:
         print(f"응답의 전체 해시 개수: {recorder.full_hash_count}")
+    for line in recorder.structure:
+        print(line)
     if recorder.error:
         print(f"전송 단계 문제: {recorder.error}")
     for line in diagnostics.summary or []:
@@ -399,8 +421,8 @@ async def check(env: Mapping[str, str], timeout: float, transport=None, probe: s
     if result.status == "unknown":
         print("[안내] 일치한 해시가 있지만 현재 경고에 쓰지 않는 위협 유형·속성이에요.")
         return 0
-    if recorder.content_type and recorder.content_type != "application/json":
-        print("[중요] JSON이 아닌 응답이에요. protobuf일 수 있어요. 디코더를 만들기 전에 이 출력을 그대로 공유해주세요(키는 출력되지 않아요).")
+    if recorder.error == "응답 형식 오류" and not recorder.structure:
+        print("[중요] 지원하지 않는 응답 형식이에요(protobuf·JSON 아님). 이 출력을 그대로 공유해주세요(키는 출력되지 않아요).")
     print("[실패] 조회를 완료하지 못했어요. 위 상태와 reason을 확인해주세요.")
     return 1
 

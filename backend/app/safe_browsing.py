@@ -26,8 +26,12 @@ SEARCH_ENDPOINT = "https://safebrowsing.googleapis.com/v5/hashes:search"
 
 @dataclass(frozen=True, repr=False)
 class SearchResponse:
+    """Internal transport result, not part of the API contract (never serialized to clients)."""
+
     status_code: int
     body: dict = field(repr=False)
+    # Media type of a 200 body (e.g. application/x-protobuf) for manual diagnostics only.
+    content_type: str | None = None
 
 
 class HashSearchTransport(Protocol):
@@ -47,11 +51,12 @@ class TransportNetworkError(Exception):
 
 
 class TransportResponseError(Exception):
-    """Unusable 200 response (format, size, JSON). Keeps only the Content-Type for diagnostics."""
+    """Unusable 200 response (format, size, decoding). Keeps only Content-Type and body size for diagnostics."""
 
-    def __init__(self, content_type: str = ""):
+    def __init__(self, content_type: str = "", size: int | None = None):
         super().__init__()
         self.content_type = content_type[:100]
+        self.size = size
 
 
 def encode_prefix(prefix: bytes) -> str:

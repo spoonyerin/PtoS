@@ -80,12 +80,56 @@ def test_empty_reply_is_guidance_not_error(capsys):
     assert "[실패]" not in output
 
 
-def test_protobuf_reply_is_reported_before_any_decoder(capsys):
-    code, _ = run(lambda request: httpx.Response(200, headers={"content-type": "application/x-protobuf"}, content=b"\x12\x03\x08\xac\x02"))
+def malware_protobuf():
+    digest = next(iter(HASHES.full_hashes))  # 테스트 URL 표현 중 하나의 전체 해시
+    entry = (
+        b"\x0a\x20" + digest  # FullHash 필드 1 full_hash, LEN 32
+        + b"\x12\x02"         # FullHash 필드 2 full_hash_details, LEN 2
+        + b"\x08\x01"         #   threat_type varint 1 = MALWARE
+    )
+    return (
+        b"\x0a" + bytes([len(entry)]) + entry  # 응답 필드 1 full_hashes, LEN 38
+        + b"\x12\x03\x08\xac\x02"            # 응답 필드 2 cache_duration, LEN 3: seconds 300
+    )
+
+
+def test_default_run_protobuf_match_shows_structure_and_verdict(capsys):
+    code, requests = run(lambda request: httpx.Response(200, headers={"content-type": "application/x-protobuf"}, content=malware_protobuf()))
     output = capsys.readouterr().out
-    assert code == 1 and "Content-Type: application/x-protobuf" in output
-    assert "protobuf일 수 있어요" in output and "reason=invalid_response" in output
+    assert code == 0 and len(requests) == 1
+    assert "alt" not in requests[0].url.params and requests[0].headers["x-goog-api-key"] == KEY
+    assert "HTTP 상태: 200" in output and "Content-Type: application/x-protobuf" in output
+    assert "protobuf 구조: full_hashes 1개, cache_duration 300s" in output
+    assert "[0] full_hash 길이 32바이트, details 1개 (threat_type: MALWARE; attributes: 0개)" in output
+    assert "status=malicious, reason=full_hash_match" in output and "위협 유형: MALWARE" in output
+    assert "[확인] 전체 해시와 위협 유형이 일치했어요" in output
     assert_no_secrets(output)
+
+
+def test_default_run_protobuf_empty_is_guidance(capsys):
+    code, _ = run(lambda request: httpx.Response(200, headers={"content-type": "application/x-protobuf"},
+                                                 content=b"\x12\x03\x08\xac\x02"))  # cache_duration 300s만
+    output = capsys.readouterr().out
+    assert code == 0 and "protobuf 구조: full_hashes 0개, cache_duration 300s" in output
+    assert "status=unknown, reason=no_match" in output and "v5에서 일치하지 않을 수 있어요" in output
+    assert "[실패]" not in output
+
+
+def test_default_run_protobuf_parse_failure_prints_size_only(capsys):
+    content = b"\x0a\x05\x00"  # full_hashes 길이 5인데 1바이트만 있음
+    code, _ = run(lambda request: httpx.Response(200, headers={"content-type": "application/x-protobuf"}, content=content))
+    output = capsys.readouterr().out
+    assert code == 1 and "해석 실패(형식 오류) / 본문 크기: 3 바이트" in output
+    assert "reason=invalid_response" in output and "protobuf 구조" not in output and "[중요]" not in output
+    assert content.hex() not in output
+    assert_no_secrets(output)
+
+
+def test_default_run_unsupported_content_type(capsys):
+    code, _ = run(lambda request: httpx.Response(200, headers={"content-type": "text/html"}, content=b"<html></html>"))
+    output = capsys.readouterr().out
+    assert code == 1 and "Content-Type: text/html" in output and "reason=invalid_response" in output
+    assert "지원하지 않는 응답 형식이에요" in output and "<html>" not in output
 
 
 @pytest.mark.parametrize("status,reason", [(401, "authentication_failed"), (403, "authentication_failed"), (429, "provider_rate_limit"), (503, "server_error")])
