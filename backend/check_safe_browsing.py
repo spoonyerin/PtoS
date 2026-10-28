@@ -1,21 +1,29 @@
-"""Run from backend: python check_safe_browsing.py --live [--timeout 초]
+"""Run from backend: python check_safe_browsing.py --live [--timeout 초] [--probe official-example]
 
 Google Safe Browsing v5 hashes.search를 사람이 직접 한 번 확인하는 수동 스크립트다. 자동 테스트에 넣지 않는다.
 - --live 옵션, GOOGLE_SAFE_BROWSING_API_KEY, PTOS_SAFE_BROWSING_MODE=live-noncommercial이 모두 있을 때만 호출한다.
 - 사용자 입력은 받지 않는다. 아래 고정 테스트 URL의 해시 접두사만 1회 조회하고, 그 URL에는 접속하지 않는다.
+- --probe official-example은 테스트 URL 대신 공식 개요 예시 접두사(WwuJdQ) 1개만 보낸다. 키 문제와 접두사 형식 문제를 가른다.
 - 키·접두사·전체 해시는 출력하지 않는다. 앱과 같은 정규화·해시·응답 대조(SafeBrowsingV5Provider)를 거친다.
+- 이 스크립트에서만 HTTP 오류 본문을 최대 16 KiB 읽어 짧은 분류 값(error.status, details[].reason 등)만 출력한다.
+  오류 message·description 원문은 출력하지 않는다. 앱의 전송기는 계속 오류 본문을 읽지 않는다.
 
 테스트 URL 출처: Google 공식 GitHub 저장소 google/safebrowsing의 README(sblookup 예시,
 https://github.com/google/safebrowsing). v4 참조 구현의 예시이며 v5 문서에서는 테스트 URL 목록을 찾지 못했다.
 v5에서 이 URL이 위협 목록과 일치한다는 보장은 없다.
+공식 예시 접두사 출처: https://developers.google.com/safe-browsing/reference (hashes.search 예시 요청 hashPrefixes=WwuJdQ)
 """
 
 import argparse
 import asyncio
 from collections.abc import Mapping
+import json
 import os
+import re
 import sys
 import time
+
+import httpx
 
 from app.safe_browsing import SafeBrowsingV5Provider, SearchResponse, TransportNetworkError, TransportResponseError, TransportTimeout
 from app.safe_browsing_http import HttpxHashSearchTransport
@@ -24,7 +32,93 @@ from app.urls import extract_urls
 
 TEST_URL = "http://testsafebrowsing.appspot.com/apiv4/ANY_PLATFORM/MALWARE/URL/"
 TEST_URL_SOURCE = "https://github.com/google/safebrowsing (README, sblookup 예시, v4 참조 구현)"
+OFFICIAL_EXAMPLE_PREFIX = "WwuJdQ"
+OFFICIAL_EXAMPLE_SOURCE = "https://developers.google.com/safe-browsing/reference (hashes.search 예시 요청)"
 MAX_TIMEOUT = 30.0
+# 진단용으로 읽는 오류 본문의 최대 크기(개발 제안).
+MAX_ERROR_BODY_BYTES = 16 * 1024
+
+UPPER_CODE = re.compile(r"[A-Z][A-Z0-9_]{0,63}")
+TYPE_NAME = re.compile(r"[A-Za-z0-9_]{1,64}")
+FIELD_NAME = re.compile(r"[A-Za-z0-9_.\[\]]{1,64}")
+CONTENT_TYPE = re.compile(r"[A-Za-z0-9!#$&^_.+\-/;= ]{1,100}")
+OMITTED = "(형식 밖 값 생략)"
+
+
+def _short(value, pattern: re.Pattern) -> str | None:
+    if value is None:
+        return None
+    return value if isinstance(value, str) and pattern.fullmatch(value) else OMITTED
+
+
+def summarize_error_body(content_type: str, data: bytes, truncated: bool) -> list[str]:
+    """오류 본문에서 짧은 분류 값만 뽑는다. message·description·metadata 원문은 돌려주지 않는다."""
+    shown_type = content_type if CONTENT_TYPE.fullmatch(content_type or "") else "(없음 또는 형식 밖)"
+    if truncated:
+        return [f"오류 본문: {MAX_ERROR_BODY_BYTES // 1024} KiB를 넘어 분석하지 않았어요 (Content-Type: {shown_type})"]
+    if (content_type or "").split(";")[0].strip().lower() != "application/json":
+        return [f"오류 본문: JSON이 아니에요 (Content-Type: {shown_type})"]
+    try:
+        body = json.loads(data)
+    except ValueError:
+        return [f"오류 본문: JSON이 아니에요 (Content-Type: {shown_type})"]
+    error = body.get("error") if isinstance(body, dict) else None
+    if not isinstance(error, dict):
+        return ["오류 본문: error 객체가 없어요"]
+    lines = []
+    code = error.get("code")
+    lines.append(f"error.code: {code if isinstance(code, int) and not isinstance(code, bool) else OMITTED}")
+    lines.append(f"error.status: {_short(error.get('status'), UPPER_CODE) or '(없음)'}")
+    message = error.get("message")
+    message = message if isinstance(message, str) else ""
+    # message 원문은 출력하지 않고 안에서만 검사해 참/거짓만 낸다.
+    lines.append(f"message_mentions_base64: {str(bool(re.search(r'base64|type_bytes', message, re.IGNORECASE))).lower()}")
+    lines.append(f"message_mentions_api_key: {str(bool(re.search(r'api[ _-]?key', message, re.IGNORECASE))).lower()}")
+    details = error.get("details")
+    for index, detail in enumerate(details[:10] if isinstance(details, list) else []):
+        if not isinstance(detail, dict):
+            continue
+        raw_type = detail.get("@type")
+        type_name = _short(re.split(r"[/.]", raw_type)[-1], TYPE_NAME) if isinstance(raw_type, str) else None
+        parts = [f"@type={type_name or '(없음)'}"]
+        if "reason" in detail:
+            parts.append(f"reason={_short(detail.get('reason'), UPPER_CODE)}")
+        violations = detail.get("fieldViolations")
+        if isinstance(violations, list):
+            fields = [_short(v.get("field"), FIELD_NAME) or "(없음)" for v in violations[:10] if isinstance(v, dict)]
+            parts.append(f"fieldViolations.field=[{', '.join(fields)}]")
+        lines.append(f"error.details[{index}]: {' '.join(parts)}")
+    return lines
+
+
+class ErrorBodyDiagnostics(httpx.AsyncBaseTransport):
+    """수동 확인 전용. 200이 아닌 응답 본문을 제한된 크기만 읽어 분류 값으로 요약하고, 본문은 비워서 넘긴다."""
+
+    def __init__(self, inner: httpx.AsyncBaseTransport):
+        self.inner = inner
+        self.summary: list[str] | None = None
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        response = await self.inner.handle_async_request(request)
+        if response.status_code == 200:
+            return response
+        content_type = response.headers.get("content-type", "")
+        data, truncated = bytearray(), False
+        try:
+            async for chunk in response.aiter_bytes():
+                if len(data) + len(chunk) > MAX_ERROR_BODY_BYTES:
+                    truncated = True
+                    break
+                data.extend(chunk)
+        finally:
+            await response.aclose()
+        self.summary = summarize_error_body(content_type, bytes(data), truncated)
+        data.clear()
+        # 앱 전송기는 오류 본문을 읽지 않으므로 상태 코드만 그대로 넘긴다.
+        return httpx.Response(response.status_code, headers=[("content-type", content_type)] if content_type else [])
+
+    async def aclose(self) -> None:
+        await self.inner.aclose()
 
 
 class RecordingTransport:
@@ -76,25 +170,7 @@ def refuse(message: str) -> int:
     return 2
 
 
-async def check(env: Mapping[str, str], timeout: float, transport=None) -> int:
-    key = env.get(API_KEY_ENV, "").strip()
-    if not key:
-        return refuse(f"{API_KEY_ENV}가 없어요. 백엔드 환경 변수로만 넣어주세요.")
-    if env.get(MODE_ENV, "") != LIVE_MODE:
-        return refuse(f"{MODE_ENV}={LIVE_MODE} 가 정확히 설정되어 있지 않아요.")
-    value = extract_urls(TEST_URL, direct=True).records[0].value
-    recorder = RecordingTransport(HttpxHashSearchTransport(key, timeout=timeout, transport=transport))
-    # 이 스크립트 실행에서 호출은 최대 1회다.
-    provider = SafeBrowsingV5Provider(recorder, per_minute=1, per_day=1, timeout=timeout)
-    try:
-        result = await provider.lookup(value)
-    finally:
-        await provider.aclose()
-
-    print("Google Safe Browsing v5 hashes.search 수동 확인 (저장소 없는 실시간 모드)")
-    print(f"테스트 URL: {TEST_URL}")
-    print(f"테스트 URL 출처: {TEST_URL_SOURCE}")
-    print("이 URL에는 접속하지 않았고, 4바이트 해시 접두사만 보냈어요.")
+def print_diagnostics(recorder: RecordingTransport, diagnostics: ErrorBodyDiagnostics, timeout: float) -> None:
     print(f"호출 횟수: {recorder.calls}회 / 보낸 접두사 개수: {recorder.prefix_count}개")
     if recorder.elapsed_ms is not None:
         print(f"응답 시간: {recorder.elapsed_ms:.0f} ms (이번 확인의 제한 {timeout:g}초)")
@@ -106,6 +182,56 @@ async def check(env: Mapping[str, str], timeout: float, transport=None) -> int:
         print(f"응답의 전체 해시 개수: {recorder.full_hash_count}")
     if recorder.error:
         print(f"전송 단계 문제: {recorder.error}")
+    for line in diagnostics.summary or []:
+        print(line)
+    if diagnostics.summary:
+        text = "\n".join(diagnostics.summary)
+        if "API_KEY" in text or "message_mentions_api_key: true" in text:
+            print("[참고] 오류 분류에 API 키 관련 표시가 있어요. 키 값·제한 설정을 확인해주세요.")
+        if "message_mentions_base64: true" in text or re.search(r"hash_?prefixes", text, re.IGNORECASE):
+            print("[참고] 오류 분류가 해시 접두사(형식)를 가리켜요. 접두사 인코딩 결정에 이 출력을 공유해주세요.")
+
+
+async def check(env: Mapping[str, str], timeout: float, transport=None, probe: str | None = None) -> int:
+    key = env.get(API_KEY_ENV, "").strip()
+    if not key:
+        return refuse(f"{API_KEY_ENV}가 없어요. 백엔드 환경 변수로만 넣어주세요.")
+    if env.get(MODE_ENV, "") != LIVE_MODE:
+        return refuse(f"{MODE_ENV}={LIVE_MODE} 가 정확히 설정되어 있지 않아요.")
+    diagnostics = ErrorBodyDiagnostics(transport if transport is not None else httpx.AsyncHTTPTransport())
+    recorder = RecordingTransport(HttpxHashSearchTransport(key, timeout=timeout, transport=diagnostics))
+
+    print("Google Safe Browsing v5 hashes.search 수동 확인 (저장소 없는 실시간 모드)")
+    if probe == "official-example":
+        print(f"확인 방식: 공식 예시 접두사 1개만 조회 (출처: {OFFICIAL_EXAMPLE_SOURCE})")
+        try:
+            async with asyncio.timeout(timeout):
+                await recorder.search((OFFICIAL_EXAMPLE_PREFIX,))
+        except (TimeoutError, TransportTimeout):
+            recorder.error = recorder.error or "전송 시간 초과"
+        except (TransportNetworkError, TransportResponseError):
+            pass
+        finally:
+            await recorder.aclose()
+        print_diagnostics(recorder, diagnostics, timeout)
+        if recorder.status_code == 200:
+            print("[확인] 공식 예시 접두사로는 200이에요. 키와 기본 요청은 정상이고, 문제는 테스트 URL 접두사 쪽일 가능성이 커요.")
+            return 0
+        print("[실패] 공식 예시 접두사로도 조회하지 못했어요. 위 오류 분류를 확인해주세요.")
+        return 1
+
+    value = extract_urls(TEST_URL, direct=True).records[0].value
+    # 이 스크립트 실행에서 호출은 최대 1회다.
+    provider = SafeBrowsingV5Provider(recorder, per_minute=1, per_day=1, timeout=timeout)
+    try:
+        result = await provider.lookup(value)
+    finally:
+        await provider.aclose()
+
+    print(f"테스트 URL: {TEST_URL}")
+    print(f"테스트 URL 출처: {TEST_URL_SOURCE}")
+    print("이 URL에는 접속하지 않았고, 4바이트 해시 접두사만 보냈어요.")
+    print_diagnostics(recorder, diagnostics, timeout)
     print(f"결과: status={result.status}, reason={result.reason}")
     print(f"위협 유형: {', '.join(result.threat_types) if result.threat_types else '(없음)'}")
 
@@ -132,12 +258,14 @@ def main(argv: list[str] | None = None, env: Mapping[str, str] | None = None, tr
     parser.add_argument("--live", action="store_true", help="실제 Google 호출을 허용한다. 없으면 호출하지 않는다.")
     parser.add_argument("--timeout", type=float, default=10.0,
                         help=f"이번 확인의 제한 시간(초, 기본 10, 최대 {MAX_TIMEOUT:g}). 실제 지연을 재기 위해 앱 기본값보다 길다.")
+    parser.add_argument("--probe", choices=["official-example"],
+                        help="테스트 URL 대신 공식 예시 접두사 WwuJdQ 1개만 조회한다 (호출 1회).")
     args = parser.parse_args(argv)
     if not args.live:
         return refuse("--live 옵션이 없어요. 실제 Google 호출은 --live를 붙여 직접 실행할 때만 해요.")
     if not 0 < args.timeout <= MAX_TIMEOUT:
         return refuse(f"--timeout은 0보다 크고 {MAX_TIMEOUT:g} 이하여야 해요.")
-    return asyncio.run(check(os.environ if env is None else env, args.timeout, transport))
+    return asyncio.run(check(os.environ if env is None else env, args.timeout, transport, args.probe))
 
 
 if __name__ == "__main__":

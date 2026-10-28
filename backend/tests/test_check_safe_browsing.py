@@ -105,5 +105,115 @@ def test_network_error_is_reported(capsys):
     assert_no_secrets(output)
 
 
+SECRET_MESSAGE = f"Invalid value at 'hash_prefixes[3]' (TYPE_BYTES), Base64 decoding failed for \"ab+/cd\" key={KEY} https://example.invalid/leak"
+
+
+def google_error(status="INVALID_ARGUMENT", message=SECRET_MESSAGE, details=None, code=400):
+    return {"error": {"code": code, "message": message, "status": status, "details": details or []}}
+
+
+def assert_no_error_text(output: str):
+    assert_no_secrets(output)
+    for leaked in ("Invalid value", "decoding failed", "ab+/cd", "example.invalid", "leak", "secret-description", "meta-value"):
+        assert leaked not in output
+
+
+def test_bad_prefix_400_prints_only_short_classification(capsys):
+    details = [{"@type": "type.googleapis.com/google.rpc.BadRequest", "fieldViolations": [
+        {"field": "hash_prefixes[3]", "description": "secret-description " + KEY}]}]
+    code, requests = run(lambda request: httpx.Response(400, json=google_error(details=details)))
+    output = capsys.readouterr().out
+    assert code == 1 and len(requests) == 1
+    assert "HTTP 상태: 400" in output and "reason=http_error" in output
+    assert "error.code: 400" in output and "error.status: INVALID_ARGUMENT" in output
+    assert "message_mentions_base64: true" in output and "message_mentions_api_key: false" in output
+    assert "error.details[0]: @type=BadRequest fieldViolations.field=[hash_prefixes[3]]" in output
+    assert "해시 접두사(형식)를 가리켜요" in output and "API 키 관련" not in output
+    assert_no_error_text(output)
+
+
+def test_invalid_key_400_is_identified_without_message(capsys):
+    details = [{"@type": "type.googleapis.com/google.rpc.ErrorInfo", "reason": "API_KEY_INVALID",
+                "domain": "googleapis.com", "metadata": {"service": "meta-value"}}]
+    body = google_error(message=f"API key not valid. Please pass a valid API key. {KEY}", details=details)
+    code, _ = run(lambda request: httpx.Response(400, json=body))
+    output = capsys.readouterr().out
+    assert code == 1 and "error.details[0]: @type=ErrorInfo reason=API_KEY_INVALID" in output
+    assert "message_mentions_api_key: true" in output and "message_mentions_base64: false" in output
+    assert "API 키 관련 표시" in output and "API key not valid" not in output
+    assert_no_error_text(output)
+
+
+@pytest.mark.parametrize("value", ["lower_case", "TOO_LONG_" * 10, "HAS SPACE", 123])
+def test_unexpected_values_are_omitted(value, capsys):
+    details = [{"@type": "type.googleapis.com/google.rpc.ErrorInfo", "reason": value}]
+    run(lambda request: httpx.Response(400, json=google_error(status=value, details=details)))
+    output = capsys.readouterr().out
+    assert "error.status: (형식 밖 값 생략)" in output and "reason=(형식 밖 값 생략)" in output
+    if isinstance(value, str):
+        assert value not in output
+
+
+@pytest.mark.parametrize("response,expected", [
+    (httpx.Response(400, headers={"content-type": "text/html"}, content=b"<html>" + KEY.encode() + b"</html>"), "JSON이 아니에요 (Content-Type: text/html)"),
+    (httpx.Response(400, headers={"content-type": "application/json"}, content=b"not json " + KEY.encode()), "JSON이 아니에요"),
+    (httpx.Response(400, headers={"content-type": "application/json"}, content=b"[1]"), "error 객체가 없어요"),
+    (httpx.Response(400, headers={"content-type": "application/json"}, content=b'{"error": {"message": "' + b"x" * (16 * 1024) + b'"}}'), "16 KiB를 넘어 분석하지 않았어요"),
+])
+def test_non_json_missing_and_oversized_bodies(response, expected, capsys):
+    code, _ = run(lambda request: response)
+    output = capsys.readouterr().out
+    assert code == 1 and expected in output and "<html>" not in output
+    assert_no_secrets(output)
+
+
+def test_probe_sends_only_the_official_example_prefix(capsys):
+    code, requests = run(lambda request: httpx.Response(200, headers=JSON, json={"cacheDuration": "60s"}),
+                         argv=("--live", "--probe", "official-example"))
+    output = capsys.readouterr().out
+    assert code == 0 and len(requests) == 1
+    assert requests[0].url.params.get_list("hashPrefixes") == ["WwuJdQ"]
+    assert "공식 예시 접두사 1개만 조회" in output and "보낸 접두사 개수: 1개" in output
+    assert "키와 기본 요청은 정상" in output and "testsafebrowsing" not in output
+    assert KEY not in output
+
+
+def test_probe_reports_key_error(capsys):
+    details = [{"@type": "type.googleapis.com/google.rpc.ErrorInfo", "reason": "API_KEY_INVALID"}]
+    code, requests = run(lambda request: httpx.Response(400, json=google_error(details=details, message="API key not valid")),
+                         argv=("--live", "--probe", "official-example"))
+    output = capsys.readouterr().out
+    assert code == 1 and len(requests) == 1
+    assert "reason=API_KEY_INVALID" in output and "[실패]" in output and "API key not valid" not in output
+
+
+def test_probe_network_error_is_reported(capsys):
+    def fail(request):
+        raise httpx.ConnectError(f"{request.url} {KEY}", request=request)
+    code, _ = run(fail, argv=("--live", "--probe", "official-example"))
+    output = capsys.readouterr().out
+    assert code == 1 and "네트워크 오류" in output and KEY not in output
+
+
+def test_app_transport_still_does_not_read_error_bodies():
+    """진단은 스크립트 전용이다. 앱 전송기는 오류 본문을 읽지 않고 상태 코드만 넘긴다."""
+    import asyncio
+
+    class Unreadable(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            raise AssertionError("app transport must not read error bodies")
+            yield b""
+
+    async def go():
+        transport = safe_browsing_http.HttpxHashSearchTransport(KEY, timeout=1.0, transport=httpx.MockTransport(
+            lambda request: httpx.Response(400, stream=Unreadable())))
+        try:
+            return await transport.search(("WwuJdQ",))
+        finally:
+            await transport.aclose()
+    response = asyncio.run(go())
+    assert response.status_code == 400 and response.body == {}
+
+
 def test_script_uses_the_app_transport():
     assert check_safe_browsing.HttpxHashSearchTransport is safe_browsing_http.HttpxHashSearchTransport
