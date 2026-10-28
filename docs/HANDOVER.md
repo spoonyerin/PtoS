@@ -23,7 +23,7 @@ React와 FastAPI를 연결한 **규칙 기반 개발 버전**이다. 문자·URL
 | 화면·API | 문자 입력, 서버 요청, 결과 표시, 빈 입력·오류 처리 | Figma 적용, 고령자 사용성 검증 |
 | 규칙 분석 | 명의 주장, 금전·민감정보 요구, 링크·앱 요구, 긴급성, 근거, 템플릿. T4 임시 보강(`rules-dev-v3`): 대괄호 머리말·가족 호칭(약한 명의), 반말·의문형 요청, “확인” 계열 링크 요구, 불이익·청구, 임박 기한, 규칙 A·B | 팀 정책 확정(T1), 검수된 평가셋 재측정, 답장 유도·혜택·비밀유지·콜백 신호 |
 | URL | 직접 입력, 본문 추출, HTTP(S) 검증, IDNA, 구두점 처리, 중복 제거 | 한국 스미싱 URL 탐지 범위 측정 |
-| 평판 어댑터 | Safe Browsing v5 URL 표현, SHA-256, 전체 해시 일치, 캐시, 개발 예산, 실제 HTTP 전송기(protobuf 직접 디코더), 켜는 조건, ready `url_reputation`, 전송 안내·Google 표기 화면, 수동 확인 스크립트 | hashes.search 할당량 항목 확인, 켜진 앱 화면에서의 실조회 확인, 배포 시 키 IP 제한·다중 프로세스 캐시 |
+| 평판 어댑터 | Safe Browsing v5 URL 표현, SHA-256, 전체 해시 일치, 캐시, 개발 예산, 실제 HTTP 전송기(protobuf 직접 디코더), 켜는 조건, ready `url_reputation`, 전송 안내·Google 표기 화면, 수동 확인 스크립트 | hashes.search 할당량 항목 확인, 배포 시 키 IP 제한·다중 프로세스 캐시 |
 | OCR | Tesseract 5 한국어·영어, 이미지 검증, 수정·확인 후 분석 | 실제 기기 캡처 품질 평가 |
 | 경량 AI | TF-IDF + 로지스틱 회귀 기준선(T5): 어댑터·가짜 모델 테스트, `CompositeAnalyzer`(short-circuit 없음), dev 전용 학습·그룹 교차검증·임시 임계값, 하네스 `rules+model`, 지연·메모리 측정 | 검수된 평가셋·정상 표본 확보, 팀 정책 확정, test 1회 비교, 트랜스포머 비교(T5c, 중간점검 이후), 계약 B안 검토 |
 | LLM | 없음 | 조건부 호출, 비용·전송 정책 |
@@ -55,7 +55,7 @@ T1 결정 ──────┼─ T5 경량 모델 (5a 어댑터 ∥ 5b TF-IDF 
 | T5a | 경량 모델 어댑터와 가짜 모델 | T0 | 가짜 모델 응답으로 종합 흐름과 `analysis_stages`를 검증한다. 실제 모델 평가와 구분해 기록한다. **(2026-10-27 구현)** `TextRiskModel`, 저장소 밖 manifest + joblib 로더, `CompositeAnalyzer`, 임시 정책 `rules-model-dev-v1`(정보 부족 → 의심만). 계약 변경 없음(A안). | [  ] | [  ] |
 | T5b | 단순 기준선 모델 (중간점검 범위) | T2 | TF-IDF 분류기로 학습·평가 코드를 재현 가능하게 만든다 (설정, 분할, 모델 버전 고정). **(2026-10-27 구현)** `train_model.py`: dev만 학습, `campaign_id` 그룹 교차검증, 임시 임계값(`provisional-dev-cv`), 하네스 `rules+model`, `measure_model.py`. 커밋 `ba5bc1b`로 학습한 모델로 9절 기록을 갱신했다. 남은 것: test 1회 비교. | [  ] | [  ] |
 | T5c | 모델 비교 (**중간점검 이후**) | T5b | TF-IDF 기준선 대비 KoELECTRA, KLUE-RoBERTa, KoBERT 등 트랜스포머 후보(확정 아님, AGENTS.md 결정 필요 3)를 비교한 결과, 이용 조건이 확인된 공개 피싱 탐지 모델과의 비교, 정밀도·재현율·F1·혼동행렬·처리시간·메모리·오분류 사례. 피싱을 정상으로 놓치는 비율은 따로 기록한다. | [  ] | [  ] |
-| T6 | URL 평판 | T0 | 이용 조건 확인(**[준비]**) → HTTP 전송기 → 실제 API 검증. 가짜 응답 검증과 실제 검증을 구분해 기록하고, 오류·충돌·캐시·호출 한도·전송 범위를 문서화한다. 한국 스미싱 URL에 대한 탐지 범위도 직접 측정한다. **(2026-10-28 구현)** 이용 조건은 사용자가 확인(비상업 캡스톤, 결제수단 없음, 키 API 제한). 전송기: 헤더 키, `hashPrefixes`만, protobuf 응답을 직접 디코더로 해석. 켜는 조건: 키 + `PTOS_SAFE_BROWSING_MODE=live-noncommercial`, 시간 제한 `PTOS_SAFE_BROWSING_TIMEOUT_SECONDS`(기본 1초). 장애 분류 추가(`network_error`, `server_error` 등). ready 응답에 `url_reputation`(계약 변경), 입력 화면 전송 안내, Google 근거에만 Advisory 표기. 수동 확인 스크립트로 실제 호출 결과 기록(테스트 URL 1건 일치). 남은 것: 한국 스미싱 URL 탐지 범위 측정, hashes.search 할당량 항목 확인, 켜진 앱 화면의 실조회 확인. | [  ] | [  ] |
+| T6 | URL 평판 | T0 | 이용 조건 확인(**[준비]**) → HTTP 전송기 → 실제 API 검증. 가짜 응답 검증과 실제 검증을 구분해 기록하고, 오류·충돌·캐시·호출 한도·전송 범위를 문서화한다. 한국 스미싱 URL에 대한 탐지 범위도 직접 측정한다. **(2026-10-28 구현)** 이용 조건은 사용자가 확인(비상업 캡스톤, 결제수단 없음, 키 API 제한). 전송기: 헤더 키, `hashPrefixes`만, protobuf 응답을 직접 디코더로 해석. 켜는 조건: 키 + `PTOS_SAFE_BROWSING_MODE=live-noncommercial`, 시간 제한 `PTOS_SAFE_BROWSING_TIMEOUT_SECONDS`(기본 1초). 장애 분류 추가(`network_error`, `server_error` 등). ready 응답에 `url_reputation`(계약 변경), 입력 화면 전송 안내, Google 근거에만 Advisory 표기. 수동 확인 스크립트로 실제 호출 결과 기록(테스트 URL 1건 일치). 남은 것: 한국 스미싱 URL 탐지 범위 측정, hashes.search 할당량 항목 확인. | [  ] | [  ] |
 | T7 | 종합 정책과 조건부 LLM | T3, T5, T6 | 충돌·불확실 시에만 호출하는 기준을 검증 데이터에서 정하고 LLM 호출률, 전체 비용, 탐지 성능, 응답 시간을 전체 LLM 방식과 비교한다. LLM 장애 시 화면 계약(전체 오류 또는 부분 결과)을 명시한다. | [  ] | [  ] |
 | T8 | 화면·PWA·배포 | T0 | Figma를 `components`와 `styles.css`에 적용하고 요청 상태·분석 로직은 분리한다. 큰 글씨, 키보드 접근, 색상·기호·텍스트 병행을 검증한다. 고령자 사용성 테스트를 수행한다. AWS 배포 전에 HTTPS, 비밀키, 요청 크기·속도 제한, 동시성, 공급자 호출 예산, 로그 비노출을 준비한다. PWA 캐시에 원문·결과가 들어가지 않는지 검증한다. **Safe Browsing 후속:** AWS 배포 시 서버 고정 IP를 정하고 Google 콘솔에서 API 키에 애플리케이션 제한(IP 주소)을 건다(현재는 API 제한만 있음). 키와 `PTOS_SAFE_BROWSING_MODE`는 서버 환경 변수로만 넣는다. 비상업 조건에 따라 팀원·평가자만 접근하게 하고 공개 운영하지 않는다. 다중 프로세스면 캐시·호출 예산 공유를 다시 설계한다. | [  ] | [  ] |
 | T9 | 단계별 지연 계측 | T0 | 규칙, OCR, 평판, 모델, LLM별 지연과 오류를 **원문·전체 URL·이미지 없이** 기록한다. p50, p95, 시간 초과 비율, LLM 호출 비율을 볼 수 있다. | [  ] | [  ] |
@@ -128,7 +128,7 @@ T1 결정 ──────┼─ T5 경량 모델 (5a 어댑터 ∥ 5b TF-IDF 
 - [x] test split 1회 비교 실행 (T5b)
 - [x] Google API 키 발급, API 제한, 이용 조건·필수 표기 확인 (T6, 2026-10-28)
 - [ ] hashes.search가 해당하는 할당량 항목과 한도 확인 (T6)
-- [ ] 켜진 앱 화면에서 테스트 URL로 Google 표기·전송 안내 직접 확인 (T6)
+- [x] 켜진 앱 화면에서 테스트 URL로 Google 표기·전송 안내 직접 확인 (T6, 2026-10-28 수동 관찰)
 - [ ] AWS 배포 시 서버 고정 IP로 API 키 애플리케이션 제한 (T8)
 - [ ] LLM 공급자와 비용 상한 승인 (T7). 유료 호출은 별도 합의 없이 연결하지 않는다.
 - [ ] Figma 전달 일정 확정 (T8)
@@ -154,7 +154,7 @@ T1 결정 ──────┼─ T5 경량 모델 (5a 어댑터 ∥ 5b TF-IDF 
 | 데이터 원래 분류 | 시나리오 기준 malicious 37 / benign_lookalike 32 / benign 31, 본문 기준 41/32/31. 제공 문서의 일부 수치와 다르며, 이 분류를 제품의 4단계 정답으로 자동 변환하지 않는다. |
 | 평가 입력 검증 | 라벨이 없는 라벨링 파일은 평가에서 거부한다. BOM 유무에 따른 CSV 읽기 일치 검증 기록 있음. |
 | T5 모델 연결 | 2026-10-27 백엔드 `pytest -q` 536 passed, 2 skipped, 1 warning(3단계, 커밋 `ba5bc1b` + 미커밋). 1단계 변경에서 `npm run api:check`·`npm test`(43)·`npm run build`·Playwright 25 passed(실제 FastAPI, 모델 없는 서버). 모델 동작은 가짜 모델과 테스트 안 합성 CSV로만 검증했다. 실제 OCR(`RUN_REAL_OCR=1`)은 재실행하지 않았다. |
-| T6 URL 평판 | 2026-10-28, 4단계 커밋 `8619c4f` 기준: 백엔드 724 passed, 2 skipped. `export_openapi.py --check`·`npm run api:check` 통과(ready 계약 변경 후 재생성). `npm test` 65 passed, `npm run build` 통과, Playwright 29 passed(평판 꺼진 실제 FastAPI, 평판·ready 켜짐은 가짜 응답). 자동 테스트는 외부 호출을 막고 실패시킨다. 실제 Google 호출은 사용자가 수동 스크립트로 실행했고 테스트 URL 1건이 `malicious / full_hash_match`였다(`docs/SAFE_BROWSING_VALIDATION.md`). 실제 OCR은 이번 단계에서 재실행하지 않았다. |
+| T6 URL 평판 | 2026-10-28, 4단계 커밋 `8619c4f` 기준: 백엔드 724 passed, 2 skipped. `export_openapi.py --check`·`npm run api:check` 통과(ready 계약 변경 후 재생성). `npm test` 65 passed, `npm run build` 통과, Playwright 29 passed(평판 꺼진 실제 FastAPI, 평판·ready 켜짐은 가짜 응답). 자동 테스트는 외부 호출을 막고 실패시킨다. 실제 Google 호출은 사용자가 수동 스크립트로 실행했고 테스트 URL 1건이 `malicious / full_hash_match`였다(`docs/SAFE_BROWSING_VALIDATION.md`). 실제 OCR은 이번 단계에서 재실행하지 않았다. **2026-10-28 화면 확인(수동 관찰, 자동 테스트 아님):** 모델과 평판을 모두 켠 서버(Windows, Git Bash)에서 ready의 `url_reputation`이 `live`일 때 문자 입력 폼의 분석 버튼 위에 "URL 확인 기능이 켜져 있어요. 주소를 그대로 보내지 않고, 주소에서 만든 일부 정보(해시)만 Google로 전송돼요." 안내가 보였다. Google 공식 테스트 URL이 든 문자를 분석했다. 첫 조회는 평판 조회 시간 초과(앱 기본 1초)로 규칙 결과만 표시됐고 규칙 근거와 의심 등급은 유지됐다. 약 1분 뒤 두 번째 조회는 성공해 `malicious / full_hash_match`(`MALWARE`)로 나왔고 등급이 위험으로 올라갔다. Google 근거에만 "Advisory provided by Google" 링크가 있었고 규칙 근거에는 없었으며, 사용자 URL은 링크가 아니었다. 한국 스미싱 URL 탐지 범위는 확인하지 않았다. 첫 조회 시간 초과는 첫 연결 비용으로 추정하며 확인하지 않았다(필요하면 `PTOS_SAFE_BROWSING_TIMEOUT_SECONDS`를 늘린다). 중간점검 이후 사용성 검토 항목: "위험" 설명 첫 문장이 "확인이 필요한 요구 표현을 발견했어요"로 시작해 등급과 어색하게 읽힌다. |
 | 탐지 성능 | **소규모 파일럿만 측정, 독립 검증 아님.** 아래 "T3 규칙 기준선 파일럿", "T4 규칙 보강 1차 비교", "T5 기준선 모델 dev 교차검증", "T5 rules vs rules+model test 1회 비교" 참고. 검수된 평가셋의 기준선은 아직 없다. 평판 테스트는 가짜 응답이며 실제 API 탐지 성능이 아니다. |
 
 평가 데이터·본문·원래 라벨 매핑은 저장소와 동기화 폴더 밖에 보관하고 커밋하지 않는다.
