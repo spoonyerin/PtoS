@@ -2,17 +2,27 @@
 
 문자 또는 URL을 입력하면 FastAPI가 규칙 기반 위험 신호와 URL 형식·평판 연결 상태를 반환합니다. 스크린샷은 **미리보기 → OCR → 사용자 확인·수정 → 명시적인 확인 후 분석**을 거칩니다. OCR 직후 자동 위험 분석하지 않습니다. React/TypeScript 화면과 Python/FastAPI 분석기를 한 저장소에서 관리합니다.
 
-> **규칙 기반 개발 버전**입니다. 경량 모델은 TF-IDF 기준선만 선택적으로 연결하며(모델 파일을 직접 학습해 `PTOS_MODEL_PATH`로 줄 때만), URL 평판 조회는 없습니다. 신원·사기 여부를 확정하거나 안전을 보장하지 않습니다. `confidence`는 항상 `null`입니다. 실제 개인정보 대신 연습용 문장을 입력하세요.
+> **규칙 기반 개발 버전**입니다. 경량 모델은 TF-IDF 기준선만 선택적으로 연결하며(모델 파일을 직접 학습해 `PTOS_MODEL_PATH`로 줄 때만), URL 평판 조회(Google Safe Browsing)는 기본으로 꺼져 있고 백엔드 환경 변수로 직접 켤 때만 동작합니다. 신원·사기 여부를 확정하거나 안전을 보장하지 않습니다. `confidence`는 항상 `null`입니다. 실제 개인정보 대신 연습용 문장을 입력하세요.
 
 이번 정책은 [RULE_POLICY.md](docs/RULE_POLICY.md)에 먼저 정리했습니다. 수치 점수나 PRD 확정 임계값을 만들지 않습니다. **현재는 `normal`을 반환하지 않습니다.** 규칙에 걸리지 않은 정상 안내문도 미구현 분석 때문에 **정보 부족**으로 표시하며 사기라고 단정하지 않습니다. 최종 MVP의 네 결과 열거형은 계약에 유지합니다.
 
-트랜스포머 등 실제 피싱 AI 모델·LLM, 외부 URL 조회, DB, 배포, PWA 설치와 디자인 개편은 이번 범위에 없습니다. OCR에는 무료 로컬 Tesseract 5를 사용합니다. 최종 PRD 필수 범위와 미확정 사항은 [AGENTS.md](AGENTS.md)를 참고하세요.
+트랜스포머 등 실제 피싱 AI 모델·LLM, 사용자 URL 직접 접속, DB, 배포, PWA 설치와 디자인 개편은 이번 범위에 없습니다. OCR에는 무료 로컬 Tesseract 5를 사용합니다. 최종 PRD 필수 범위와 미확정 사항은 [AGENTS.md](AGENTS.md)를 참고하세요.
 
 문서 역할: [AGENTS.md](AGENTS.md)는 사람과 모든 코딩 에이전트의 공통 지침, [DEVELOPMENT.md](DEVELOPMENT.md)는 개발 작업 방식, [docs/HANDOVER.md](docs/HANDOVER.md)는 현황·로드맵·실행 기록입니다.
 
-URL 평판은 **Google Safe Browsing v5 hashes.search의 키 없는 어댑터**까지 구현했습니다. 정규화·해시·전체 해시 대조·응답 캐시·개발 호출 예산·종합 판정을 가짜 응답으로 검증합니다. **무료/무결제·할당량·필수 표시 조건은 정책 사이트 차단으로 미확인**이므로 실제 HTTP 전송기는 연결하지 않았습니다. 키가 있어도 `policy_pending`으로 외부 호출을 하지 않습니다. 키 발급·결제·추가 패키지 설치는 필요 없습니다. [공식 출처·확인 수준·정책·Windows 확인 순서](docs/SAFE_BROWSING.md)를 읽어주세요. 실제 화면의 평판은 계속 **미연결**입니다.
+## URL 평판 조회 (Google Safe Browsing)
 
-[이번 검증 기록](docs/SAFE_BROWSING_VALIDATION.md)은 가짜 평판 응답 테스트, 실제 한국어 OCR, 실제 Google API 미실행을 구분합니다.
+URL 평판 조회는 Google Safe Browsing API(hashes.search)를 사용한다. 이 API는 비상업적 용도로만 사용할 수 있으며, 상업적 목적에는 Web Risk API를 사용해야 한다. 본 프로젝트는 캡스톤 개발·검증·시연 목적의 비상업적 사용이며, 팀원과 평가자에게만 접근을 허용하고 공개 운영 서비스로 배포하지 않는다. 상업화할 경우 Web Risk API 등 상업용 수단과 이용 조건을 재검토한다.
+
+> **고지:** Google Safe Browsing의 보호는 완벽하지 않습니다. 안전한 사이트가 위험한 사이트로 잘못 표시되거나, 위험한 사이트를 찾아내지 못할 수 있습니다. 이 앱의 결과는 안전을 보장하지 않습니다.
+
+- **기본은 꺼짐**입니다. 백엔드 환경 변수 `GOOGLE_SAFE_BROWSING_API_KEY`와 `PTOS_SAFE_BROWSING_MODE=live-noncommercial`(정확히 이 값)이 **모두** 있을 때만 조회합니다. 키만으로는 켜지지 않습니다(`policy_pending`). 조회 시간 제한은 `PTOS_SAFE_BROWSING_TIMEOUT_SECONDS`(기본 1초, 개발 제안)입니다. 키는 `VITE_` 변수, `.env` 파일, 채팅, 커밋에 넣지 않습니다.
+- 켜져 있으면 주소에서 만든 SHA-256 해시의 앞 4바이트(접두사)와 키만 Google로 보냅니다. URL 원문·전체 해시는 보내지 않고 사용자 URL에 접속하지 않습니다. 화면의 입력 단계에 이 사실을 안내합니다.
+- Google 근거로 만든 경고에만 "Advisory provided by Google"과 공식 Advisory 링크를 붙이고, 규칙·모델 근거에는 붙이지 않습니다.
+- 결과 없음(`unknown`)·오류·시간 초과는 안전 판정이 아니며 이미 찾은 규칙·모델 근거를 지우지 않습니다.
+- 분당 2회·24시간 100회 등 호출 예산은 단일 프로세스 개발 제안이며 Google 할당량이 아닙니다.
+
+켜는 방법, 요청·응답 형식, 상태 표, 수동 확인 스크립트는 [docs/SAFE_BROWSING.md](docs/SAFE_BROWSING.md), 자동 테스트와 실제 호출 결과는 [docs/SAFE_BROWSING_VALIDATION.md](docs/SAFE_BROWSING_VALIDATION.md)를 보세요. 자동 테스트는 실제 Google을 호출하지 않습니다.
 
 **Windows Git Bash 사용자는 [설치·실행·화면 확인 순서](docs/WINDOWS_GIT_BASH.md)를 따라주세요.** Tesseract 설치와 한국어 데이터 준비가 추가되며, Windows 백엔드에서는 `--reload` 없이 실행합니다.
 
@@ -128,8 +138,9 @@ Codespaces는 해당 환경의 전달 호스트만 허용합니다. `allowedHost
 
 - `urls.py`: 네트워크 없는 URL 검증·IDNA 정규화·중복 제거와 원문 위치 보존.
 - `ocr.py`: 교체 가능한 `OcrEngine`, 실제 이미지 검증/EXIF 회전·제거, stdin/stdout 기반 Tesseract 어댑터. OCR API는 Analyzer를 호출하지 않음.
-- `url_reputation.py`: 교체 가능한 `UrlReputationProvider`와 실제 연결을 보류하는 기본 어댑터. 백엔드의 키 유무만 확인하며 키 값은 보존하지 않음.
-- `safe_browsing_urls.py` / `safe_browsing.py`: 로컬 URL 표현·SHA-256, 4바이트 prefix 전송 경계, 전체 해시 대조, 응답 TTL 캐시와 개발 예산. 테스트에서 가짜 전송기만 주입하며 실제 HTTP 전송기는 없음.
+- `url_reputation.py`: 교체 가능한 `UrlReputationProvider`와 켜는 조건. 키와 `PTOS_SAFE_BROWSING_MODE=live-noncommercial`이 모두 있을 때만 실제 공급자를 만들고, 그 외에는 미연결 어댑터. 키 값은 로그·응답에 남기지 않음.
+- `safe_browsing_urls.py` / `safe_browsing.py`: 로컬 URL 표현·SHA-256, 4바이트 prefix 전송 경계, 전체 해시 대조, 응답 TTL 캐시와 개발 예산.
+- `safe_browsing_http.py` / `safe_browsing_proto.py`: 실제 hashes.search HTTP 전송기(헤더 키, `hashPrefixes`만)와 protobuf 응답 직접 디코더. 자동 테스트는 가짜 전송기만 사용.
 - `reputation_policy.py`: 검증된 전체 해시/위협 유형만 URL 원문 근거로 채택하고 문자 규칙과 종합. 결과 없음·오류는 규칙을 낮추거나 정상으로 승격하지 않음.
 - `rule_detection.py`: 대상+긍정적 요구, 명의·긴급 표현, 부정/교육 인용 처리, 원문 근거.
 - `rule_context.py`/`rule_policy.py`: 화자·인용·문단 경계를 구분하고 순수 명의 도입과 인접 직접 요구만 제한적으로 연결해 임시 판정. 반복 횟수나 숫자 점수를 합산하지 않음.
@@ -153,17 +164,17 @@ Codespaces는 해당 환경의 전달 호스트만 허용합니다. `allowedHost
 
 - `evidence`: 코드·표시 이름·규칙 ID·`source: rule | url_reputation`·원문 구절·`start`/`end`. URL 근거는 검증된 전체 해시와 위협 유형 일치가 있어야 하며 기본 미연결 앱에서는 생성하지 않습니다. 좌표는 원문 유니코드 코드포인트의 시작 포함·끝 제외입니다. JS에서는 `Array.from(content).slice(start, end)`가 같은 구절이어야 합니다. 현재 화면은 좌표로 강조하지 않고 받은 구절을 그대로 표시합니다.
 - `input_assessment`: `action_identified` / `sentence_present` / `fragment` / `url_only`와 이유. 글자 수만으로 충분성을 정하지 않습니다.
-- `analysis_stages`: rules는 `completed`, lightweight_model은 모델 미설정 시 `not_connected`·실행 시 `completed`·로드 실패/시간 초과/오류 시 `unavailable`·URL 직접 입력 시 `not_applicable`([모델 정책](docs/MODEL_POLICY.md)), url_reputation은 유효한 URL에 기본 어댑터를 쓰면 `not_connected`, 유효한 URL이 없으면 `not_applicable`입니다.
-- `urls`: 원문/정규화 URL·ASCII 호스트, `validation_status: valid | invalid`, 형식 안내·경계 경고, 모든 `occurrences`(원문 구절·코드포인트 좌표), `reputation`을 포함합니다. 현재 유효 URL의 평판은 `not_connected`, 무효 후보는 `not_requested`이며 provider/checked_at은 null입니다. 형식 확인은 정상/안전 판정이 아닙니다.
+- `analysis_stages`: rules는 `completed`, lightweight_model은 모델 미설정 시 `not_connected`·실행 시 `completed`·로드 실패/시간 초과/오류 시 `unavailable`·URL 직접 입력 시 `not_applicable`([모델 정책](docs/MODEL_POLICY.md)), url_reputation은 꺼져 있으면 `not_connected`, 켜져 있고 모든 조회를 끝내면 `completed`, 하나라도 시간 초과·장애·한도·인증 오류면 `unavailable`, 유효한 URL이 없으면 `not_applicable`입니다.
+- `urls`: 원문/정규화 URL·ASCII 호스트, `validation_status: valid | invalid`, 형식 안내·경계 경고, 모든 `occurrences`(원문 구절·코드포인트 좌표), `reputation`을 포함합니다. 꺼져 있으면 유효 URL의 평판은 `not_connected`(provider/checked_at null), 무효 후보는 `not_requested`입니다. 켜져 있으면 `provider: google_safe_browsing_v5`와 상태·`reason`이 들어갑니다. 형식 확인은 정상/안전 판정이 아닙니다.
 - `policy_reason`: 어떤 임시 조합/보류 기준을 적용했는지 나타내는 개발용 식별자입니다. 확정 위험 점수가 아닙니다.
 
-평판 계약에는 `auth_error`·`rate_limited`와 `reason`, `full_hash_verified`, `threat_types`, `cache_expires_at`, `cache_hit`을 추가했습니다. `unknown/no_match`는 안전 판정이 아니며 이 어댑터는 `benign`을 생성하지 않습니다. 테스트에서 검증한 전체 해시 위협 일치만 임시 위험 경고를 추가합니다. [종합 정책·상태 표](docs/SAFE_BROWSING.md)를 참고하세요.
+평판 계약에는 `auth_error`·`rate_limited`와 `reason`, `full_hash_verified`, `threat_types`, `cache_expires_at`, `cache_hit`을 추가했습니다. `unknown/no_match`는 안전 판정이 아니며 이 어댑터는 `benign`을 생성하지 않습니다. 전체 해시와 위협 유형이 일치할 때만 임시 위험 경고를 추가합니다. 장애 reason은 `network_error`, `server_error`, `http_error`, `invalid_response`, 꺼짐 reason은 `key_missing`, `policy_pending`, `invalid_config`, `not_configured`로 구분합니다. [종합 정책·상태 표](docs/SAFE_BROWSING.md)를 참고하세요.
 
 `risk_level` 계약은 `normal | suspicious | dangerous | insufficient_information`을 유지하지만 현재 정책에서는 normal을 생성하지 않습니다. 지원하는 표현이 제한적이므로 우회 표현·복잡한 부정·인용·다른 대화 주체를 놓치거나 잘못 경고할 수 있습니다.
 
 오류는 422(`INVALID_INPUT`/`INPUT_TOO_LONG`/`INVALID_URL`/`TOO_MANY_URLS`), 503(`ANALYSIS_UNAVAILABLE`), 서버 분석 5초 제한 초과 시 504(`ANALYSIS_TIMEOUT`)로 구분하며 `{ "error": { "code", "message", "retryable" }, "request_id" }` 형태입니다. 브라우저 대기 제한은 별도로 10초입니다. 정보 부족은 오류가 아닌 HTTP 200 분석 결과입니다.
 
-상태 확인: `GET /api/v1/health/live`, `GET /api/v1/health/ready` (`mode: rules`). 입력·근거를 DB/파일/localStorage에 저장하거나 원문 로그로 남기지 않습니다. 응답은 `Cache-Control: no-store`입니다. URL을 직접 열거나 외부로 조회하지 않습니다. 현재 탭 메모리에는 입력과 결과가 남습니다. 공개 운영용 속도 제한·인증·요청 본문 바이트 제한은 아직 없으므로 개발 환경에서 사용하세요.
+상태 확인: `GET /api/v1/health/live`, `GET /api/v1/health/ready` (`{"status": "ready", "mode": "rules", "url_reputation": "live" | "off"}`, T6에서 타입 있는 응답으로 변경). `url_reputation`은 평판 조회가 켜졌는지만 알리며 키·시간 제한·공급자 상태는 넣지 않습니다. 입력·근거를 DB/파일/localStorage에 저장하거나 원문 로그로 남기지 않습니다. 응답은 `Cache-Control: no-store`입니다. URL을 직접 열지 않으며, 평판 조회가 켜진 경우에만 해시 접두사로 Google에 조회합니다. 현재 탭 메모리에는 입력과 결과가 남습니다. 공개 운영용 속도 제한·인증·요청 본문 바이트 제한은 아직 없으므로 개발 환경에서 사용하세요.
 
 ```bash
 curl --fail http://127.0.0.1:5173/api/v1/analyses \

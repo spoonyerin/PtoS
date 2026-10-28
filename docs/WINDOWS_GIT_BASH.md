@@ -14,7 +14,7 @@ git pull --ff-only
 
 필요한 도구는 Git, Python 3.12 또는 3.13, Node.js 22.12 이상(검증은 24), Tesseract 5다. Python/Node가 이미 설치되어 있다면 유지한다. `py -0`, `node --version`으로 확인한다. 2026-10-26에 Windows 11 / Python 3.13.15 / Tesseract v5.5.3에서 백엔드, 실제 OCR, Playwright를 실행했다 (`docs/HANDOVER.md` 9절).
 
-현재 main에는 Safe Browsing의 **키 없는 어댑터**가 있다. 실행·OCR 설치는 기존과 같고 API 키 발급·결제 등록은 필요 없다. 실제 평판은 미연결이며 키를 설정해도 이용 조건 확인 전에는 조회하지 않는다. [공식 조건 확인 결과·로컬 확인 순서](SAFE_BROWSING.md)를 참고한다.
+URL 평판 조회(Google Safe Browsing)는 **기본 꺼짐**이다. 실행·OCR 설치는 기존과 같고 키 없이도 앱은 동작한다. 키와 `PTOS_SAFE_BROWSING_MODE=live-noncommercial`을 백엔드 셸에 둘 다 넣었을 때만 외부 조회가 켜진다. 켜는 방법과 수동 확인은 [SAFE_BROWSING.md](SAFE_BROWSING.md)를 참고한다.
 
 ## 2. 무료 Tesseract 설치
 

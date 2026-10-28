@@ -1,6 +1,6 @@
 # URL 입력·추출 정책 · url-input-v1
 
-PRD FR-03과 개발설계서 4·6·8장을 바탕으로 한 입력 정책이다. URL 접속, DNS 조회, 리디렉션 추적은 하지 않는다. 평판 어댑터·전체 해시 대조·종합 판정의 후속 정책은 [SAFE_BROWSING.md](SAFE_BROWSING.md)에서 확장한다. 기본 앱은 계속 외부 평판 미연결이며 이 문서의 형식/추출 규칙은 유지한다.
+PRD FR-03과 개발설계서 4·6·8장을 바탕으로 한 입력 정책이다. URL 접속, DNS 조회, 리디렉션 추적은 하지 않는다. 평판 어댑터·전체 해시 대조·종합 판정의 후속 정책은 [SAFE_BROWSING.md](SAFE_BROWSING.md)에서 확장한다. 외부 평판 조회는 기본 꺼짐이며(T6, 키와 명시적 모드가 모두 있을 때만 켜짐) 이 문서의 형식/추출 규칙은 유지한다.
 
 - `input_type: url`: 앞뒤 공백을 제외한 HTTP(S) URL 한 개. 스킴 없는 주소, 다른 프로토콜, 여러 주소·설명이 섞인 입력은 422 `INVALID_URL`. 직접 입력에서는 끝 구두점을 자동 제거하지 않는다.
 - `input_type: text`: `http://`, `https://`로 시작하는 주소를 추출한다. `scheme://` 형태의 다른 프로토콜과 `www.`도 후보로 표시하되 지원하지 않는/스킴 없는 형식으로 구분한다. 스킴 없는 일반 도메인과 이메일은 추측해서 추출하지 않는다.
@@ -18,8 +18,8 @@ PRD FR-03과 개발설계서 4·6·8장을 바탕으로 한 입력 정책이다.
 ## 결과와 기존 규칙 통합
 
 - `urls`에 원문 주소, 정규화 주소/ASCII 호스트, 형식 상태와 이유, 경계 안내, 원문 출현 구절·코드포인트 좌표와 평판 상태를 제공한다. 중복 URL의 출현 위치는 모두 보존한다.
-- 유효한 주소는 **형식 확인 / 평판 조회 미연결**이다. 무효 후보는 **형식 확인 필요 / 평판 조회 안 함**이다. 형식 확인은 정상/안전 판정이 아니다.
-- `UrlReputationProvider`와 네트워크를 사용하지 않는 `DisconnectedReputationProvider`를 둔다. 기본 앱은 `not_connected`만 반환한다. 후속 Safe Browsing 어댑터는 malicious/unknown/auth_error/rate_limited/unavailable/timeout을 구분하지만 테스트의 가짜 전송기로만 검증한다. 결과 없음은 정상 근거가 아니다.
+- 평판 조회가 꺼져 있으면 유효한 주소는 **형식 확인 / 평판 조회 미연결**이다. 무효 후보는 **형식 확인 필요 / 평판 조회 안 함**이며 켜져 있어도 조회하지 않는다. 형식 확인은 정상/안전 판정이 아니다.
+- `UrlReputationProvider`와 네트워크를 사용하지 않는 `DisconnectedReputationProvider`를 둔다. 기본 앱은 `not_connected`를 반환한다. 켜진 경우의 Safe Browsing 공급자는 malicious/unknown/auth_error/rate_limited/unavailable/timeout을 구분한다([SAFE_BROWSING.md](SAFE_BROWSING.md)). 자동 테스트는 가짜 전송기만 쓴다. 결과 없음은 정상 근거가 아니다.
 - URL 유무, 형식 오류, IDN, 미연결 상태를 위험 신호 점수로 사용하지 않는다. `rules-dev-v2`의 문장 근거 정책을 유지하고 종합 정책은 `rules-reputation-dev-v1`로 버전 관리한다. `confidence: null`, normal 미반환을 유지한다.
 - URL 안의 경로/쿼리 문자열은 문장 규칙의 명의·송금·인증번호 요구로 해석하지 않는다. 메시지의 URL 밖에서 확인한 요구만 경고한다. 직접 URL 입력은 문장 맥락이 없으므로 정보 부족이다.
 - 화면에서는 주소를 일반 텍스트로 표시한다. `<a>`, 자동 링크, 미리보기 이미지, prefetch를 만들지 않는다. 원문·전체 URL·쿼리·근거는 로그/DB/파일/브라우저 영속 저장소에 저장하지 않는다.
