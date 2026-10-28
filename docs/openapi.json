@@ -30,7 +30,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyResponse"
+                }
               }
             }
           }
@@ -623,6 +625,36 @@
           "request_id"
         ],
         "title": "OcrReviewResponse"
+      },
+      "ReadyResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ready",
+            "title": "Status",
+            "default": "ready"
+          },
+          "mode": {
+            "type": "string",
+            "const": "rules",
+            "title": "Mode",
+            "default": "rules"
+          },
+          "url_reputation": {
+            "type": "string",
+            "enum": [
+              "live",
+              "off"
+            ],
+            "title": "Url Reputation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url_reputation"
+        ],
+        "title": "ReadyResponse",
+        "description": "준비 상태. url_reputation은 실제 외부 평판 조회가 켜졌는지만 알린다 (키·시간 제한·공급자 세부 상태는 넣지 않는다)."
       },
       "RiskLevel": {
         "type": "string",

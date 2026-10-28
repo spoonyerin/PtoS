@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { AnalysisResponse } from '../api/types'
 import { riskLevels } from '../riskLevels'
 import { UrlResults } from './UrlResults'
+import { GoogleAdvisory, isGoogleEvidence } from './GoogleAdvisory'
 
 export function AnalysisResult({ result }: { result: AnalysisResponse }) {
   const heading = useRef<HTMLHeadingElement>(null)
@@ -17,7 +18,11 @@ export function AnalysisResult({ result }: { result: AnalysisResponse }) {
         <h3>입력에서 확인한 표현</h3>
         {result.risk_factors.length ? <ul>{result.risk_factors.map(factor => <li key={factor}>
           {factor}
-          <ul>{result.evidence.filter(item => item.label === factor).map(item => <li key={`${item.rule_id}-${item.start}-${item.end}`}><q style={{ overflowWrap: 'anywhere' }}>{item.snippet}</q></li>)}</ul>
+          <ul>{result.evidence.filter(item => item.label === factor).map(item => <li key={`${item.rule_id}-${item.start}-${item.end}`}>
+            <q style={{ overflowWrap: 'anywhere' }}>{item.snippet}</q>
+            {/* Google 자료에서 나온 근거에만 Google 표기를 붙인다. 규칙 근거에는 붙이지 않는다. */}
+            {isGoogleEvidence(item, result.urls) && <GoogleAdvisory />}
+          </li>)}</ul>
         </li>)}</ul> : <p>현재 규칙으로 확인한 위험 요구는 없어요. 정상이라는 뜻은 아니에요.</p>}
       </div>
       <UrlResults urls={result.urls} />

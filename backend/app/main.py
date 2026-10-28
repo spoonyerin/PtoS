@@ -17,7 +17,9 @@ from .contracts import (
     AnalysisResponse,
     ErrorDetail,
     ErrorResponse,
+    ReadyResponse,
 )
+from .safe_browsing import SafeBrowsingV5Provider
 from .urls import PUBLIC_ERRORS
 from .ocr import OcrEngine, TesseractOcr, OcrError, OCR_ERRORS, MAX_IMAGE_BYTES, prepare_image, url_previews, extract_until_disconnect
 from .contracts import OcrResponse, OcrReviewRequest, OcrReviewResponse, MAX_CONTENT_LENGTH
@@ -112,9 +114,11 @@ def create_app(
     async def live():
         return {"status": "ok"}
 
-    @app.get("/api/v1/health/ready")
+    @app.get("/api/v1/health/ready", response_model=ReadyResponse)
     async def ready():
-        return {"status": "ready", "mode": "rules"}
+        # 화면이 "주소의 일부 정보(해시)가 Google로 전송돼요" 안내를 켜거나 끄는 데만 쓴다.
+        live = isinstance(reputation_provider, SafeBrowsingV5Provider)
+        return ReadyResponse(url_reputation="live" if live else "off")
 
     @app.post("/api/v1/ocr/review", response_model=OcrReviewResponse, responses=error_responses(422))
     async def review_ocr(body: OcrReviewRequest, request: Request):

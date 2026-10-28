@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useOcr, useOcrReview } from '../hooks/useOcr'
 import { characterCount } from '../input'
+import { UrlCheckNotice } from './UrlCheckNotice'
 
 type Props = { loading: boolean; analysisError: string | null; onChange: () => void; onSubmit: (text: string) => void }
 const MAX_BYTES = 10 * 1024 * 1024
@@ -72,6 +73,7 @@ export function ScreenshotInput(props: Props) {
       <p>읽을 수 없는 글자나 URL은 추측하지 마세요. 확인할 수 없다면 이미지를 다시 올리거나 문자 직접 입력으로 바꿔주세요.</p>
       <label><input type="checkbox" checked={confirmed} disabled={!review.ready || props.loading || !text.trim()} onChange={event => setConfirmed(event.target.checked)} />추출한 문자와 URL을 원본과 비교해 확인했습니다.</label>
       {props.analysisError && <p role="alert" className="error-message">{props.analysisError}</p>}
+      <UrlCheckNotice />
       <button className="primary-button" type="submit" disabled={!confirmed || !review.ready || props.loading || !text.trim()}>{props.loading ? '분석 요청 중…' : '확인한 내용으로 분석하기'}</button>
     </form>}
     <p className="submission-note">OCR만으로 위험 분석하지 않아요. 이미지는 서버의 파일이나 분석 이력으로 저장하지 않아요.</p>

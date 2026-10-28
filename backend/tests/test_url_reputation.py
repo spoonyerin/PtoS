@@ -61,6 +61,30 @@ def test_live_mode_builds_provider_with_configured_timeout(value, expected, capl
     assert provider._transport._client is None
 
 
+@pytest.mark.parametrize("env,expected", [
+    ({}, "off"),
+    ({API_KEY_ENV: KEY}, "off"),
+    ({MODE_ENV: LIVE_MODE}, "off"),
+    ({API_KEY_ENV: KEY, MODE_ENV: "1"}, "off"),
+    ({API_KEY_ENV: KEY, MODE_ENV: LIVE_MODE, TIMEOUT_ENV: "abc"}, "off"),
+    ({API_KEY_ENV: KEY, MODE_ENV: LIVE_MODE}, "live"),
+    ({API_KEY_ENV: KEY, MODE_ENV: LIVE_MODE, TIMEOUT_ENV: "2"}, "live"),
+])
+def test_ready_reports_only_whether_lookups_are_live(env, expected, monkeypatch):
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    with TestClient(create_app()) as client:
+        response = client.get("/api/v1/health/ready")
+    # Only on/off: no key, timeout, provider name or provider state. No external call is made for ready.
+    assert response.json() == {"status": "ready", "mode": "rules", "url_reputation": expected}
+    assert KEY not in response.text and "timeout" not in response.text and "google" not in response.text.lower()
+
+
+def test_ready_is_off_for_injected_analyzers():
+    with TestClient(create_app(analyzer_factory=lambda: None)) as client:
+        assert client.get("/api/v1/health/ready").json()["url_reputation"] == "off"
+
+
 def test_app_without_live_mode_never_builds_transport(monkeypatch, no_transport):
     monkeypatch.setenv(API_KEY_ENV, KEY)
     with TestClient(create_app()) as client:

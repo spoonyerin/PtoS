@@ -32,7 +32,9 @@ test('일반 분석 화면에는 결과 선택이 없고 개발 제한을 표시
   expect(screen.getAllByRole('radio')).toHaveLength(3)
   expect(screen.queryByRole('radio', { name: '위험' })).not.toBeInTheDocument()
   expect(screen.getByText('규칙 기반 개발 버전')).toBeInTheDocument()
-  expect(screen.getByText(/URL 평판 조회는 미연결이며/)).toBeInTheDocument()
+  // 상태 제공자 없이 그리면 확인하지 못한 상태다. 켜져 있을 수 있으므로 전송 안내를 보인다.
+  expect(screen.getByText(/URL 평판 조회가 켜져 있는지 확인하지 못했으며/)).toBeInTheDocument()
+  expect(screen.getByRole('note')).toHaveTextContent('주소에서 만든 일부 정보(해시)만 Google로 전송돼요.')
 })
 
 test('문자만 전송하고 근거를 표시한다. 다시 수정하면 이전 결과를 지운다', async () => {

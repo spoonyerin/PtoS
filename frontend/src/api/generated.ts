@@ -254,6 +254,29 @@ export interface components {
             request_id: string;
         };
         /**
+         * ReadyResponse
+         * @description 준비 상태. url_reputation은 실제 외부 평판 조회가 켜졌는지만 알린다 (키·시간 제한·공급자 세부 상태는 넣지 않는다).
+         */
+        ReadyResponse: {
+            /**
+             * Status
+             * @default ready
+             * @constant
+             */
+            status: "ready";
+            /**
+             * Mode
+             * @default rules
+             * @constant
+             */
+            mode: "rules";
+            /**
+             * Url Reputation
+             * @enum {string}
+             */
+            url_reputation: "live" | "off";
+        };
+        /**
          * RiskLevel
          * @enum {string}
          */
@@ -380,7 +403,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ReadyResponse"];
                 };
             };
         };

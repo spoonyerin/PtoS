@@ -9,6 +9,14 @@ vi.mock('./hooks/useOcr', () => ({
   useOcrReview: () => ({ ready: true, urls: [], loading: false, error: null, retry: vi.fn() }),
 }))
 
+test('OCR 확인 단계의 분석 버튼 앞에 전송 안내를 보인다 (상태 미확인)', async () => {
+  render(<App />)
+  await userEvent.click(screen.getByRole('radio', { name: '스크린샷' }))
+  const note = screen.getByRole('note')
+  expect(note).toHaveTextContent('주소에서 만든 일부 정보(해시)만 Google로 전송돼요.')
+  expect(note.closest('form')).toContainElement(screen.getByRole('button', { name: '확인한 내용으로 분석하기' }))
+})
+
 test.each(['새 문자 내용', '은행입니다. 인증번호를 알려주세요. https://example.invalid/changed'])('OCR 편집 이벤트 직후 확인과 이전 분석을 즉시 해제한다: %s', async edited => {
   const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
     request_id: '8c224149-d5c4-4f9a-a77b-55a058cb8c71', risk_level: 'dangerous', confidence: null,
