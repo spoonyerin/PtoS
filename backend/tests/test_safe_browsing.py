@@ -43,8 +43,9 @@ def test_complete_hash_match_and_only_four_byte_prefixes_cross_boundary():
     result = lookup(fake)
     assert result.status == "malicious" and result.full_hash_verified
     assert result.threat_types == ["SOCIAL_ENGINEERING"] and result.reason == "full_hash_match"
-    assert fake.calls == [tuple(base64.b64encode(p).decode() for p in hash_url(URL).prefixes)]
-    assert all(len(base64.b64decode(p)) == 4 for p in fake.calls[0])
+    assert fake.calls == [tuple(base64.b64encode(p).decode().rstrip("=") for p in hash_url(URL).prefixes)]
+    # Unpadded standard Base64 (official overview example: hashPrefixes=WwuJdQ).
+    assert all(len(p) == 6 and "=" not in p and len(base64.b64decode(p + "==")) == 4 for p in fake.calls[0])
     assert URL not in repr(fake.calls) and "private" not in repr(fake.calls)
 
 
@@ -60,7 +61,7 @@ def test_http_200_empty_is_unknown_not_benign(body):
     assert lookup(FakeTransport(body)).status == "unknown"
 
 
-@pytest.mark.parametrize("status,expected,reason", [(401, "auth_error", "authentication_failed"), (403, "auth_error", "authentication_failed"), (429, "rate_limited", "provider_rate_limit"), (500, "unavailable", "http_error"), (404, "unavailable", "http_error")])
+@pytest.mark.parametrize("status,expected,reason", [(401, "auth_error", "authentication_failed"), (403, "auth_error", "authentication_failed"), (429, "rate_limited", "provider_rate_limit"), (500, "unavailable", "server_error"), (503, "unavailable", "server_error"), (404, "unavailable", "http_error"), (302, "unavailable", "http_error")])
 def test_http_error_classification(status, expected, reason):
     result = lookup(FakeTransport({"error": "sensitive data must not escape"}, status))
     assert (result.status, result.reason) == (expected, reason)
@@ -209,10 +210,10 @@ def test_minute_and_rolling_day_budget_includes_errors_but_allows_cached_reads()
         now = [0.0]
         fake = FakeTransport(status=500)
         provider = SafeBrowsingV5Provider(fake, per_minute=1, per_day=2, monotonic=lambda: now[0])
-        assert (await provider.lookup(VALUE)).reason == "http_error"
+        assert (await provider.lookup(VALUE)).reason == "server_error"
         assert (await provider.lookup(VALUE)).reason == "local_limit"
         now[0] = 60
-        assert (await provider.lookup(VALUE)).reason == "http_error"
+        assert (await provider.lookup(VALUE)).reason == "server_error"
         now[0] = 120
         assert (await provider.lookup(VALUE)).reason == "local_limit"
         now[0] = 86400

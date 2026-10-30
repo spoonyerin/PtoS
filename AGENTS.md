@@ -33,7 +33,7 @@
 2. 위험 점수 경계, 모델 신뢰도의 의미와 `confidence` 처리
 3. 경량 모델 선택 (중간점검은 TF-IDF 기준선. KoELECTRA·KoBERT 등 트랜스포머 비교는 이후이며 어느 것도 확정 아님)
 4. LLM 공급자, 전송 범위, 마스킹 방식, 비용 상한
-5. 실제 URL 평판 API 연결 시점 (이용 조건 확인 후)
+5. 실제 URL 평판 조회를 켜는 시점과 범위 (공급자는 Google Safe Browsing v5 hashes.search로 결정됨. 켜는 것은 사용자가 직접 한다)
 6. 담당자와 이번 제출 범위
 
 ## 반드시 유지할 동작
@@ -78,7 +78,10 @@
 - 문자 정책 원본은 `docs/RULE_POLICY.md`의 `rules-dev-v3`(T4 임시 보강, 팀 확정 필요), 종합 정책은 `docs/SAFE_BROWSING.md`의 종합 판정(`RuleBasedAnalyzer`의 `analysis_version: rules-reputation-dev-v2`)과 `docs/MODEL_POLICY.md`의 모델 종합(API 응답 `analysis_version: rules-model-dev-v1`). PRD 확정 임계값이 아니며 숫자 점수 합산을 하지 않는다. 규칙 부재·단편 입력·미구현 분석에 의한 정보 부족을 구분한다. 원문의 줄바꿈은 보존하고, 순수 명의 도입 → 인접 직접 요구만 제한적으로 연결하며 화자·인용·교육 경계는 분리한다.
 - 명의 주장과 금전/민감정보/앱 설치 등 문서화한 조합만 임시 위험으로 경고한다. 단일 요구는 의심, 명의·긴급·불이익 단어나 대괄호 머리말만으로 위험 확정하지 않는다. 새 신호는 기존 `FactorCode` 안에서 `rule_id`(예: `impersonation-header-v1`, `urgency_threat-penalty-v1`)로 구분하며 계약 enum을 늘리지 않았다. 실제 사칭/악성 URL 여부를 검증한 것처럼 쓰지 않는다.
 - URL은 `docs/URL_POLICY.md`를 따른다. 직접 입력은 HTTP(S) 한 개, 문자 후보는 중복 제거 후 최대 10개다. IDNA·구두점·괄호를 처리하고 원문 위치를 보존한다. 주소·평판 상태는 일반 텍스트로 표시한다. URL 존재/형식/IDN만으로 위험도를 올리거나 정상으로 승격하지 않는다.
-- `UrlReputationProvider`의 기본 어댑터는 `not_connected`다. 무효 후보는 `not_requested`, 유효 URL이 없는 단계는 `not_applicable`로 구분한다. Safe Browsing v5는 키 없는 어댑터/가짜 전송기 테스트만 구현했다. 실제 HTTP 전송기는 없으며 키가 있어도 `policy_pending`으로 통신하지 않는다. 사용자 확인 및 실제 연결 요청 전에는 켜지 않는다.
+- URL 평판 조회는 Google Safe Browsing API(hashes.search)를 사용한다. 이 API는 비상업적 용도로만 사용할 수 있으며, 상업적 목적에는 Web Risk API를 사용해야 한다. 본 프로젝트는 캡스톤 개발·검증·시연 목적의 비상업적 사용이며, 팀원과 평가자에게만 접근을 허용하고 공개 운영 서비스로 배포하지 않는다. 상업화할 경우 Web Risk API 등 상업용 수단과 이용 조건을 재검토한다.
+- 평판 조회는 **기본 꺼짐**이다. 백엔드 환경 변수 `GOOGLE_SAFE_BROWSING_API_KEY`와 `PTOS_SAFE_BROWSING_MODE=live-noncommercial`(정확히 일치)이 모두 있을 때만 `create_app`이 실제 전송기를 만든다. 하나라도 없으면 `not_connected`(`key_missing`/`policy_pending`), 시간 제한 `PTOS_SAFE_BROWSING_TIMEOUT_SECONDS`(기본 1초, 개발 제안)가 잘못되면 `invalid_config`로 꺼진 상태를 유지한다. 직접 만든 `RuleBasedAnalyzer()`·평가·학습 스크립트는 항상 미연결이다. 에이전트는 이 변수를 켜지 않고 실제 Google을 호출하지 않는다. 실제 호출은 사용자가 `backend/check_safe_browsing.py`로 직접 한다. 무효 후보는 `not_requested`, 유효 URL이 없는 단계는 `not_applicable`이다.
+- 전송기(`safe_browsing_http.py`)는 `GET /v5/hashes:search`에 반복 `hashPrefixes`(padding 없는 표준 Base64, 퍼센트 인코딩)만 보내고 키는 `X-Goog-Api-Key` 헤더로만 보낸다. `alt=json`과 JSON `Accept`는 보내지 않는다(실제 호출에서 400). 응답 `application/x-protobuf`는 직접 디코더(`safe_browsing_proto.py`, protobuf 패키지 없음)로 읽고 기존 `parse_response`로 검증한다. 리디렉션·환경 프록시를 쓰지 않고 오류 본문을 읽지 않는다. 시간 초과·네트워크 오류·5xx·형식 오류를 구분한다.
+- `GET /api/v1/health/ready`는 `url_reputation: live | off`만 알린다(키·시간 제한·공급자 상태 없음). 화면은 꺼짐이 확인될 때만 "주소에서 만든 일부 정보(해시)만 Google로 전송돼요" 안내를 숨긴다(OCR 업로드 화면에는 없음). Google 전체 해시 경고와 그 근거에만 "Advisory provided by Google"과 고정 Advisory 링크를 붙이고, 규칙·모델 근거에는 Google 표기를 붙이지 않는다. 사용자 URL은 링크로 만들지 않는다. Google Safe Browsing의 보호는 완벽하지 않으며 오탐·미탐이 있을 수 있다는 고지를 유지한다.
 - URL 정규화/host-path 표현/전체 SHA-256은 로컬 처리하고 전송 경계에는 4바이트 prefix만 허용한다. 전체 해시+유효한 위협 detail 일치만 URL 원문 근거로 채택한다. prefix 일치·결과 없음·인기 목록은 정상/악성 확정 근거가 아니다. 인증/한도/시간 초과/장애를 구별하고 기존 문자 근거를 낮추지 않는다. URL 내부 문자열은 문장 규칙에서 제외한다.
 - 캐시는 응답의 `cacheDuration`으로 양성/음성 prefix를 모두 처리하며 미만료 자료를 축출해 재조회하지 않는다. 원문/URL/키는 캐시·로그·디스크에 넣지 않는다. 2회/분·100회/rolling 24시간·2,048 prefix·큐 포함 1초는 단일 프로세스 개발 제안이고 Google 할당량/0원 보장이 아니다. 실제 URL 접속·DNS·신규 검사 제출·공급자 자동 전환은 금지한다.
 - 원문 근거는 코드포인트 시작 포함·끝 제외 좌표와 snippet을 함께 반환한다. 화면에서는 일반 텍스트로 표시하며 UTF-16 인덱스로 강조하지 않는다.
@@ -95,7 +98,8 @@
 - 모델·평판·LLM/향후 외부 OCR 공급자, 데이터 이용 조건·라벨·분할·평가 기준. 현재 로컬 OCR의 실제 기기·메시지 사진 품질 평가는 미확정이다.
 - 위험 가중치·점수 경계, 신뢰도 의미와 보정, 심화 조건 및 장애 시 판정 우선순위. 임의 수치를 확정하지 않는다.
 - 외부 전송·마스킹·보관 정책, 요청 제한·동시성·공급자 예산·시간 예산, 익명 운영 지표 보관 기간.
-- Google Safe Browsing 비상업 캡스톤 무료 자격, 결제수단 없는 활성화, 초과/자동 과금, 할당량과 필수 경고/상표. 현재는 키 없이 실행하고 외부 조회는 보류한다. 무료 MIT Phishing.Database의 로컬 snapshot은 대안 제안이며 연결/다운로드하지 않았다. 키는 이후 사용자가 백엔드에 직접 준비하고 채팅에 요청하지 않는다.
+- Google Safe Browsing: 비상업 이용 조건·결제수단 없음·키 API 제한·필수 표기는 사용자가 확인했다(2026-10-28). **미확정:** hashes.search가 해당하는 할당량 항목과 한도, v5 전용 Advisory 페이지 유무, `alt=json`과 JSON Accept 중 400의 원인, 배포 시 키 애플리케이션 제한(서버 고정 IP, HANDOVER T8)과 다중 프로세스 캐시·예산, 한국 스미싱 URL 탐지 범위. 키는 사용자가 백엔드 환경 변수로만 넣고 채팅·코드·로그·문서·커밋·`.env`에 쓰지 않는다. MIT Phishing.Database 로컬 snapshot은 채택하지 않은 대안이다.
+- `Evidence`에 공급자 필드를 넣는 계약 변경은 중간점검 이후 검토 항목이다(HANDOVER 10절).
 - 입력 제한은 개발 기본값 10,000 유니코드 코드포인트다. 실제 메시지·기기 검증 후 확정한다.
 - TTS, 사용자 선택 가족 공유, 공식 기관 목록 대조, 신고 연결·상황별 대응 안내는 별도 채택이 필요하다.
 - 가족 계정·자동 알림·장기 분석 이력·결제는 최종 MVP에서도 제외한다. DB는 MVP 필수가 아니다.
@@ -112,8 +116,11 @@
 | `backend/app/rule_policy.py` | 규칙 조합에 따른 임시 판단 |
 | `backend/app/rule_templates.py` | 설명·행동 템플릿 |
 | `backend/app/urls.py` | URL 검증·추출, 원문 위치 |
-| `backend/app/url_reputation.py` | UrlReputationProvider, 기본 미연결 처리 |
+| `backend/app/url_reputation.py` | UrlReputationProvider, 켜는 조건(키 + 모드), 기본 미연결 처리 |
 | `backend/app/safe_browsing_urls.py`, `safe_browsing.py` | Safe Browsing URL 표현, 해시, 응답 대조, 캐시, 개발 호출 예산 |
+| `backend/app/safe_browsing_http.py`, `safe_browsing_proto.py` | 실제 hashes.search HTTP 전송기, protobuf 응답 직접 디코더 |
+| `backend/check_safe_browsing.py` | 사용자가 직접 실행하는 Safe Browsing 1회 수동 확인 (자동 테스트 아님) |
+| `backend/tests/conftest.py` | 자동 테스트의 외부 네트워크 차단, 평판 환경 변수 제거 |
 | `backend/app/reputation_policy.py` | 규칙과 검증된 평판 근거 종합 |
 | `backend/app/model_adapter.py` | TextRiskModel, 모델 manifest·SHA-256 확인과 로드, 모델 입력 전처리 |
 | `backend/app/model_policy.py` | 규칙 결과와 모델 신호의 임시 종합, 모델 단계 표시 문장 |
@@ -141,6 +148,6 @@
 - README의 백엔드 테스트·계약 일치·프론트엔드 테스트/빌드를 실행한다. 기능 흐름 변경 시 실제 FastAPI에 연결하는 Playwright도 실행한다.
 - 회귀 테스트 통과는 탐지 성능이나 최종 MVP 검증이 아니다. 탐지 성능은 고정 평가셋으로만 주장한다.
 - 기본 OCR 테스트는 가짜 어댑터다. 별도로 `RUN_REAL_OCR=1`의 실제 한국어 PNG/JPEG와 브라우저 확인 흐름을 실행한다. 단일 깨끗한 이미지의 성공을 인식 정확도 검증으로 일반화하지 않는다. 실행한 환경(Windows, Linux, Codespaces)을 구분해 보고한다.
-- Safe Browsing의 가짜 응답/충돌/오류/TTL/동시성/개발 예산/비접속 테스트와 실제 Google API 검증 여부를 구분해서 보고한다. 현재 실 API는 미실행이다. 참조 벡터의 출처·Apache 고지는 `docs/THIRD_PARTY_NOTICES.md`를 유지한다.
+- Safe Browsing의 가짜 응답/충돌/오류/TTL/동시성/개발 예산/비접속 테스트와 실제 Google API 검증 여부를 구분해서 보고한다. 자동 테스트(pytest, Playwright)는 실제 Google을 호출하지 않는다. 실제 호출은 사용자가 수동 확인 스크립트로 실행한 기록만 있다(`docs/SAFE_BROWSING_VALIDATION.md`). 참조 벡터의 출처·Apache 고지는 `docs/THIRD_PARTY_NOTICES.md`를 유지한다.
 - Codespaces 설정은 `.devcontainer/`, 실행 메뉴는 `.vscode/tasks.json`, 사용자 안내는 `docs/CODESPACES.md`다. 화면용 5173만 전달하며 백엔드 8000은 내부 프록시로 사용한다. 포트는 Private로 유지한다. Vite는 해당 Codespace의 정확한 전달 호스트만 허용하고 전체 호스트 검증을 해제하지 않는다.
 - 사용자 요청 없이 Codespace 생성, 유료 서비스 배포, PR 병합을 하지 않는다. Codespaces 설정의 로컬 검증과 실제 Codespace 생성·브라우저 검증은 구분해서 보고한다.

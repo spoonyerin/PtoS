@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from collections.abc import Callable
+from contextlib import asynccontextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -16,7 +17,9 @@ from .contracts import (
     AnalysisResponse,
     ErrorDetail,
     ErrorResponse,
+    ReadyResponse,
 )
+from .safe_browsing import SafeBrowsingV5Provider
 from .urls import PUBLIC_ERRORS
 from .ocr import OcrEngine, TesseractOcr, OcrError, OCR_ERRORS, MAX_IMAGE_BYTES, prepare_image, url_previews, extract_until_disconnect
 from .contracts import OcrResponse, OcrReviewRequest, OcrReviewResponse, MAX_CONTENT_LENGTH
@@ -49,10 +52,20 @@ def create_app(
     model_loader: Callable[[], ModelState] = load_configured_model,
     model_timeout: float = 1.0,
 ) -> FastAPI:
-    app = FastAPI(title="PtoS 규칙·URL·OCR 개발 API", version="0.5.0")
-    # App-scoped boundary for a future shared in-memory cache/budget, never per-request keys.
+    reputation_provider = None
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        yield
+        # 실제 전송기의 HTTP 연결을 정리한다. 미연결 공급자에는 aclose가 없다.
+        close = getattr(reputation_provider, "aclose", None)
+        if close is not None:
+            await close()
+
+    app = FastAPI(title="PtoS 규칙·URL·OCR 개발 API", version="0.5.0", lifespan=lifespan)
+    # App-scoped shared in-memory cache/budget, never per-request keys.
     if analyzer_factory is None:
-        reputation_provider = configured_reputation_provider()
+        reputation_provider = configured_reputation_provider(max_timeout=analysis_timeout)
         # 모델은 앱 생성 시 한 번만 로드한다. 실패해도 서버는 뜨고 규칙 결과만 낸다.
         # 모델 제한 시간(개발 제안 1초)은 전체 분석 제한보다 짧아 모델 지연이 504가 되지 않는다.
         model_state = model_loader()
@@ -101,9 +114,11 @@ def create_app(
     async def live():
         return {"status": "ok"}
 
-    @app.get("/api/v1/health/ready")
+    @app.get("/api/v1/health/ready", response_model=ReadyResponse)
     async def ready():
-        return {"status": "ready", "mode": "rules"}
+        # 화면이 "주소의 일부 정보(해시)가 Google로 전송돼요" 안내를 켜거나 끄는 데만 쓴다.
+        live = isinstance(reputation_provider, SafeBrowsingV5Provider)
+        return ReadyResponse(url_reputation="live" if live else "off")
 
     @app.post("/api/v1/ocr/review", response_model=OcrReviewResponse, responses=error_responses(422))
     async def review_ocr(body: OcrReviewRequest, request: Request):

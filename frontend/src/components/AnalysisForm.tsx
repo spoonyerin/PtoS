@@ -2,6 +2,7 @@ import { useRef, type FormEvent } from 'react'
 import { characterCount, MAX_CONTENT_LENGTH } from '../input'
 import type { InputType } from '../api/types'
 import { ScreenshotInput } from './ScreenshotInput'
+import { UrlCheckNotice } from './UrlCheckNotice'
 
 type Props = {
   content: string
@@ -41,6 +42,7 @@ export function AnalysisForm(props: Props) {
         <textarea ref={textArea} id="message" rows={7} value={props.content} disabled={props.loading} placeholder={props.inputType === 'url' ? 'http:// 또는 https://로 시작하는 주소 한 개를 입력해주세요.' : '이곳에 문자 내용을 입력하거나 붙여넣어주세요.'} onChange={event => props.onContentChange(event.target.value)} aria-describedby={`privacy-help message-count${props.error ? ' analysis-error' : ''}`} aria-invalid={!!props.error} />
         <p id="message-count" className={`counter ${count > MAX_CONTENT_LENGTH ? 'over-limit' : ''}`}>{count.toLocaleString()} / 10,000자</p>
         {props.error && <p className="error-message" id="analysis-error" role="alert">{props.error}</p>}
+        <UrlCheckNotice />
         <button className="primary-button" type="submit" disabled={props.loading}>
           {props.loading ? '분석 요청 중…' : '분석하기'} <span aria-hidden="true">→</span>
         </button>

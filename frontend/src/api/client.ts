@@ -1,5 +1,18 @@
 import { z } from 'zod'
-import type { AnalysisRequest, AnalysisResponse } from './types'
+import type { AnalysisRequest, AnalysisResponse, ReadyResponse } from './types'
+
+const readySchema: z.ZodType<ReadyResponse> = z.object({
+  status: z.literal('ready'),
+  mode: z.literal('rules'),
+  url_reputation: z.enum(['live', 'off']),
+})
+
+// URL 평판 조회가 켜져 있는지만 확인한다. 실패하면 호출한 쪽이 '확인 못 함'으로 처리한다.
+export async function requestServiceStatus(signal: AbortSignal): Promise<ReadyResponse> {
+  const response = await fetch('/api/v1/health/ready', { signal, cache: 'no-store' })
+  if (!response.ok) throw new Error('status unavailable')
+  return readySchema.parse(await response.json())
+}
 
 const resultSchema: z.ZodType<AnalysisResponse> = z.object({
   request_id: z.uuid(),

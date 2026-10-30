@@ -3,11 +3,19 @@ import { AnalysisForm } from './components/AnalysisForm'
 import { AnalysisResult } from './components/AnalysisResult'
 import { useAnalysis } from './hooks/useAnalysis'
 import type { InputType } from './api/types'
+import { useUrlReputationStatus, type UrlReputationStatus } from './hooks/useServiceStatus'
+
+const reputationNote: Record<UrlReputationStatus, string> = {
+  live: 'URL 평판 조회(Google Safe Browsing)는 켜져 있지만',
+  off: 'URL 평판 조회는 꺼져 있으며',
+  unknown: 'URL 평판 조회가 켜져 있는지 확인하지 못했으며',
+}
 
 export default function App() {
   const [content, setContent] = useState('')
   const [inputType, setInputType] = useState<InputType>('text')
   const analysis = useAnalysis()
+  const urlReputation = useUrlReputationStatus()
   return (
     <>
       <a href="#main" className="skip-link">본문 바로가기</a>
@@ -23,7 +31,7 @@ export default function App() {
         </div>
         <aside className="demo-notice" aria-label="개발용 안내">
           <span className="notice-symbol" aria-hidden="true">i</span>
-          <div><strong>규칙 기반 개발 버전</strong><p>입력의 위험 신호와 URL 형식을 확인해요. 일부 분석 단계는 꺼져 있을 수 있고 URL 평판 조회는 미연결이며, 결과는 안전을 보장하지 않아요.</p></div>
+          <div><strong>규칙 기반 개발 버전</strong><p>입력의 위험 신호와 URL 형식을 확인해요. 일부 분석 단계는 꺼져 있을 수 있고 {reputationNote[urlReputation]}, 결과는 안전을 보장하지 않아요.</p></div>
         </aside>
         <div className="workspace">
           <AnalysisForm content={content} inputType={inputType} loading={analysis.status === 'loading'} error={analysis.error}

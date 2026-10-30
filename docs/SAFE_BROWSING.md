@@ -1,30 +1,56 @@
-# Google Safe Browsing v5 · 연결 전 검토
+# Google Safe Browsing v5 · URL 평판 조회
 
-검토 기준: PRD FR-03~06·개발설계서의 규칙/평판 분리와 개인정보 원칙. 이번 증분은 **키 없는 어댑터·가짜 응답 테스트**다. 실제 서비스의 탐지 성능, 무료 이용 자격, 약관 준수 완료를 의미하지 않는다. AWS·결제·계정 생성·키 발급은 수행하지 않았다.
+검토 기준: PRD FR-03~06·개발설계서의 규칙/평판 분리와 개인정보 원칙. T6(2026-10-28)에서 `hashes.search`의 실제 HTTP 전송기와 켜는 조건을 구현했다. **기본값은 꺼짐**이며, 키와 명시적 모드가 모두 있을 때만 외부로 조회한다. 실제 호출 결과와 자동 테스트 범위는 [SAFE_BROWSING_VALIDATION.md](SAFE_BROWSING_VALIDATION.md)에 구분해 적었다. 탐지 성능 검증이 아니다.
 
-## 공식 자료 확인 결과
+## 이용 범위 (비상업)
 
-확인 시도일: **2026-10-22 UTC**. Google 개발자 정책 사이트는 이 클라우드의 네트워크 프록시가 `403`으로 차단했다. Google 공식 GitHub API 정의와 공식 Go 참조 구현은 읽을 수 있었다. 따라서 API 규격과 이용 정책의 확인 수준을 구분한다.
+URL 평판 조회는 Google Safe Browsing API(hashes.search)를 사용한다. 이 API는 비상업적 용도로만 사용할 수 있으며, 상업적 목적에는 Web Risk API를 사용해야 한다. 본 프로젝트는 캡스톤 개발·검증·시연 목적의 비상업적 사용이며, 팀원과 평가자에게만 접근을 허용하고 공개 운영 서비스로 배포하지 않는다. 상업화할 경우 Web Risk API 등 상업용 수단과 이용 조건을 재검토한다.
 
-| 확인할 사항 | 이번 확인 결과 | 공식 확인 위치 |
+## 고지
+
+**Google Safe Browsing의 보호는 완벽하지 않습니다. 안전한 사이트가 위험한 사이트로 잘못 표시되거나, 위험한 사이트를 찾아내지 못할 수 있습니다.** Google은 정확하고 최신의 정보를 제공하려 하지만 그 정보가 완전하고 오류가 없다고 보장하지 않는다. 이 앱의 결과는 안전을 보장하지 않는다.
+
+출처: [Permitted Use](https://developers.google.com/safe-browsing/reference/Appropriate.Usage) (2026-10-28 확인). 같은 문서의 다른 요구사항과 이 앱의 대응은 아래 "화면·응답 표시"에 적었다.
+
+## 공식 자료와 확인 수준
+
+확인일 2026-10-28. "사용자 확인"은 사용자가 Google 콘솔·공식 문서에서 직접 확인해 알려준 내용이다.
+
+| 항목 | 결과 | 확인 방법·출처 |
 | --- | --- | --- |
-| 비상업 학생 캡스톤의 무료 이용 자격·허용 범위 | **미확인**. 비상업이라는 이유만으로 무료 이용 승인을 받은 것으로 보지 않음 | [v5 시작](https://developers.google.com/safe-browsing/v5), [이용 약관](https://developers.google.com/safe-browsing/terms) |
-| 결제수단 없이 API 활성화/키 사용 가능 여부 | **미확인**. 가입 화면을 열거나 카드 등록하지 않음 | [시작 안내](https://developers.google.com/safe-browsing/v5/get-started) |
-| 무료 일/분당 할당량, 증액 조건, 초과 과금/자동 유료 전환 | **미확인**. 정확한 무료 호출 수를 제시하지 않음 | [Usage limits](https://developers.google.com/safe-browsing/v5/usage-limits) |
-| 필수 사용자 경고·Google 출처/상표 표시 문구·위치 | **미확인**. 화면의 공급자명·오탐/미탐 주의 문구는 개발안이며 공식 준수 완료가 아님 | [Usage guidelines](https://developers.google.com/safe-browsing/v5/usage-guidelines) |
-| 조회 데이터 보관·공유·삭제 조건 | **미확인**. 해시 접두사도 개인정보 비전송/익명성을 보장하지 않음 | 위 약관·[Google 개인정보처리방침](https://policies.google.com/privacy) |
-| 인증 | 공식 Discovery 문서는 OAuth 토큰을 쓰지 않으면 API 키가 필요하다고 명시. 키의 무료 발급·무카드 이용과는 별개 | [공식 Discovery JSON](https://github.com/googleapis/google-api-python-client/blob/main/googleapiclient/discovery_cache/documents/safebrowsing.v5.json), revision `20251214` |
-| `hashes.search` 요청·응답·캐시 | 공식 v5 정의에서 확인: 4바이트 접두사, 최대 1,000개/요청, URL 절차는 최대 30개, 전체 SHA-256 대조, 응답별 캐시 기간 | [공식 protobuf](https://github.com/googleapis/googleapis/blob/master/google/security/safebrowsing/v5/safebrowsing.proto), [REST 문서](https://developers.google.com/safe-browsing/reference/rest/v5/hashes/search) |
+| 비상업 용도 한정, 상업용은 Web Risk | 확인 | [Permitted Use](https://developers.google.com/safe-browsing/reference/Appropriate.Usage), 사용자 확인 |
+| 결제수단 없이 키 발급·API 사용 설정 | 확인. 키 발급 시 결제수단 요구 없음, 프로젝트에 결제 계정 없음 | 사용자 확인 (콘솔) |
+| 키 제한 | API 제한: Safe Browsing API 1개. 애플리케이션 제한: 없음 (AWS 배포 시 서버 고정 IP 제한 예정, HANDOVER T8) | 사용자 확인 (콘솔) |
+| 할당량 | 콘솔 기본 할당량은 하루 10,000회 수준. **hashes.search가 어느 할당량 항목에 해당하는지는 미확정** | 사용자 확인 (콘솔) |
+| 필수 표기 | Google 근거 경고에 "Advisory provided by Google"과 Advisory 링크, 한정 표현, 오탐·미탐 고지, Google 외 근거에는 Google 표기 금지 | [Permitted Use](https://developers.google.com/safe-browsing/reference/Appropriate.Usage) |
+| 요청 형식 | `GET /v5/hashes:search`, 본문 없음, 반복 `hashPrefixes`(4바이트, base64, 최대 1,000개, 보통 30개 이하) | [REST hashes.search](https://developers.google.com/safe-browsing/reference/rest/v5/hashes/search), [safebrowsing.v5.json](https://github.com/googleapis/google-api-python-client/blob/main/googleapiclient/discovery_cache/documents/safebrowsing.v5.json) revision `20251214` |
+| 인증 | `key` 쿼리 또는 `X-Goog-Api-Key` 헤더 | safebrowsing.v5.json, [System parameters](https://docs.cloud.google.com/apis/docs/system-parameters) |
+| 응답 형식 | 개요 문서: 응답 본문은 protobuf. 실제 호출: `alt` 없이 요청하면 `application/x-protobuf`, `alt=json`과 `Accept: application/json`을 함께 보내면 400 `INVALID_ARGUMENT` | [개요](https://developers.google.com/safe-browsing/reference), 수동 호출(VALIDATION 문서) |
+| 응답 필드 | SearchHashesResponse 1 `full_hashes`, 2 `cache_duration`(Duration) / FullHash 1 `full_hash`, 2 `full_hash_details` / FullHashDetail 1 `threat_type`, 2 `attributes` | [safebrowsing.proto](https://github.com/googleapis/googleapis/blob/master/google/security/safebrowsing/v5/safebrowsing.proto), [duration.proto](https://github.com/protocolbuffers/protobuf/blob/main/src/google/protobuf/duration.proto) |
+| 저장소 없는 실시간 모드 | 로컬 DB 없이 매번 hashes.search 조회, 전체 해시 메모리 캐시 | [No-Storage Real-Time Mode](https://developers.google.com/safe-browsing/reference/No.Storage.Real.Time.Mode) |
 
-**결론: 무료·무결제·표시 조건이 확인되지 않아 실제 외부 연결을 보류한다.** 공식 정의의 1,000개는 요청 크기 제한이며 무료 일일 할당량이 아니다. GitHub 클라이언트의 Apache 라이선스도 API 서비스 무료 이용 조건을 대신하지 않는다.
+## 켜는 조건
 
-## 현재 연결 경계
+백엔드 환경 변수로만 설정한다. `.env` 자동 로딩은 없고, `VITE_` 변수나 프론트엔드에는 넣지 않는다. 키는 채팅·코드·로그·문서·커밋·`.env` 파일에 쓰지 않는다.
 
-- `UrlReputationProvider` 계약을 유지한다. `SafeBrowsingV5Provider`는 주입받은 `HashSearchTransport`로만 동작한다. **현재는 실제 HTTP 전송 구현·운영 연결·활성화 스위치가 없다.** 테스트가 메모리의 가짜 전송기를 주입한다.
-- 애플리케이션 기본 공급자는 `not_connected`다. 백엔드 환경변수 `GOOGLE_SAFE_BROWSING_API_KEY`가 없으면 `key_missing`, 있더라도 **`policy_pending`으로 통신하지 않는다.** 키만 넣고 재시작해서 외부 호출이 시작되는 일은 없다. 프론트엔드 변수·응답·로그에 키를 넣지 않는다.
-- 미래 HTTP 전송기는 고정 `GET https://safebrowsing.googleapis.com/v5/hashes:search`에 반복 `hashPrefixes`(4바이트의 표준 Base64)만 전달해야 한다. 접두사는 URL 인코딩해야 하며 키는 백엔드에서 별도 인증 헤더로 전달하는 방식을 공식 문서로 재확인해야 한다. 전체 URL·도메인·입력·전체 해시는 요청에 넣지 않는다. Google은 연결 시 송신 IP·시각·접두사 등을 알 수 있으므로 익명성을 약속하지 않는다.
-- 사용자 URL 접속·DNS·리디렉션·신규 검사 제출·인기 목록 기반 안전 판정·다른 공급자 전환·자동 재시도는 없다.
-- `.env` 자동 로딩은 하지 않는다. `backend/.env.example`은 비밀값 없는 변수 이름 안내다. 지금은 키를 발급하거나 채팅에 공유할 필요가 없다.
+| 환경 변수 | 값 | 의미 |
+| --- | --- | --- |
+| `GOOGLE_SAFE_BROWSING_API_KEY` | 사용자가 발급한 키 | 없으면 `not_connected / key_missing` |
+| `PTOS_SAFE_BROWSING_MODE` | 정확히 `live-noncommercial` | 다른 값(공백·대소문자 차이 포함)이거나 없으면 키가 있어도 `not_connected / policy_pending`, 외부 호출 없음 |
+| `PTOS_SAFE_BROWSING_TIMEOUT_SECONDS` | 선택, 기본 `1` | URL 하나당 큐 대기 포함 제한(개발 제안). 0보다 크고 전체 분석 제한(5초)보다 작아야 하며, 아니면 `not_connected / invalid_config`로 꺼진 상태 유지 |
+
+- 서버 시작 시 한 번만 판단한다. 바꾸면 서버를 재시작한다(Windows는 `--reload` 금지). 켜지면 "lookups are ON" 경고 로그 한 줄을 남긴다(키 없음).
+- `GET /api/v1/health/ready`의 `url_reputation`이 `live` 또는 `off`를 알려준다. 키·시간 제한·공급자 상태는 넣지 않는다. 화면은 이 값으로 전송 안내를 켜고 끈다.
+- 실제 조회는 `create_app`이 앱당 공급자 하나로만 만든다. 평가 하네스·학습·측정 스크립트와 직접 만든 `RuleBasedAnalyzer()`는 항상 미연결이다.
+- 자동 테스트는 외부 호출을 하지 않는다. pytest는 `backend/tests/conftest.py`가 키·모드 변수를 지우고 루프백 외 연결 시도를 막고 실패시킨다. Playwright는 백엔드에 `PTOS_SAFE_BROWSING_MODE=''`를 주고, 재사용된 서버가 켜져 있으면 실패하는 확인 테스트가 있다.
+
+## 요청과 응답 처리
+
+- **보내는 것:** `GET https://safebrowsing.googleapis.com/v5/hashes:search?hashPrefixes=…` (반복). 접두사는 4바이트 SHA-256 앞부분의 **표준 Base64, padding 없음**이며 `+`·`/`는 `%2B`·`%2F`로 인코딩한다. 키는 `X-Goog-Api-Key` 헤더로만 보낸다. `alt`와 JSON `Accept` 헤더는 보내지 않는다.
+- **보내지 않는 것:** URL 원문, 호스트, 경로, 입력 문자, 전체 해시. 사용자 URL에 접속·DNS 조회·리디렉션 추적을 하지 않는다. 리디렉션은 따라가지 않고, 환경의 프록시·`.netrc`를 쓰지 않는다(`trust_env=False`).
+- **익명성 한계:** 켜면 Google은 송신 IP·시각·접두사를 알 수 있다. 해시 접두사도 익명성을 보장하지 않는다.
+- **응답:** `application/x-protobuf`는 직접 디코더(`backend/app/safe_browsing_proto.py`, protobuf 패키지 미사용)로 REST JSON과 같은 모양으로 바꾼 뒤 기존 `parse_response`로 검증한다. `application/json`은 호환용으로 받는다. 그 외 형식, 1 MiB(개발 제안) 초과, 해석 실패는 `invalid_response`다. 오류 응답 본문은 읽지 않는다.
+- **공식 절차와 다른 점:** 공식 No-Storage 절차는 오류 시 SAFE를 반환하지만, 이 앱은 오류·결과 없음을 안전으로 바꾸지 않는다.
 
 ## URL 절차와 제한
 
@@ -36,34 +62,51 @@
 4. 호스트는 전체 호스트와 마지막 최대 5개 label부터 2개 label까지의 suffix(최대 5개 표현), IP는 하나만 생성한다. 경로는 루트+첫 3개 디렉터리 prefix+전체 경로+전체 경로/쿼리로 최대 6개다. 중복 제거 후 최대 30개를 SHA-256하고 4바이트 prefix만 조회 경계에 넘긴다.
 5. 응답의 32바이트 해시를 **로컬의 전체 해시**와 비교한다. prefix만 같은 충돌은 `unknown`이다. 지원되지 않는 위협 유형/속성은 해당 detail을 무시한다. `CANARY`와 `FRAME_ONLY`도 이 독립 URL 경고에 사용하지 않는다.
 
-규격 근거: [URL 처리 문서](https://developers.google.com/safe-browsing/v5/urls-hashing) 본문은 이번 환경에서 미확인. 알고리즘과 회귀 벡터는 [Google 공식 Go 참조](https://github.com/google/safebrowsing/blob/bbf0d20d26b32d99fd21664677fe31ee9f0f66e3/urls.go)·[테스트](https://github.com/google/safebrowsing/blob/bbf0d20d26b32d99fd21664677fe31ee9f0f66e3/urls_test.go)를 교차 확인했다. 이 참조는 v4이므로 v5 API 정의의 최대 30개에 맞춰 host/path 개수를 제한했다. 실제 연결 전에 최신 v5 URL 문서와 추가 상호운용성 검증이 필요하다. 브라우저 내장 Safe Browsing과 완전히 같은 범위를 구현했다고 주장하지 않는다.
+규격 근거: 알고리즘과 회귀 벡터는 [Google 공식 Go 참조](https://github.com/google/safebrowsing/blob/bbf0d20d26b32d99fd21664677fe31ee9f0f66e3/urls.go)·[테스트](https://github.com/google/safebrowsing/blob/bbf0d20d26b32d99fd21664677fe31ee9f0f66e3/urls_test.go)를 교차 확인했다(v4). v5 API 정의의 최대 30개에 맞춰 host/path 개수를 제한했다. [URL 처리 문서](https://developers.google.com/safe-browsing/v5/urls-hashing) 본문과의 상호운용성은 테스트 URL 1건의 실제 일치 외에는 검증하지 않았다. 브라우저 내장 Safe Browsing과 같은 범위를 구현했다고 주장하지 않는다.
 
-입력은 기존 HTTP(S) 한정·10,000 코드포인트·URL 후보 10개 제한을 유지한다. 중첩 escape 1,024회 초과·처리 불가 주소는 `unavailable/normalization_failed`로 보류하며 `no_match`로 바꾸지 않는다. 이 자원 제한은 개발 제안이다. URL/원문을 캐시 키·로그·디스크로 보존하지 않는다.
+입력은 기존 HTTP(S) 한정·10,000 코드포인트·URL 후보 10개 제한을 유지한다. 중첩 escape 1,024회 초과·처리 불가 주소는 `unavailable/normalization_failed`로 보류하며 `no_match`로 바꾸지 않는다. 이 자원 제한은 개발 제안이다.
 
-## 응답 상태·캐시·예산
+## 응답 상태
 
 | 상태 / reason | 의미 |
 | --- | --- |
 | `malicious / full_hash_match` | 전체 해시 + 지원하는 위협 detail 일치. `full_hash_verified: true`와 `threat_types` 제공 |
-| `unknown / no_match` | 200 응답을 받았지만 유효한 전체 해시 위협 일치 없음. **안전 판정 아님** |
-| `unknown / unsupported_details` | 일치 해시의 유형/속성을 현재 URL 경고에 적용할 수 없음 |
-| `auth_error / authentication_failed` | HTTP 401/403. 원문 오류 본문·키는 반환하지 않음 |
+| `unknown / no_match` | 200 응답, 유효한 전체 해시 위협 일치 없음. **안전 판정 아님** |
+| `unknown / unsupported_details` | 일치 해시의 유형/속성(모르는 번호, CANARY, FRAME_ONLY 등)을 경고에 쓸 수 없음 |
+| `not_connected / key_missing`, `policy_pending`, `invalid_config` | 키 없음 / 모드 미설정 / 시간 제한 설정 오류. 외부 호출 없음 |
+| `not_connected / not_configured` | 공급자 없이 직접 만든 분석기(평가·스크립트). 외부 호출 없음 |
+| `auth_error / authentication_failed` | HTTP 401/403. 오류 본문·키는 반환하지 않음 |
 | `rate_limited / provider_rate_limit` | HTTP 429. 자동 재시도/증액 없음 |
 | `rate_limited / local_limit` | 로컬 개발 예산 소진. Google 할당량과 구분 |
-| `timeout / request_timeout` | 큐 대기 포함 제한 초과. 취소·잠금 해제 |
-| `unavailable` | 통신/프로토콜/정규화/캐시 용량 장애. 404도 결과 없음으로 처리하지 않음 |
+| `timeout / request_timeout` | 큐 대기 포함 제한 초과 또는 HTTP 시간 초과 |
+| `unavailable / network_error` | 연결·읽기 등 네트워크 오류 |
+| `unavailable / server_error` | HTTP 5xx |
+| `unavailable / http_error` | 그 밖의 HTTP 상태(400, 404, 302 등). 404도 결과 없음으로 처리하지 않음 |
+| `unavailable / invalid_response` | 지원하지 않는 형식, 크기 초과, protobuf·JSON 해석 실패, 필수 필드 누락 |
+| `unavailable / transport_error`, `normalization_failed`, `cache_capacity`, `cache_expired_during_lookup` | 기타 전송 예외 / 정규화 불가 / 캐시 용량 / 대기 중 음성 캐시 만료 |
 
-일부 음성 캐시가 다른 접두사 응답을 기다리는 동안 만료되면 `cache_expired_during_lookup`으로 보류한다. 다음 시도는 만료분만 다시 조회하며 만료 자료로 조회 완료를 주장하지 않는다.
+어느 실패도 이미 확보한 규칙·모델 근거와 판정을 지우지 않는다. `analysis_stages`의 `url_reputation`은 하나라도 조회를 끝내지 못하면 `unavailable`, 모두 끝나면 `completed`, 미연결이면 `not_connected`, 유효 URL이 없으면 `not_applicable`이다. URL별 상세 상태는 `urls[].reputation.status/reason`에 있다.
 
-- 공식 응답 `cacheDuration`을 각 조회 접두사의 양성·음성 결과 모두에 적용한다. 값이 누락/잘못되면 장애다. TTL을 추정·고정하거나 음성 TTL을 임의로 연장하지 않는다. 만료 자료는 재사용하지 않는다.
+## 캐시·호출 예산
+
+- 응답 `cacheDuration`을 각 조회 접두사의 양성·음성 결과 모두에 적용한다. 값이 누락/잘못되면 장애다. TTL을 추정·고정하거나 음성 TTL을 연장하지 않는다(공식 문서는 결과가 비었을 때 24시간 이내 연장을 허용하지만 사용하지 않는다). 만료 자료는 재사용하지 않는다.
 - 캐시는 프로세스 메모리에 prefix·반환된 전체 해시·위협 유형·시각만 보유한다. 호스트·경로·키·원문을 보존하지 않는다. 미만료 캐시를 쫓아내고 다시 조회하지 않도록 용량 부족이면 새 호출을 보류한다. 재시작하면 사라진다.
-- 동시 중복은 잠금으로 합치고 실제 전송은 동시에 1개다. 개발 기본 예산은 프로세스당 **분당 2회·rolling 24시간 100회·캐시 2,048 prefix·큐 포함 1초**다. 이는 **PRD/Google 확정 제한이 아닌 개발 제안**이다. 실패 시도도 횟수에 포함하며 캐시 읽기는 호출 수를 쓰지 않는다. 현재 앱의 실제 호출 수는 항상 0이다.
-- 복수 URL은 각각 기한을 적용해 한 주소 지연으로 문자 규칙 결과 전체가 사라지지 않게 한다. 부분 캐시의 유효한 전체 해시 일치는 새 경로의 조회 불가와 무관하게 유지한다.
-- 현재 단일 Windows 프로세스 개발용이다. 향후 여러 서버/worker 배포 전에는 공급자 약관에 맞는 캐시 지속성·전역 예산/동시성·백오프를 설계해야 한다. 현재 기본값을 운영 무료 사용 보장으로 쓰지 않는다.
+- 동시 중복은 잠금으로 합치고 실제 전송은 동시에 1개다. 개발 기본 예산은 프로세스당 **분당 2회·rolling 24시간 100회·캐시 2,048 prefix·큐 포함 1초**다. **이 값들은 PRD/Google 확정 제한이 아니며 Google 할당량도 아닌 개발 제안이다.** 실패 시도도 횟수에 포함하며 캐시 읽기는 호출 수를 쓰지 않는다.
+- 1초 제한은 유지한다(사용자 결정, 2026-10-28). 실제 응답 시간은 첫 두 호출 1.1~1.3초, 이후 409~548ms였다. 첫 연결이 느리면 `timeout`이 될 수 있다.
+- 단일 Windows 프로세스 개발용이다. 여러 서버/worker 배포 전에는 캐시 공유·전역 예산/동시성·백오프를 설계해야 한다.
 
-## 종합 판정 · rules-reputation-dev-v1
+## 화면·응답 표시
 
-T4(2026-10-27)에서 문자 규칙이 `rules-dev-v3`(임시)로 바뀌어 `RuleBasedAnalyzer`의 `analysis_version`은 `rules-reputation-dev-v2`다. T5에서 API 응답은 모델 종합을 거쳐 `rules-model-dev-v1`이 됐다([MODEL_POLICY.md](MODEL_POLICY.md)). 평판 종합 방식은 아래와 같고 바뀌지 않았다.
+- **출처 구분(현재 계약으로 가능, 계약 변경 없음):** `evidence[].source`가 `rule`과 `url_reputation`을 나누고, Google 출처 여부는 `urls[].reputation.provider == "google_safe_browsing_v5"`와 occurrence 좌표가 같은지로 판단한다. 모델 신호는 `evidence`가 아니다. 한계: `explanation`은 규칙 문장과 URL 문장을 이어 붙인 문자열이라, Google 표기는 설명문이 아니라 URL 결과와 URL 근거 옆에 붙인다. `Evidence`에 공급자 필드를 넣는 계약 변경은 중간점검 이후 검토 항목이다(HANDOVER).
+- **Google 표기:** 공급자가 Google이고 `malicious`이며 전체 해시가 검증된 URL과 그 근거에만 "Advisory provided by Google (Google 제공 경고)"와 고정 링크 `https://developers.google.com/safe-browsing/v4/advisory`를 붙인다. 규칙·모델 근거에는 붙이지 않는다. 링크 경로는 Permitted Use 문서가 가리키는 v4 경로이며, v5 전용 Advisory 페이지 유무는 미확인이다.
+- **한정 표현과 고지:** "위험한 사이트일 수 있다는 보고가 있어요", "Google은 정확한 정보를 제공하려 하지만, 위험한 사이트를 놓치거나 안전한 사이트를 위험으로 잘못 표시할 수 있어요. 안전을 보장하지 않아요."
+- **전송 안내:** 켜져 있거나 상태를 확인하지 못하면 문자·URL 입력과 OCR 확인 단계의 분석 버튼 앞에 "URL 확인 기능이 켜져 있어요. 주소를 그대로 보내지 않고, 주소에서 만든 일부 정보(해시)만 Google로 전송돼요."를 보인다. 꺼짐이 확인되면 숨긴다. OCR 업로드 화면에는 없다(OCR은 Google로 보내지 않음).
+- 사용자 URL은 링크로 만들지 않는다. 화면의 외부 링크는 고정 Advisory 주소뿐이다.
+- 결과 제목 "위험"은 규칙과 평판을 합친 앱의 판정이다. Google 판정처럼 읽히는지는 사용성 검토에서 확인한다.
+
+## 종합 판정 · rules-reputation-dev-v2
+
+T4(2026-10-27)에서 문자 규칙이 `rules-dev-v3`(임시)로 바뀌어 `RuleBasedAnalyzer`의 `analysis_version`은 `rules-reputation-dev-v2`다. T5에서 API 응답은 모델 종합을 거쳐 `rules-model-dev-v1`이 됐다([MODEL_POLICY.md](MODEL_POLICY.md)). 평판 종합 방식은 아래와 같고 T6에서 바뀌지 않았다.
 
 | 확인한 근거 | 개발용 결과 |
 | --- | --- |
@@ -73,37 +116,41 @@ T4(2026-10-27)에서 문자 규칙이 `rules-dev-v3`(임시)로 바뀌어 `RuleB
 | URL 존재·형식 확인·접두사 충돌·미지원 detail·결과 없음만 있음 | 기존 정책 유지. 경고 요구가 없으면 `insufficient_information`. `normal` 승격 없음 |
 | 단순 `malicious` 문자열뿐이며 전체 해시 검증/위협 유형 없음 | 종합 판정 위험 근거로 채택하지 않음 |
 
-위 정책은 개발 제안이다. `dangerous`는 목록 일치에 근거한 위험 가능성 경고이며 사기 확정이 아니다. 기관 신원, 메시지 발신자, 송금 요구 등 입력에 없는 사실은 추가하지 않는다. `confidence`는 **null**, 모델/LLM은 미구현이다. `benign`은 기존 공급자 교체 계약 호환용으로 남기지만 이 어댑터는 생성하지 않으며 정상 근거로 쓰지 않는다. 공급자별 상태·출처·시각·캐시 여부는 주소와 함께 일반 텍스트로만 표시한다. 정확한 필수 경고/상표 준수 확인은 실제 연결의 선행 조건이다.
+위 정책은 개발 제안이다. `dangerous`는 목록 일치에 근거한 위험 가능성 경고이며 사기 확정이 아니다. 기관 신원, 메시지 발신자, 송금 요구 등 입력에 없는 사실은 추가하지 않는다. `confidence`는 **null**이다. `benign`은 공급자 교체 계약 호환용이며 이 어댑터는 생성하지 않는다.
 
-## 무료 조건이 계속 불명확할 때의 로컬 대안
+## 수동 확인 (실제 호출은 사람이 직접)
 
-**Phishing.Database의 수동 승인된 로컬 snapshot**을 대안으로 제안한다. [공식 프로젝트](https://github.com/Phishing-Database/Phishing.Database) README는 feeds를 무료로 제공한다고 명시하고, [LICENSE](https://github.com/Phishing-Database/Phishing.Database/blob/master/LICENSE)와 README의 License 절은 MIT 사용·복사·수정·배포를 무료로 허용한다. 확인일은 위와 같다. API 계정·키·결제수단 없이 파일을 로컬에서 조회할 수 있는 방식이다. 저작권/라이선스 고지 보존이 필요하고 데이터는 AS IS이며 정확도·최신성 보장이 없다.
+`backend/check_safe_browsing.py`는 자동 테스트에 넣지 않는 1회 확인 스크립트다. `--live` 옵션, 키, `PTOS_SAFE_BROWSING_MODE=live-noncommercial`이 모두 있어야 호출하며, 실행 한 번에 호출은 최대 1회다. 사용자 입력은 받지 않는다.
 
-채택 시 **URL이 포함된 active 목록**의 버전/다운로드일/체크섬·라이선스를 기록한 뒤 로컬 해시 색인을 만들고 별도 `UrlReputationProvider`로 연결한다. 목록 없는 주소·만료 snapshot은 unknown이지 안전이 아니다. 사용자의 입력 URL을 목록 제공자에 전송하거나 대상 URL에 접속하지 않는다. 목록 다운로드는 공개 데이터 갱신이며 사용자 URL 제출과 구분한다. 이번에는 라이선스/README만 읽었고 **위협 목록 다운로드·로컬 공급자 구현·자동 전환은 하지 않았다.** 이를 선택하려면 별도 승인이 아니라 다음 구현 방향을 사용자가 선택하면 된다.
+- 기본 실행: 고정 테스트 URL `http://testsafebrowsing.appspot.com/apiv4/ANY_PLATFORM/MALWARE/URL/`의 접두사만 앱과 같은 경로로 조회한다. 이 URL에는 접속하지 않는다. 출처는 Google 공식 GitHub [google/safebrowsing README](https://github.com/google/safebrowsing)의 sblookup 예시(v4 참조 구현)이며, v5 문서에서는 테스트 URL 목록을 찾지 못했다.
+- `--probe official-example [--variant no-alt|key-query|padded|official-exact]`: 공식 개요 예시 접두사 `WwuJdQ` 1개로 요청 모양을 바꿔 진단한다. key-query·official-exact는 키가 URL에 들어가므로 URL·예외 메시지를 출력하지 않고 httpx 로그를 막는다.
+- 출력: 응답 시간, HTTP 상태, Content-Type, protobuf 구조(개수·길이·위협 유형), 판정, 오류 분류(`error.status`, `details[].@type`·`reason`, `fieldViolations.field`, message 안의 Base64/API key 언급 여부). 키·접두사·전체 해시·원본 바이트·오류 message 원문은 출력하지 않는다.
 
-## Windows에서 지금 확인하기
-
-기존 OCR 설치는 유지한다. 두 서버를 `Ctrl+C`로 종료하고 Git Bash의 저장소 최상위에서:
-
-```bash
-git fetch origin
-git switch main
-git pull --ff-only
-./.venv/Scripts/python.exe -m pip install -r backend/requirements-dev.txt
-```
-
-기존 Git Bash 첫 터미널의 `TESSERACT_CMD` 설정을 유지하고:
+Git Bash, 저장소 최상위 기준:
 
 ```bash
+read -rs GOOGLE_SAFE_BROWSING_API_KEY && export GOOGLE_SAFE_BROWSING_API_KEY
+export PTOS_SAFE_BROWSING_MODE=live-noncommercial
 cd backend
-../.venv/Scripts/python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-access-log
+../.venv/Scripts/python.exe check_safe_browsing.py --live
+unset GOOGLE_SAFE_BROWSING_API_KEY PTOS_SAFE_BROWSING_MODE
 ```
 
-두 번째 Git Bash에서 `cd frontend`, `npm ci`, `npm run dev`를 차례로 실행한다. 브라우저에서 **http://localhost:5173**을 연다.
+`read -rs`는 키를 화면과 셸 기록에 남기지 않는다. 확인 후 `unset`하지 않으면 같은 셸에서 띄운 서버도 실제 조회가 켜진다.
 
-1. URL 직접 입력 `https://예시.한국/공지` → **정보 부족 / 형식 확인 / 평판 조회 미연결**. 클릭 가능한 링크가 없어야 한다.
-2. 문자 `은행입니다. 인증번호를 알려주세요. https://example.invalid/test` → 기존 **위험** 근거 유지 + 평판 미연결. 실제 Google 악성 탐지가 아니다.
-3. 기존 한국어 합성 이미지로 OCR → 수정 → 확인 체크 → 분석 순서가 유지되어야 한다. OCR/수정 미리보기 API는 계속 평판 조회를 하지 않는다.
-4. 가짜 응답 어댑터 테스트: 저장소 최상위에서 `cd backend` 후 `../.venv/Scripts/python.exe -m pytest -q tests/test_safe_browsing.py tests/test_safe_browsing_urls.py`. 실제 Google 계정/키 없이 악성 일치·접두사 충돌·빈 결과·인증·한도·시간 초과·캐시를 검증한다. 사용자 화면에 가짜 평판을 켜는 운영용 데모 경로는 없다.
+## Windows에서 앱으로 확인하기
 
-**키가 필요한 시점의 첫 단계:** 우선 PC 브라우저로 위 Google 공식 이용 조건·Usage limits·Usage guidelines를 확인한다. 무료 비상업 캡스톤 허용, 결제수단 없음, 자동 과금 없음, 정확한 할당량과 표시 요건을 확인할 때까지 키 발급/실연결로 진행하지 않는다. 결제 연결 화면이 필수이면 중단하고 로컬 대안을 선택한다. 준비가 확인된 다음 작업에서 API 제한·키 발급·백엔드 환경변수 설정을 한 단계씩 안내한다. 키는 PC의 백엔드에서만 직접 입력하며 **채팅·Git·화면·스크린샷에 공유하지 않는다.** 현재는 키를 준비할 필요가 없다.
+- 기본(꺼짐): 키·모드 없이 서버를 띄우면 화면 상단에 "URL 평판 조회는 꺼져 있으며", URL 결과에 **평판 조회 미연결**이 보이고 전송 안내는 없다.
+- 켜서 확인(실제 호출 발생): 위 `read -rs`·`export` 두 줄을 실행한 셸에서 백엔드를 시작한다. 상단 문구가 "켜져 있지만"으로 바뀌고 입력 화면에 전송 안내가 보인다. 테스트 URL을 분석해 Google 표기가 붙은 위험 가능성 경고가 나오는지 확인한다. 2026-10-28에 사용자가 문자 입력으로 수동 확인했다: 전송 안내가 분석 버튼 위에 보였고, 첫 조회는 시간 초과(1초)로 규칙 결과만 나왔으며, 약 1분 뒤 두 번째 조회에서 `malicious / full_hash_match`(`MALWARE`)와 Google 근거에만 Advisory 링크가 표시됐다([VALIDATION](SAFE_BROWSING_VALIDATION.md)). 자동 테스트가 아닌 수동 관찰이다. 끝나면 서버를 끄고 `unset`한다.
+
+## 로컬 대안 (채택 안 함)
+
+[Phishing.Database](https://github.com/Phishing-Database/Phishing.Database)(MIT)의 수동 승인 snapshot을 로컬 해시 색인으로 조회하는 별도 `UrlReputationProvider`를 대안으로 검토했다. 다운로드·구현하지 않았다. 목록에 없는 주소·만료 snapshot은 unknown이지 안전이 아니다.
+
+## 미확정
+
+- hashes.search가 해당하는 할당량 항목과 정확한 한도, 초과 시 동작.
+- v5 전용 Advisory 페이지 유무와 표기 위치의 최종 검토.
+- `alt=json`과 JSON `Accept` 중 어느 쪽이 400의 원인인지(둘을 함께 뺀 요청만 성공 확인).
+- 다중 프로세스·AWS 배포 시 캐시·예산 공유, 키 애플리케이션 제한(서버 고정 IP).
+- 한국 스미싱 URL에 대한 탐지 범위(측정 안 함).

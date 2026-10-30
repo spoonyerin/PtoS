@@ -159,6 +159,14 @@ class AnalysisResponse(AnalysisResult):
     request_id: UUID
 
 
+class ReadyResponse(BaseModel):
+    """준비 상태. url_reputation은 실제 외부 평판 조회가 켜졌는지만 알린다 (키·시간 제한·공급자 세부 상태는 넣지 않는다)."""
+
+    status: Literal["ready"] = "ready"
+    mode: Literal["rules"] = "rules"
+    url_reputation: Literal["live", "off"]
+
+
 class ErrorDetail(BaseModel):
     code: str
     message: str

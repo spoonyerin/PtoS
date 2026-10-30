@@ -1,6 +1,7 @@
 """Keyless v5 hashes.search adapter. Only a caller-supplied transport can run.
 
-The application intentionally has NO live HTTP transport. Tests inject fakes.
+The live HTTP transport lives in safe_browsing_http.py and is never wired by
+default. Tests inject fakes.
 Cache holds prefixes, returned full hashes and metadata; never URLs or API keys.
 """
 
@@ -25,14 +26,41 @@ SEARCH_ENDPOINT = "https://safebrowsing.googleapis.com/v5/hashes:search"
 
 @dataclass(frozen=True, repr=False)
 class SearchResponse:
+    """Internal transport result, not part of the API contract (never serialized to clients)."""
+
     status_code: int
     body: dict = field(repr=False)
+    # Media type of a 200 body (e.g. application/x-protobuf) for manual diagnostics only.
+    content_type: str | None = None
 
 
 class HashSearchTransport(Protocol):
-    # Repeated REST hashPrefixes values: standard padded Base64 of exactly 4 bytes.
+    # Repeated REST hashPrefixes values: standard Base64 of exactly 4 bytes WITHOUT
+    # padding, as in the official overview example (hashPrefixes=WwuJdQ).
     # No URL, hostname, expression, input text or full hash crosses this boundary.
     async def search(self, hash_prefixes: tuple[str, ...]) -> SearchResponse: ...
+
+
+# Transport failures carry no message: request data must not leak through them.
+class TransportTimeout(Exception):
+    pass
+
+
+class TransportNetworkError(Exception):
+    pass
+
+
+class TransportResponseError(Exception):
+    """Unusable 200 response (format, size, decoding). Keeps only Content-Type and body size for diagnostics."""
+
+    def __init__(self, content_type: str = "", size: int | None = None):
+        super().__init__()
+        self.content_type = content_type[:100]
+        self.size = size
+
+
+def encode_prefix(prefix: bytes) -> str:
+    return base64.b64encode(prefix).decode("ascii").rstrip("=")
 
 
 @dataclass(frozen=True, repr=False)
@@ -98,6 +126,11 @@ class SafeBrowsingV5Provider:
         self._calls: deque[float] = deque()
         self._lock = asyncio.Lock()
 
+    async def aclose(self) -> None:
+        close = getattr(self._transport, "aclose", None)
+        if close is not None:
+            await close()
+
     @staticmethod
     def _verdict(hashes, entries: list[CacheEntry], cache_hit: bool) -> UrlReputation:
         threats = sorted({threat for entry in entries for digest, kinds in entry.hashes.items()
@@ -145,11 +178,13 @@ class SafeBrowsingV5Provider:
                             return failure("rate_limited", "local_limit")
                         # Count attempted calls, including HTTP/network failures.
                         self._calls.append(now)
-                        response = await self._transport.search(tuple(base64.b64encode(p).decode("ascii") for p in missing))
+                        response = await self._transport.search(tuple(encode_prefix(p) for p in missing))
                         if response.status_code in (401, 403):
                             return failure("auth_error", "authentication_failed")
                         if response.status_code == 429:
                             return failure("rate_limited", "provider_rate_limit")
+                        if 500 <= response.status_code <= 599:
+                            return failure("unavailable", "server_error")
                         if response.status_code != 200:
                             return failure("unavailable", "http_error")
                         try:
@@ -175,8 +210,12 @@ class SafeBrowsingV5Provider:
                             return failure("unavailable", "cache_expired_during_lookup")
                     # One complete SHA-256 comparison, not prefix membership, is required.
                     return self._verdict(hashes, entries, cache_hit)
-        except TimeoutError:
+        except (TimeoutError, TransportTimeout):
             return failure("timeout", "request_timeout")
+        except TransportNetworkError:
+            return failure("unavailable", "network_error")
+        except TransportResponseError:
+            return failure("unavailable", "invalid_response")
         except Exception:
             # Never propagate/log exceptions that can contain request data or credentials.
             return failure("unavailable", "transport_error")
