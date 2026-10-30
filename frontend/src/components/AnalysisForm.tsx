@@ -3,6 +3,8 @@ import { characterCount, MAX_CONTENT_LENGTH } from '../input'
 import type { InputType } from '../api/types'
 import { ScreenshotInput } from './ScreenshotInput'
 import { Icon } from './Icons'
+import { UrlCheckNotice } from './UrlCheckNotice'
+import { DevelopmentNote } from './DevelopmentNote'
 type Props = {
   content: string
   inputType: InputType
@@ -101,6 +103,7 @@ export function AnalysisForm(props: Props) {
               {props.error}
             </p>
           )}
+          <UrlCheckNotice />
           <button
             className="primary-button analyze-button"
             type="submit"
@@ -112,10 +115,7 @@ export function AnalysisForm(props: Props) {
           </button>
         </form>
       )}
-      <p className="development-note">
-        규칙 기반 개발 버전 · URL 평판 조회는 미연결이며 결과는 안전을 보장하지
-        않아요.
-      </p>
+      <DevelopmentNote />
     </section>
   )
 }

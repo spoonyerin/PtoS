@@ -5,6 +5,17 @@ import { ServiceStatusProvider } from './useServiceStatus'
 
 const NOTICE = 'URL 확인 기능이 켜져 있어요. 주소를 그대로 보내지 않고, 주소에서 만든 일부 정보(해시)만 Google로 전송돼요.'
 
+beforeEach(() => {
+  history.replaceState(null, '', '/#text')
+  vi.stubGlobal('scrollTo', vi.fn())
+})
+
+// 새 화면에는 입력 방식 라디오가 없다. 홈 메뉴로 다른 확인 화면에 들어간다.
+async function openPage(name: '링크 확인하기' | '사진으로 확인하기') {
+  await userEvent.click(screen.getByRole('button', { name: '홈으로 돌아가기' }))
+  await userEvent.click(screen.getByRole('button', { name }))
+}
+
 function renderWith(fetchMock: ReturnType<typeof vi.fn>) {
   vi.stubGlobal('fetch', fetchMock)
   return render(<ServiceStatusProvider><App /></ServiceStatusProvider>)
@@ -20,7 +31,7 @@ test('켜짐이면 문자·URL 입력 화면에 전송 안내를 보인다', asy
   await screen.findByText(/URL 평판 조회\(Google Safe Browsing\)는 켜져 있지만/)
   expect(screen.getByRole('note')).toHaveTextContent(NOTICE)
   expect(fetchMock).toHaveBeenCalledWith('/api/v1/health/ready', expect.objectContaining({ cache: 'no-store' }))
-  await userEvent.click(screen.getByRole('radio', { name: 'URL 직접 입력' }))
+  await openPage('링크 확인하기')
   expect(screen.getByRole('note')).toHaveTextContent(NOTICE)
 })
 
@@ -46,6 +57,6 @@ test.each([
 test('스크린샷 업로드 화면에는 전송 안내가 없다', async () => {
   renderWith(ready('live'))
   await screen.findByText(/켜져 있지만/)
-  await userEvent.click(screen.getByRole('radio', { name: '스크린샷' }))
+  await openPage('사진으로 확인하기')
   expect(screen.queryByRole('note')).toBeNull()
 })
