@@ -636,6 +636,10 @@ textarea::placeholder {
   gap: 9px;
   white-space: nowrap;
 }
+.result-buttons .button-label small {
+  display: block;
+  font-size: 0.72em;
+}
 .result-buttons button svg {
   width: 25px;
   height: 25px;

@@ -223,7 +223,10 @@ export default function App() {
                       onClick={() => setShareNotice(true)}
                     >
                       <Icon name="share" />
-                      가족에게 공유 (준비 중)
+                      {/* 좁은 화면에서 가로로 넘치지 않도록 "준비 중"은 둘째 줄에 둔다. */}
+                      <span className="button-label">
+                        가족에게 공유 <small>(준비 중)</small>
+                      </span>
                     </button>
                     <button
                       className="primary-button"

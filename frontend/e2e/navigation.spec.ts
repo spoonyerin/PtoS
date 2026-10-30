@@ -67,3 +67,28 @@ test('결과 공유는 준비 중 안내만 표시하고 원문을 전달하지 
     '은행입니다. 인증번호를 알려주세요.',
   )
 })
+
+test('가족에게 공유(준비 중)를 눌러도 네트워크 요청·새 창·클립보드 쓰기가 없다', async ({ page }) => {
+  await page.addInitScript(() => {
+    // 공유가 원문을 클립보드나 공유 시트로 넘기지 않는지 기록한다. 값은 저장하지 않는다.
+    const calls: string[] = []
+    ;(window as unknown as { __shareCalls: string[] }).__shareCalls = calls
+    if (navigator.clipboard) navigator.clipboard.writeText = async () => { calls.push('clipboard') }
+    ;(navigator as Navigator & { share?: unknown }).share = async () => { calls.push('share') }
+  })
+  await page.goto('/#text')
+  await page.getByRole('textbox').fill('은행입니다. 인증번호를 알려주세요.')
+  await page.getByRole('button', { name: '분석하기', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '위험', exact: true })).toBeVisible()
+  const requests: string[] = []
+  page.on('request', request => requests.push(request.url()))
+  const popups: unknown[] = []
+  page.on('popup', popup => popups.push(popup))
+  await page.getByRole('button', { name: '가족에게 공유 (준비 중)', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('준비 중')
+  await expect(page.getByRole('status')).toContainText('공유되지 않았어요')
+  await page.waitForTimeout(500)
+  expect(requests).toEqual([])
+  expect(popups).toEqual([])
+  expect(await page.evaluate(() => (window as unknown as { __shareCalls: string[] }).__shareCalls)).toEqual([])
+})
