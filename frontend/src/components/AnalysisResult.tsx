@@ -3,6 +3,7 @@ import type { AnalysisResponse } from '../api/types'
 import { riskLevels } from '../riskLevels'
 import { UrlResults } from './UrlResults'
 import { Icon, type IconName } from './Icons'
+import { GoogleAdvisory, isGoogleEvidence } from './GoogleAdvisory'
 
 // These describe signals supplied by the API, not additional classifications.
 const factorDisplay: Record<string, { icon: IconName; description: string }> = {
@@ -106,6 +107,10 @@ export function AnalysisResult({
                     {signal?.description ??
                       '분석에서 확인한 신호예요. 아래 상세 근거와 행동 안내를 확인하세요.'}
                   </p>
+                  {/* 요약 카드도 Google 자료에서 나온 경고일 때만 Google 표기를 붙인다. 상세 근거는 기본으로 접혀 있다. */}
+                  {evidence.some((item) => isGoogleEvidence(item, result.urls)) && (
+                    <GoogleAdvisory />
+                  )}
                 </li>
               )
             })}
@@ -139,7 +144,9 @@ export function AnalysisResult({
               {result.evidence.map((item) => (
                 <li key={`${item.rule_id}-${item.start}-${item.end}`}>
                   <strong>{item.label}</strong>
-                  <q>{item.snippet}</q>
+                  <q style={{ overflowWrap: 'anywhere' }}>{item.snippet}</q>
+                  {/* Google 자료에서 나온 근거에만 Google 표기를 붙인다. 규칙 근거에는 붙이지 않는다. */}
+                  {isGoogleEvidence(item, result.urls) && <GoogleAdvisory />}
                 </li>
               ))}
             </ul>
