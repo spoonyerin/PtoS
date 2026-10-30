@@ -8,7 +8,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
-from .analyzers import Analyzer, RuleBasedAnalyzer
+from .analyzers import Analyzer, CompositeAnalyzer, RuleBasedAnalyzer
+from .model_adapter import ModelState, load_configured_model
 from .contracts import (
     AnalysisInput,
     AnalysisRequest,
@@ -45,12 +46,17 @@ def create_app(
     analysis_timeout: float = 5.0,
     ocr_factory: Callable[[], OcrEngine] = TesseractOcr,
     ocr_timeout: float = 15.0,
+    model_loader: Callable[[], ModelState] = load_configured_model,
+    model_timeout: float = 1.0,
 ) -> FastAPI:
     app = FastAPI(title="PtoS 규칙·URL·OCR 개발 API", version="0.5.0")
     # App-scoped boundary for a future shared in-memory cache/budget, never per-request keys.
     if analyzer_factory is None:
         reputation_provider = configured_reputation_provider()
-        analyzer_factory = lambda: RuleBasedAnalyzer(reputation_provider)
+        # 모델은 앱 생성 시 한 번만 로드한다. 실패해도 서버는 뜨고 규칙 결과만 낸다.
+        # 모델 제한 시간(개발 제안 1초)은 전체 분석 제한보다 짧아 모델 지연이 504가 되지 않는다.
+        model_state = model_loader()
+        analyzer_factory = lambda: CompositeAnalyzer(RuleBasedAnalyzer(reputation_provider), model_state, model_timeout)
     ocr_lock = asyncio.Lock()
 
     def error_response(request: Request, status: int, code: str, message: str, retryable: bool):

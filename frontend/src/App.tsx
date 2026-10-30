@@ -23,7 +23,7 @@ export default function App() {
         </div>
         <aside className="demo-notice" aria-label="개발용 안내">
           <span className="notice-symbol" aria-hidden="true">i</span>
-          <div><strong>규칙 기반 개발 버전</strong><p>입력의 위험 신호와 URL 형식을 확인해요. 경량 모델은 아직 없고 URL 평판 조회는 미연결이며, 결과는 안전을 보장하지 않아요.</p></div>
+          <div><strong>규칙 기반 개발 버전</strong><p>입력의 위험 신호와 URL 형식을 확인해요. 일부 분석 단계는 꺼져 있을 수 있고 URL 평판 조회는 미연결이며, 결과는 안전을 보장하지 않아요.</p></div>
         </aside>
         <div className="workspace">
           <AnalysisForm content={content} inputType={inputType} loading={analysis.status === 'loading'} error={analysis.error}

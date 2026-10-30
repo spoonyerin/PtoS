@@ -63,7 +63,7 @@
 
 ## 종합 판정 · rules-reputation-dev-v1
 
-T4(2026-10-27)에서 문자 규칙이 `rules-dev-v3`(임시)로 바뀌어 응답의 `analysis_version`은 `rules-reputation-dev-v2`다. 평판 종합 방식은 아래와 같고 바뀌지 않았다.
+T4(2026-10-27)에서 문자 규칙이 `rules-dev-v3`(임시)로 바뀌어 `RuleBasedAnalyzer`의 `analysis_version`은 `rules-reputation-dev-v2`다. T5에서 API 응답은 모델 종합을 거쳐 `rules-model-dev-v1`이 됐다([MODEL_POLICY.md](MODEL_POLICY.md)). 평판 종합 방식은 아래와 같고 바뀌지 않았다.
 
 | 확인한 근거 | 개발용 결과 |
 | --- | --- |

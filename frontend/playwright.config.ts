@@ -18,6 +18,8 @@ export default defineConfig({
     {
       command: `${python} -m uvicorn app.main:app --app-dir ../backend --host 127.0.0.1 --port 8000 --no-access-log`,
       url: 'http://127.0.0.1:8000/api/v1/health/ready',
+      // 기본 e2e는 모델 없이 규칙 결과를 검증한다. 모델을 켠 서버를 재사용하면 기대값이 달라진다.
+      env: { PTOS_MODEL_PATH: '' },
       reuseExistingServer: !process.env.CI,
     },
     {

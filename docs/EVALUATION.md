@@ -7,7 +7,7 @@
 
 평가 데이터는 저장소에 커밋하지 않는다. 실제 수신 문자는 개인정보를 담을 수 있다.
 
-- **저장소 밖, 동기화되지 않는 폴더에 둔다.** 이 저장소가 OneDrive·Dropbox·iCloud 같은 동기화 폴더 안에 있으면, `.gitignore`로 git에서 빼도 파일은 클라우드로 올라간다. 예: `C:/ptos-eval/`(Windows), `~/ptos-eval/`(동기화 대상이 아닌 홈 하위).
+- **저장소 밖, 동기화되지 않는 폴더에 둔다.** 이 저장소가 OneDrive·Dropbox·iCloud 같은 동기화 폴더 안에 있으면, `.gitignore`로 git에서 빼도 파일은 클라우드로 올라간다. 예: `C:/_Coding/ptos-eval/`(Windows), `~/ptos-eval/`(동기화 대상이 아닌 홈 하위).
 - `--data`로 그 경로를 넘긴다. 저장소 안으로 복사하지 않는다.
 - 리포트(`--output`)도 같은 폴더에 둔다. 리포트에는 원문이 없지만 id와 판정 목록이 들어간다.
 - 안전장치로 `.gitignore`에 `/eval-data/`, `/eval-reports/`를 넣었다. 실수로 저장소 최상위에 두었을 때 커밋만 막을 뿐이며, 동기화 폴더 문제는 해결하지 않는다.
@@ -57,15 +57,17 @@ UTF-8 CSV(Excel의 UTF-8 BOM 허용). 컬럼은 HANDOVER 4절과 같다. 모든 
 
 ## 실행
 
+저장소 최상위에서 시작한다. `cd`는 한 번만 한다.
+
 ```bash
 cd backend
-../.venv/Scripts/python.exe evaluate.py --data C:/ptos-eval/eval-v1.csv --output C:/ptos-eval/report-rules.md
+../.venv/Scripts/python.exe evaluate.py --data C:/_Coding/ptos-eval/eval-v1.csv --split dev --output C:/_Coding/ptos-eval/reports/report-rules.md
 ```
 
 | 옵션 | 설명 |
 | --- | --- |
 | `--data` | 평가 CSV 경로 (필수) |
-| `--analyzer` | 등록된 분석기 이름. 현재 `rules`(평판 미연결로 고정한 `RuleBasedAnalyzer`)만 있다. |
+| `--analyzer` | 등록된 분석기 이름. `rules`(평판 미연결로 고정한 `RuleBasedAnalyzer`), `rules+model`(같은 규칙 + `PTOS_MODEL_PATH`의 학습 모델, `CompositeAnalyzer`). `rules+model`은 모델이 없거나 로드에 실패하면 "분석기 준비 오류"로 멈춘다(규칙만으로 조용히 비교되지 않게). |
 | `--split` | `dev` / `test` / `all`(기본). 고른 split의 행만 분석기에 넘기고 리포트에도 그 split만 낸다. 규칙 개발 중에는 `dev`만 쓰고, `test`는 마지막 전후 비교에 한 번만 쓴다. |
 | `--review-status` | 이 값의 행만 평가. 없으면 전체를 평가하고 값별 행 수만 표시한다. |
 | `--timeout` | 행당 분석 제한 시간(초). 기본 5초(API 기본값과 같음). |
@@ -73,10 +75,54 @@ cd backend
 
 다른 분석기를 평가하려면 `backend/evaluation/harness.py`의 `ANALYZERS`에 이름과 팩토리를 등록한다. 분석기는 `Analyzer.analyze(AnalysisInput) -> AnalysisResult` 경계만 지키면 된다. 외부 전송이 있는 분석기는 별도 합의 없이 등록하지 않는다.
 
+## 경량 모델 학습 (T5)
+
+`backend/train_model.py`가 평가 CSV의 **split=dev 행만** 써서 TF-IDF 문자 n-gram + 로지스틱 회귀 기준선을 학습한다. 정책과 한계는 [MODEL_POLICY.md](MODEL_POLICY.md)를 본다. 저장소 최상위에서 시작한다.
+
+```bash
+cd backend
+../.venv/Scripts/python.exe train_model.py --data C:/_Coding/ptos-eval/eval-v1.csv --out-dir C:/_Coding/ptos-eval/models/tfidf-lr-v1
+```
+
+| 옵션 | 설명 |
+| --- | --- |
+| `--data` | 평가 CSV (필수). 하네스와 같은 스키마 검사를 한다. |
+| `--out-dir` | 모델을 저장할 **새 폴더** (필수). 저장소 안이거나 이미 모델이 있으면 거부한다. |
+| `--seed` | 기본 20261027. 교차검증 분할과 분류기에 쓴다. |
+| `--n-splits` | `campaign_id` 기준 층화 그룹 교차검증 fold 수. 기본 5. 사기·정상 라벨 각각의 campaign 수가 이보다 적으면 거부한다. |
+| `--model-version` | 기본 `tfidf-lr-v1`. manifest와 리포트에 기록한다. |
+
+- 라벨: 사기 = `suspicious` + `dangerous`, 정상 = `normal`. `insufficient_information` 라벨과 URL 입력 행은 학습에서 빼고 건수만 기록한다.
+- test 행은 형식 검사로 읽은 직후 버린다. 학습·임계값 결정·리포트 지표에 쓰지 않는다.
+- 출력: `model.joblib`, `manifest.json`(모델 버전, 시드, 설정, 평가 CSV SHA-256, 모델 SHA-256, 커밋, 라이브러리 버전, 건수, 임시 임계값과 `threshold_status: provisional-dev-cv`), `train-report.md`(OOF 모델 단독 집계, 같은 dev 행의 rules / rules+model 혼동행렬, 모델 신호로 판정이 바뀐 id). 원문·URL·campaign 값은 넣지 않는다.
+- **임계값 기준은 임시이며 팀 확정이 필요하다.** OOF 점수에서 expected=normal 행 모델 신호 0건을 지키면서 사기 재현율 최대. 같은 점수로 골랐으므로 OOF 지표도 낙관적이다.
+
+학습한 모델로 하네스를 돌린다. 모델 폴더는 백엔드 환경 변수로 준다.
+
+```bash
+cd backend
+export PTOS_MODEL_PATH=C:/_Coding/ptos-eval/models/tfidf-lr-v1
+../.venv/Scripts/python.exe evaluate.py --data C:/_Coding/ptos-eval/eval-v1.csv --analyzer rules+model --split dev --output C:/_Coding/ptos-eval/reports/report-rules-model-dev.md
+```
+
+- **dev 행은 모델 학습과 임계값 결정에 쓴 행이다.** 하네스로 dev를 평가하면 in-sample이며 리포트가 경고를 낸다. dev 비교는 `train-report.md`의 OOF 결과를 쓴다. 학습 CSV와 평가 CSV의 SHA-256이 다르면 리포트가 그 사실을 적는다.
+- test는 코드와 임계값을 확정한 뒤 `rules`와 `rules+model`을 각각 **한 번만** 실행해 비교한다.
+
+## 모델 지연·메모리 측정
+
+`backend/measure_model.py`가 모델 로드 시간, 로드 중 Python 할당 최대치(tracemalloc), 상주 메모리 전후, 요청당 `model.score` / 규칙 / 규칙+모델 시간(p50·p95·최대)을 잰다. 고정 가짜 문장 3개(최대 10,000자 포함)를 쓰고, `--data`를 주면 dev text 행도 쓴다. test 행은 쓰지 않고 원문은 출력하지 않는다.
+
+```bash
+cd backend
+../.venv/Scripts/python.exe measure_model.py --model-dir C:/_Coding/ptos-eval/models/tfidf-lr-v1 --data C:/_Coding/ptos-eval/eval-v1.csv --output C:/_Coding/ptos-eval/reports/measure-model.md
+```
+
+단일 컴퓨터·단일 스레드에서 한 번 잰 값이며 성능 보장이나 제품 목표(텍스트 5초) 검증이 아니다.
+
 ## 리포트 내용
 
-- 맨 위: 코드 커밋 해시, 작업 트리 변경 여부, 평가 CSV의 SHA-256, 분석기 이름, `analysis_version`, 실행 시각, `review_status` 필터, split 필터. 같은 해시끼리만 결과를 비교한다.
-- 데이터 구성: 실제·합성 행 수, `review_status`별 행 수, 합성만 있을 때 "탐지 성능 아님" 표시, campaign 누출 경고.
+- 맨 위: 코드 커밋 해시, 작업 트리 변경 여부, 평가 CSV의 SHA-256, 분석기 이름, `analysis_version`, 실행 시각, `review_status` 필터, split 필터. 모델이 있는 분석기는 모델 버전, 모델 파일 SHA-256, 임계값 상태도 적는다. 같은 해시끼리만 결과를 비교한다.
+- 데이터 구성: 실제·합성 행 수, `review_status`별 행 수, 합성만 있을 때 "탐지 성능 아님" 표시, campaign 누출 경고. 모델이 있는 분석기는 모델 단계 상태 집계(`completed`, `unavailable` 등)와 dev in-sample 경고.
 - `dev`, `test` 각각에 대해 **전체 / text 입력 / url 입력**으로 나눠:
   - 4단계 혼동행렬. 입력 오류(`input_error`, 예: 10,000자 초과·URL 형식 오류), 시간 초과(`timeout`), 분석 오류(`analysis_error`)는 별도 열이며 정보 부족으로 합치지 않는다.
   - 클래스별 Precision/Recall/F1. 오류 행은 해당 클래스를 맞히지 못한 것으로 재현율 분모에 포함한다. 판정 수 0이면 Precision, expected 수 0이면 Recall이 `N/A`이고, 둘 중 하나가 `N/A`이면 F1도 `N/A`다.
@@ -88,6 +134,6 @@ cd backend
 
 ## 한계
 
-- 행을 순서대로 하나씩 분석한다. 처리 시간은 측정하지 않는다 (T9).
+- 행을 순서대로 하나씩 분석한다. 하네스는 처리 시간을 측정하지 않는다. 모델 지연은 `measure_model.py`로 따로 잰다 (단계별 계측은 T9).
 - URL 입력은 현재 규칙 분석기에서 항상 `url_only` 정보 부족이다. 평판 조회가 미연결이기 때문이며, 이 결과를 URL 탐지 성능으로 해석하지 않는다.
 - 합격선, 평가셋 규모, `review_status` 허용 값은 T1에서 정한다. 하네스에는 합격 판정이 없다.

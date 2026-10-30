@@ -1,4 +1,4 @@
-"""분석기 경계. 실제 모델·평판은 향후 별도 복합 Analyzer로 연결한다."""
+"""분석기 경계. 규칙(평판 포함)과 문장 전체 점수 모델은 CompositeAnalyzer에서 종합한다."""
 
 import asyncio
 from typing import Protocol
@@ -9,7 +9,12 @@ from .rule_policy import decide
 from .rule_templates import render
 from .reputation_policy import combine_reputation
 from .urls import extract_urls
+from .model_adapter import ModelState, prepare_model_text
+from .model_policy import BASE_LIMITATION, MODEL_LIMITATIONS, STAGE_STATUS, ModelOutcome, combine_model
 from .url_reputation import configured_reputation_provider, UrlReputationProvider
+
+
+RULES_ONLY_LIMITATION = "규칙 기반 개발 버전: 경량 모델의 문맥 분석은 아직 없어요. 결과는 안전을 보장하지 않아요."
 
 
 class Analyzer(Protocol):
@@ -49,7 +54,7 @@ class RuleBasedAnalyzer:
         evidence = [finding.evidence for finding in scan.findings]
         level, reason, explanation, actions, evidence = combine_reputation(level, reason, explanation, actions, evidence, urls)
         limitations = [
-            "규칙 기반 개발 버전: 경량 모델의 문맥 분석은 아직 없어요. 결과는 안전을 보장하지 않아요.",
+            RULES_ONLY_LIMITATION,
             "부정·인용·대화 주체를 처리하는 규칙은 제한적이며 우회 표현을 놓치거나 잘못 경고할 수 있어요.",
             *scan.assessment.reasons,
         ]
@@ -82,3 +87,46 @@ class RuleBasedAnalyzer:
             ],
             policy_reason=reason, urls=urls,
         )
+
+
+class CompositeAnalyzer:
+    """규칙과 모델을 둘 다 실행하고 종합한다. 규칙 결과로 모델을 생략하지 않는다 (short-circuit 금지).
+
+    모델 단계가 없거나 실패하면 규칙 결과와 근거를 그대로 두고 analysis_stages와 limitations에만 표시한다.
+    """
+
+    VERSION = "rules-model-dev-v1"
+
+    def __init__(self, rules: RuleBasedAnalyzer, model_state: ModelState, model_timeout: float = 1.0):
+        self.rules = rules
+        self.model_state = model_state
+        self.model_timeout = model_timeout
+
+    async def _model_outcome(self, data: AnalysisInput) -> ModelOutcome:
+        if data.input_type == "url":
+            return "not_applicable"
+        if self.model_state.status != "loaded" or self.model_state.model is None:
+            return self.model_state.status
+        model = self.model_state.model
+        text = prepare_model_text(data.content, extract_urls(data.content).spans)
+        try:
+            # CPU 추론은 스레드에서 돌린다. 시간 초과 시 스레드는 끝까지 돌지만 결과는 버린다.
+            async with asyncio.timeout(self.model_timeout):
+                score = await asyncio.to_thread(model.score, text)
+        except TimeoutError:
+            return "timeout"
+        except Exception:
+            # 예외 문자열에 입력이 섞일 수 있어 기록하지 않는다.
+            return "error"
+        return "flagged" if score >= model.threshold else "not_flagged"
+
+    async def analyze(self, data: AnalysisInput) -> AnalysisResult:
+        result, outcome = await asyncio.gather(self.rules.analyze(data), self._model_outcome(data))
+        level, reason, explanation = combine_model(result.risk_level, result.policy_reason, result.explanation, outcome)
+        limitations = [BASE_LIMITATION, MODEL_LIMITATIONS[outcome], *(text for text in result.limitations if text != RULES_ONLY_LIMITATION)]
+        stages = [stage if stage.name != "lightweight_model" else AnalysisStage(name="lightweight_model", status=STAGE_STATUS[outcome])
+                  for stage in result.analysis_stages]
+        return result.model_copy(update={
+            "risk_level": level, "policy_reason": reason, "explanation": explanation,
+            "limitations": limitations, "analysis_version": self.VERSION, "analysis_stages": stages,
+        })

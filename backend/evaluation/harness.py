@@ -9,15 +9,16 @@ import hashlib
 import subprocess
 from collections import Counter
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
 from pydantic import ValidationError
 
-from app.analyzers import Analyzer, RuleBasedAnalyzer
+from app.analyzers import Analyzer, CompositeAnalyzer, RuleBasedAnalyzer
 from app.contracts import AnalysisInput, RiskLevel
+from app.model_adapter import MODEL_PATH_ENV, load_configured_model
 from app.url_reputation import DisconnectedReputationProvider
 
 REQUIRED_COLUMNS = (
@@ -35,14 +36,28 @@ PREDICTION_COLUMNS = LEVELS + ERROR_KINDS
 TRUE_VALUES = {"true", "1", "yes", "y"}
 FALSE_VALUES = {"false", "0", "no", "n"}
 
+class DatasetError(ValueError):
+    """평가셋 형식 오류. 메시지에 셀 값을 넣지 않는다."""
+
+
+class AnalyzerSetupError(ValueError):
+    """분석기를 준비하지 못함 (예: 모델 미설정·로드 실패). 경로를 넣지 않는다."""
+
+
+def _rules_model_analyzer() -> Analyzer:
+    # 모델 없이 조용히 규칙 결과만 비교되는 것을 막는다.
+    state = load_configured_model()
+    if state.status != "loaded":
+        detail = f"{state.status}, {state.reason}" if state.reason else state.status
+        raise AnalyzerSetupError(f"rules+model은 {MODEL_PATH_ENV}에 학습한 모델 폴더가 필요해요 ({detail}).")
+    return CompositeAnalyzer(RuleBasedAnalyzer(DisconnectedReputationProvider("evaluation_offline")), state)
+
+
 # 평가는 외부로 조회하지 않는다. 키 환경 변수가 있어도 미연결 어댑터를 직접 넣는다.
 ANALYZERS: dict[str, Callable[[], Analyzer]] = {
     "rules": lambda: RuleBasedAnalyzer(DisconnectedReputationProvider("evaluation_offline")),
+    "rules+model": _rules_model_analyzer,
 }
-
-
-class DatasetError(ValueError):
-    """평가셋 형식 오류. 메시지에 셀 값을 넣지 않는다."""
 
 
 @dataclass(frozen=True)
@@ -64,6 +79,7 @@ class Outcome:
     policy_reason: str | None = None
     factor_codes: tuple[str, ...] = ()
     analysis_version: str | None = None
+    model_stage: str | None = None
 
 
 def _parse_bool(value: str, line: int) -> bool:
@@ -134,6 +150,7 @@ async def _analyze_one(analyzer: Analyzer, row: EvalRow, timeout: float) -> Outc
         row, result.risk_level.value, result.policy_reason,
         tuple(dict.fromkeys(item.factor_code.value for item in result.evidence)),
         result.analysis_version,
+        next((stage.status for stage in result.analysis_stages if stage.name == "lightweight_model"), None),
     )
 
 
@@ -210,6 +227,8 @@ class RunInfo:
     run_at: str
     review_status_filter: str | None = None
     split_filter: str = "all"
+    # 모델이 있는 분석기만: 모델 버전, manifest의 모델·학습 CSV SHA-256, 임계값 상태.
+    model: dict | None = None
 
 
 def file_sha256(path: Path) -> str:
@@ -292,6 +311,9 @@ def render_report(outcomes: list[Outcome], info: RunInfo, excluded_by_filter: in
             ["실행 시각", info.run_at],
             ["review_status 필터", info.review_status_filter or "없음 (전체)"],
             ["split 필터", "없음 (전체)" if info.split_filter == "all" else info.split_filter],
+            *([["모델 버전", info.model.get("version")],
+               ["모델 파일 SHA-256", f"`{info.model.get('model_sha256')}`"],
+               ["임계값 상태", info.model.get("threshold_status") or "기록 없음"]] if info.model else []),
         ]),
         "",
         "리포트에는 원문·URL·라벨 근거를 넣지 않는다. 행은 id로만 표시한다.",
@@ -315,6 +337,13 @@ def render_report(outcomes: list[Outcome], info: RunInfo, excluded_by_filter: in
     leaked = campaigns["dev"] & campaigns["test"]
     if leaked:
         lines.append(f"- **경고: campaign_id {len(leaked)}개가 dev와 test에 함께 있다. 분할 누출 가능성.**")
+    if info.model:
+        stages = Counter(o.model_stage or "(결과 없음)" for o in outcomes)
+        lines.append("- 모델 단계 상태: " + (", ".join(f"{status} {count}" for status, count in sorted(stages.items())) or "없음"))
+        if info.model.get("data_sha256") != info.data_sha256:
+            lines.append("- 이 모델은 평가 CSV와 SHA-256이 다른 CSV로 학습했다. 학습 행과 평가 행의 겹침을 따로 확인한다.")
+        elif info.split_filter != "test":
+            lines.append("- **경고: dev 행은 모델 학습과 임계값 결정에 쓴 행이다(in-sample). dev 비교는 train-report.md의 OOF 결과를 쓴다.**")
     lines.append("")
     for split in (SPLITS if info.split_filter == "all" else (info.split_filter,)):
         split_outcomes = [o for o in outcomes if o.row.split == split]
@@ -361,6 +390,10 @@ def run(data_path: Path, analyzer_name: str = "rules", review_status: str | None
     status_counts = Counter(row.review_status for row in rows)
     in_split = rows if split == "all" else [row for row in rows if row.split == split]
     selected = in_split if review_status is None else [row for row in in_split if row.review_status == review_status]
+    analyzer = registry[analyzer_name]()
+    model = getattr(getattr(analyzer, "model_state", None), "model", None)
+    if model is not None:
+        info = replace(info, model={"version": model.version, **getattr(model, "info", {})})
     # split 밖의 행은 분석기에 넘기지 않는다.
-    outcomes = evaluate(selected, registry[analyzer_name](), timeout)
+    outcomes = evaluate(selected, analyzer, timeout)
     return render_report(outcomes, info, len(in_split) - len(selected), status_counts, len(rows) - len(in_split))

@@ -4,7 +4,7 @@ import csv
 import sys
 from pathlib import Path
 
-from evaluation.harness import ANALYZERS, SPLIT_FILTERS, DatasetError, run
+from evaluation.harness import ANALYZERS, SPLIT_FILTERS, AnalyzerSetupError, DatasetError, run
 
 parser = argparse.ArgumentParser(description="고정 평가셋으로 분석기를 평가한다. 원문은 리포트에 넣지 않는다.")
 parser.add_argument("--data", required=True, type=Path, help="평가 CSV 경로 (저장소·동기화 폴더 밖 권장)")
@@ -22,6 +22,8 @@ try:
     report = run(args.data, args.analyzer, args.review_status, args.timeout, split=args.split)
 except DatasetError as error:
     sys.exit(f"평가셋 형식 오류: {error}")
+except AnalyzerSetupError as error:
+    sys.exit(f"분석기 준비 오류: {error}")
 except (OSError, UnicodeDecodeError, csv.Error) as error:
     # 경로나 셀 값이 메시지에 섞일 수 있어 오류 종류만 알린다.
     sys.exit(f"평가 CSV를 읽지 못했어요 ({error.__class__.__name__}). UTF-8 CSV인지 확인해주세요.")
