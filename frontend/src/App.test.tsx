@@ -3,6 +3,7 @@ beforeEach(() => {
   vi.stubGlobal('scrollTo', vi.fn())
 })
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -250,4 +251,52 @@ test('빈 URL은 전송하지 않고 주소 입력을 안내한다', async () =>
     'URL 주소를 입력해주세요.',
   )
   expect(fetchMock).not.toHaveBeenCalled()
+})
+
+const FALSE_FIXED_NOTE = /아직 연결되지 않았어요/
+
+function stubDialog() {
+  // jsdom에는 showModal/close가 없다. 열림 상태만 흉내 낸다.
+  vi.spyOn(HTMLDialogElement.prototype, 'showModal').mockImplementation(function (this: HTMLDialogElement) { this.open = true })
+  vi.spyOn(HTMLDialogElement.prototype, 'close').mockImplementation(function (this: HTMLDialogElement) { this.open = false })
+}
+
+beforeAll(() => {
+  // 메서드가 없으면 spyOn을 쓸 수 없으므로 빈 구현을 먼저 둔다.
+  HTMLDialogElement.prototype.showModal ??= function () {}
+  HTMLDialogElement.prototype.close ??= function () {}
+})
+
+test('홈과 알림에는 고정된 "연결되지 않았어요" 문구 대신 상태에 맞는 안내를 보인다 (상태 미확인)', async () => {
+  history.replaceState(null, '', '/')
+  stubDialog()
+  render(<App />)
+  expect(screen.getByText(/URL 평판 조회가 켜져 있는지 확인하지 못했으며/)).toBeInTheDocument()
+  expect(screen.queryByText(FALSE_FIXED_NOTE)).toBeNull()
+  await userEvent.click(screen.getByRole('button', { name: '알림' }))
+  const dialog = screen.getByRole('dialog', { name: '알림' })
+  expect(dialog).toHaveTextContent('URL 평판 조회가 켜져 있는지 확인하지 못했으며')
+  expect(dialog).not.toHaveTextContent(FALSE_FIXED_NOTE)
+})
+
+test('가족에게 공유는 준비 중 안내만 보이고 요청을 보내지 않는다', async () => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(ruleResponse())))
+  vi.stubGlobal('fetch', fetchMock)
+  render(<App />)
+  fireEvent.change(screen.getByRole('textbox', { name: '문자 내용' }), { target: { value: '은행입니다. 인증번호를 알려주세요.' } })
+  await userEvent.click(screen.getByRole('button', { name: '분석하기' }))
+  await screen.findByRole('heading', { name: '위험' })
+  await userEvent.click(screen.getByRole('button', { name: '가족에게 공유 (준비 중)' }))
+  expect(screen.getByRole('status')).toHaveTextContent('준비 중')
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+})
+
+test('뒤로/앞으로 이동으로 다른 확인 화면에 가면 이전 원문을 지운다', () => {
+  render(<App />)
+  fireEvent.change(screen.getByRole('textbox', { name: '문자 내용' }), { target: { value: '은행입니다. 인증번호를 알려주세요.' } })
+  act(() => {
+    history.pushState(null, '', '/#url')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
+  expect(screen.getByRole('textbox', { name: 'URL 주소' })).toHaveValue('')
 })

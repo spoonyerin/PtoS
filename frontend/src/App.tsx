@@ -4,6 +4,11 @@ import { AnalysisResult } from './components/AnalysisResult'
 import { Icon } from './components/Icons'
 import { useAnalysis } from './hooks/useAnalysis'
 import type { InputType } from './api/types'
+import {
+  DevelopmentNote,
+  developmentNoteText,
+} from './components/DevelopmentNote'
+import { useUrlReputationStatus } from './hooks/useServiceStatus'
 type Page = 'home' | InputType
 const readPage = (): Page =>
   ['text', 'url', 'ocr_text'].includes(location.hash.slice(1))
@@ -18,12 +23,15 @@ export default function App() {
   const [shareNotice, setShareNotice] = useState(false)
   const [large, setLarge] = useState(false)
   const analysis = useAnalysis()
+  const urlReputation = useUrlReputationStatus()
   const dialog = useRef<HTMLDialogElement>(null)
   const title = useRef<HTMLHeadingElement>(null)
   useEffect(() => {
     const change = () => {
       setPage(readPage())
       analysis.reset()
+      // 뒤로/앞으로 이동으로 다른 확인 화면에 원문이 넘어가지 않게 지운다.
+      setContent('')
       setShareNotice(false)
     }
     window.addEventListener('hashchange', change)
@@ -184,11 +192,7 @@ export default function App() {
                 </button>
               ))}
             </nav>
-            <p className="development-note">
-              규칙 기반 개발 버전 · 결과는 안전을 보장하지 않아요.
-              <br />
-              경량 모델과 URL 평판 조회는 아직 연결되지 않았어요.
-            </p>
+            <DevelopmentNote />
           </main>
         </>
       ) : (
@@ -219,7 +223,7 @@ export default function App() {
                       onClick={() => setShareNotice(true)}
                     >
                       <Icon name="share" />
-                      가족에게 공유
+                      가족에게 공유 (준비 중)
                     </button>
                     <button
                       className="primary-button"
@@ -311,8 +315,7 @@ export default function App() {
               </label>
             ) : (
               <p>
-                규칙 기반 개발 버전입니다. 외부 URL 평판 조회와 경량 모델은 아직
-                연결되지 않았어요.
+                규칙 기반 개발 버전입니다. {developmentNoteText(urlReputation)}
               </p>
             )}
           </>

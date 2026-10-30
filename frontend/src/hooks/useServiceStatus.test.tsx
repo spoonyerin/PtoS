@@ -60,3 +60,13 @@ test('스크린샷 업로드 화면에는 전송 안내가 없다', async () => 
   await openPage('사진으로 확인하기')
   expect(screen.queryByRole('note')).toBeNull()
 })
+
+test.each([
+  ['live', /URL 평판 조회\(Google Safe Browsing\)는 켜져 있지만/],
+  ['off', /URL 평판 조회는 꺼져 있으며/],
+])('홈 하단 안내는 서버 상태(%s)에 맞춰 바뀌고 고정된 미연결 문구가 없다', async (status, expected) => {
+  history.replaceState(null, '', '/')
+  renderWith(ready(status))
+  await screen.findByText(expected)
+  expect(screen.queryByText(/아직 연결되지 않았어요/)).toBeNull()
+})
