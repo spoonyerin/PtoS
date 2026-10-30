@@ -291,10 +291,15 @@ textarea::placeholder {
   min-height: 66px;
   height: 66px;
 }
+.text-field textarea {
+  padding-right: 48px;
+}
 .clear-text {
   position: absolute;
   right: 6px;
-  top: 6px;
+  /* Top padding + half the first text line, minus half the button height. */
+  top: calc(22px + 0.775em);
+  transform: translateY(-50%);
   color: #737987;
   background: #e0e2e7;
   border-radius: 50%;
