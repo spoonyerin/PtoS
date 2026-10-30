@@ -180,9 +180,8 @@ export function ScreenshotInput(props: Props) {
         <button
           type="button"
           className="primary-button"
-          aria-label={
-            ocr.loading ? '글자 읽는 중…' : '이미지에서 글자 읽기 (OCR)'
-          }
+          // 이 버튼은 글자 읽기(OCR)만 한다. 위험 분석으로 오해하지 않도록 보이는 글자와 이름을 같게 둔다.
+          aria-label={ocr.loading ? '글자 읽는 중…' : '사진 글자 읽기'}
           disabled={!file || ocr.loading || props.loading}
           onClick={() => {
             if (!file) return
@@ -193,7 +192,7 @@ export function ScreenshotInput(props: Props) {
           }}
         >
           <Icon name="search" />
-          {ocr.loading ? '글자 읽는 중…' : '분석 시작하기'}
+          {ocr.loading ? '글자 읽는 중…' : '사진 글자 읽기'}
         </button>
       }
       <p className="submission-note">
@@ -285,6 +284,7 @@ export function ScreenshotInput(props: Props) {
               {props.analysisError}
             </p>
           )}
+          <UrlCheckNotice />
           <button
             className="primary-button"
             type="submit"

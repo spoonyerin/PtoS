@@ -34,7 +34,7 @@ test('실제 한국어 Tesseract: 미리보기 → OCR → 수정·명시적 확
   expect(analysis).toHaveLength(0)
   const reply = page.waitForResponse((r) => r.url().endsWith('/api/v1/ocr'))
   await page
-    .getByRole('button', { name: '이미지에서 글자 읽기 (OCR)', exact: true })
+    .getByRole('button', { name: '사진 글자 읽기', exact: true })
     .click()
   expect((await reply).status()).toBe(200)
   const content = page.getByRole('textbox', {
@@ -150,7 +150,7 @@ for (const [code, message] of [
     )
     await upload(page)
     await page
-      .getByRole('button', { name: '이미지에서 글자 읽기 (OCR)', exact: true })
+      .getByRole('button', { name: '사진 글자 읽기', exact: true })
       .click()
     await expect(page.getByRole('alert')).toContainText(message)
     await expect(page.getByRole('alert')).toContainText('직접 입력')
@@ -170,7 +170,7 @@ test('가짜 OCR: 이미지 변경·취소 후 이전 확인과 결과를 제거
   await page.route('**/api/v1/ocr', (route) => route.fulfill({ json: fake }))
   await upload(page)
   await page
-    .getByRole('button', { name: '이미지에서 글자 읽기 (OCR)', exact: true })
+    .getByRole('button', { name: '사진 글자 읽기', exact: true })
     .click()
   await expect(
     page.getByRole('region', { name: '수정한 내용의 URL 후보' }),
