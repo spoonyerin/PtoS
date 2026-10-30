@@ -146,7 +146,14 @@ export default function App() {
                 className="guide-button"
                 onClick={() => setPanel('guide')}
               >
-                <span className="menu-symbol help-symbol">?</span>
+                <span className="menu-symbol help-symbol">
+                  <img
+                    src="/assets/icon_questionmark.png"
+                    width="22"
+                    height="36"
+                    alt=""
+                  />
+                </span>
                 <span>
                   <strong>이용하는 방법</strong>
                   <small>
