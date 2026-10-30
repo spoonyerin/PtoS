@@ -54,3 +54,11 @@ test.each([['other_provider', true], ['google_safe_browsing_v5', false], [null, 
     expect(screen.queryByText(/Advisory provided by Google/)).toBeNull()
     expect(screen.queryAllByRole('link')).toHaveLength(0)
   })
+
+test.each([
+  ['dangerous', '위험'], ['suspicious', '의심'], ['insufficient_information', '정보 부족'],
+] as const)('결과 제목은 계약 용어(%s → %s) 그대로이고 접미사가 없다', (level, label) => {
+  render(<AnalysisResult result={{ ...result(null, true), risk_level: level }} />)
+  // 접근 이름은 aria-hidden 접미사를 무시하므로 보이는 글자 전체를 확인한다.
+  expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(label)
+})

@@ -5,21 +5,21 @@ const cases = [
   {
     name: '정상적인 안내문',
     text: '도서관은 내일 휴무입니다.',
-    label: '불확실',
+    label: '정보 부족',
     level: 'insufficient_information',
     evidence: false,
   },
   {
     name: '부정 표현',
     text: '은행은 인증번호를 요구하지 않습니다. 링크를 클릭하지 마세요.',
-    label: '불확실',
+    label: '정보 부족',
     level: 'insufficient_information',
     evidence: false,
   },
   {
     name: '예방 교육 인용',
     text: '“은행입니다. 인증번호를 알려주세요.”는 사기 예시입니다.',
-    label: '불확실',
+    label: '정보 부족',
     level: 'insufficient_information',
     evidence: false,
   },
@@ -40,7 +40,7 @@ const cases = [
   {
     name: '불충분한 입력',
     text: '그거 지금 처리',
-    label: '불확실',
+    label: '정보 부족',
     level: 'insufficient_information',
     evidence: false,
   },
@@ -152,7 +152,7 @@ test('모바일 화면에서 가로 넘침 없이 결과를 확인한다', async
   await page.getByRole('textbox').fill('그거 지금 처리')
   await page.getByRole('button', { name: '분석하기' }).click()
   await expect(
-    page.getByRole('heading', { name: '불확실', exact: true }),
+    page.getByRole('heading', { name: '정보 부족', exact: true }),
   ).toBeVisible()
   expect(
     await page.evaluate(

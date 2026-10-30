@@ -81,7 +81,6 @@ export function AnalysisResult({
         <div className="result-status-copy">
           <h2 id="result-title" ref={heading} tabIndex={-1}>
             {display.label}
-            <small aria-hidden="true">단계</small>
           </h2>
           <p>{descriptions[result.risk_level]}</p>
         </div>

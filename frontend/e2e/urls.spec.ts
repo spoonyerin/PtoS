@@ -33,7 +33,7 @@ test('직접 IDN URL을 입력하고 형식/미연결을 비링크로 표시한�
   const body = await api.json()
   expect(body.urls[0].reputation.status).toBe('not_connected')
   await expect(
-    page.getByRole('heading', { name: '불확실', exact: true }),
+    page.getByRole('heading', { name: '정보 부족', exact: true }),
   ).toBeVisible()
   await page.locator('.result-details > summary').click()
   const section = page.getByRole('region', { name: 'URL 형식 및 평판' })
@@ -63,7 +63,7 @@ test('메시지의 구두점과 중복을 처리하고 무효 후보를 구분�
   await expect(section).toContainText('형식 확인 필요')
   await expect(section).toContainText('평판 조회 안 함')
   await expect(
-    page.getByRole('heading', { name: '불확실', exact: true }),
+    page.getByRole('heading', { name: '정보 부족', exact: true }),
   ).toBeVisible()
   await expect(section.locator('a')).toHaveCount(0)
 })

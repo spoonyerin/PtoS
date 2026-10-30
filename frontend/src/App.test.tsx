@@ -217,7 +217,7 @@ test('URL 직접 입력을 전송하고 주소와 미연결 상태를 링크 없
     target: { value: url },
   })
   await userEvent.click(screen.getByRole('button', { name: '분석하기' }))
-  await screen.findByRole('heading', { name: '불확실' })
+  await screen.findByRole('heading', { name: '정보 부족' })
   await userEvent.click(screen.getByText('분석 근거와 행동 안내 자세히 보기'))
   expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
     input_type: 'url',
@@ -236,7 +236,7 @@ test('URL 직접 입력을 전송하고 주소와 미연결 상태를 링크 없
   await userEvent.click(screen.getByRole('button', { name: '홈으로 돌아가기' }))
   await userEvent.click(screen.getByRole('button', { name: '문자 확인하기' }))
   expect(
-    screen.queryByRole('heading', { name: '불확실' }),
+    screen.queryByRole('heading', { name: '정보 부족' }),
   ).not.toBeInTheDocument()
 })
 
