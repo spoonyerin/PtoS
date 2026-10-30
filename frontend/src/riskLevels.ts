@@ -5,5 +5,5 @@ export const riskLevels: Record<RiskLevel, { label: string; symbol: string }> = 
   normal: { label: '정상', symbol: '✓' },
   suspicious: { label: '의심', symbol: '!' },
   dangerous: { label: '위험', symbol: '⚠' },
-  insufficient_information: { label: '정보 부족', symbol: '?' },
+  insufficient_information: { label: '불확실', symbol: '?' },
 }
