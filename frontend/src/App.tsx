@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnalysisForm } from './components/AnalysisForm'
 import { AnalysisResult } from './components/AnalysisResult'
-import { HeroArt, Icon } from './components/Icons'
+import { Icon } from './components/Icons'
 import { useAnalysis } from './hooks/useAnalysis'
 import type { InputType } from './api/types'
 type Page = 'home' | InputType
@@ -74,23 +74,19 @@ export default function App() {
         <>
           <header className="home-header">
             <div className="brand" aria-label="PtoS">
+              {/* Crop the exported PNG's transparent padding without altering the original. */}
               <svg
-                width="38"
-                height="43"
-                viewBox="0 0 38 43"
-                aria-hidden="true"
+                className="brand-image"
+                viewBox="408 113 1463 513"
+                role="img"
+                aria-label="PtoS"
               >
-                <path
-                  d="m19 2 16 7v13c0 10-9 16-16 20C12 38 3 32 3 22V9Z"
-                  fill="#08296b"
+                <image
+                  href="/assets/PtoS_logo_rm.png"
+                  width="2271"
+                  height="755"
                 />
-                <path
-                  d="m19 10 9 4v8c0 6-4 10-9 13-5-3-9-7-9-13v-8Z"
-                  fill="white"
-                />
-                <circle cx="19" cy="21" r="5" fill="#ff731d" />
               </svg>
-              <span>PtoS</span>
             </div>
             <div className="header-tools">
               <button
@@ -98,14 +94,26 @@ export default function App() {
                 aria-label="알림"
                 onClick={() => setPanel('notice')}
               >
-                <Icon name="bell" />
+                <img
+                  className="header-asset-icon"
+                  src="/assets/icon_notification_rm.png"
+                  width="36"
+                  height="36"
+                  alt=""
+                />
               </button>
               <button
                 className="icon-button"
                 aria-label="설정"
                 onClick={() => setPanel('settings')}
               >
-                <Icon name="settings" />
+                <img
+                  className="header-asset-icon"
+                  src="/assets/icon_setting_rm.png"
+                  width="36"
+                  height="36"
+                  alt=""
+                />
               </button>
             </div>
           </header>
@@ -124,7 +132,14 @@ export default function App() {
                   PtoS가 알려드립니다.
                 </p>
               </div>
-              <HeroArt />
+              <img
+                className="hero-art"
+                src="/assets/logo_main.png"
+                width="1254"
+                height="1254"
+                alt=""
+                fetchPriority="high"
+              />
             </section>
             <nav className="home-menu" aria-label="확인 방법 선택">
               <button
@@ -149,14 +164,12 @@ export default function App() {
                   onClick={() => navigate(mode)}
                 >
                   <span className="menu-symbol">
-                    <Icon
-                      name={
-                        mode === 'text'
-                          ? 'message'
-                          : mode === 'url'
-                            ? 'link'
-                            : 'photo'
-                      }
+                    <img
+                      className="menu-asset-icon"
+                      src={`/assets/${mode === 'text' ? 'icon_message_rm.png' : mode === 'url' ? 'icon_link_rm.png' : 'icon_image_rm.png'}`}
+                      width="46"
+                      height="46"
+                      alt=""
                     />
                   </span>
                   <strong>{titles[mode]}</strong>

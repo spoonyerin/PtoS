@@ -73,11 +73,25 @@ p {
 .brand {
   display: flex;
   align-items: center;
-  color: #08296b;
-  font-size: 36px;
-  font-weight: 900;
-  letter-spacing: -2px;
-  gap: 3px;
+  flex-shrink: 0;
+}
+.brand-image {
+  display: block;
+  width: 120px;
+  height: auto;
+  aspect-ratio: 1463 / 513;
+}
+.header-asset-icon {
+  display: block;
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+.menu-asset-icon {
+  display: block;
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
 }
 .header-tools {
   display: flex;
@@ -131,10 +145,12 @@ p {
   color: #08296b;
 }
 .hero-art {
-  width: 49%;
+  width: 54%;
+  height: auto;
+  object-fit: contain;
   position: absolute;
-  right: -10px;
-  top: 20px;
+  right: -12px;
+  top: 12px;
 }
 .home-menu {
   display: grid;
