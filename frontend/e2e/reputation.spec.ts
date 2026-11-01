@@ -18,7 +18,7 @@ const NOTICE = '주소에서 만든 일부 정보(해시)만 Google로 전송돼
 const ADVISORY = 'https://developers.google.com/safe-browsing/v4/advisory'
 
 test('실제 백엔드(꺼짐)에서는 전송 안내를 숨긴다', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/#text')
   await expect(page.getByText(/URL 평판 조회는 꺼져 있으며/)).toBeVisible()
   await expect(page.getByText(NOTICE)).toHaveCount(0)
 })
@@ -29,54 +29,79 @@ for (const [name, handler] of [
 ] as const) {
   test(`가짜 준비 상태 ${name}이면 문자·URL 입력에 전송 안내를 보이고 스크린샷 업로드에는 없다`, async ({ page }) => {
     await page.route('**/api/v1/health/ready', handler)
-    await page.goto('/')
+    await page.goto('/#text')
     const notice = page.getByRole('note')
     await expect(notice).toContainText(NOTICE)
     await expect(notice).toContainText('주소를 그대로 보내지 않고')
-    await page.getByRole('radio', { name: 'URL 직접 입력' }).check()
+    // 새 화면에는 입력 방식 라디오가 없다. 홈 메뉴로 링크·사진 확인 화면에 들어간다.
+    await page.getByRole('button', { name: '홈으로 돌아가기' }).click()
+    await page.getByRole('button', { name: '링크 확인하기' }).click()
     await expect(page.getByRole('note')).toContainText(NOTICE)
-    await page.getByRole('radio', { name: '스크린샷' }).check()
+    await page.getByRole('button', { name: '홈으로 돌아가기' }).click()
+    await page.getByRole('button', { name: '사진으로 확인하기' }).click()
+    await expect(page.getByRole('heading', { name: '사진으로 확인하기' })).toBeVisible()
     await expect(page.getByRole('note')).toHaveCount(0)
   })
 }
 
 // These are explicitly FAKE reputation response UI checks, never Google calls.
 for (const [status, label] of [
-  ['unknown', '안전 판정 아님'], ['auth_error', '인증 오류'],
-  ['rate_limited', '호출 제한'], ['timeout', '시간 초과'],
+  ['unknown', '안전 판정 아님'],
+  ['auth_error', '인증 오류'],
+  ['rate_limited', '호출 제한'],
+  ['timeout', '시간 초과'],
   ['malicious', '전체 SHA-256 해시 일치'],
 ]) {
-  test(`가짜 평판 ${status} 표시와 원문 근거·비링크를 브라우저로 확인한다`, async ({ page }) => {
+  test(`가짜 평판 ${status} 표시와 원문 근거·비링크를 브라우저로 확인한다`, async ({
+    page,
+  }) => {
     const external: string[] = []
-    await page.route('**/*', route => {
+    await page.route('**/*', (route) => {
       if (new URL(route.request().url()).origin !== 'http://127.0.0.1:5173') {
         external.push(route.request().url())
         return route.abort()
       }
       return route.continue()
     })
-    await page.route('**/api/v1/analyses', async route => {
+    await page.route('**/api/v1/analyses', async (route) => {
       const response = await route.fetch()
       const body = await response.json()
       const url = body.urls[0]
       url.reputation = {
-        status, provider: 'google_safe_browsing_v5', checked_at: '2026-10-22T00:00:00Z',
-        full_hash_verified: status === 'malicious', cache_hit: true,
+        status,
+        provider: 'google_safe_browsing_v5',
+        checked_at: '2026-10-22T00:00:00Z',
+        full_hash_verified: status === 'malicious',
+        cache_hit: true,
         threat_types: status === 'malicious' ? ['SOCIAL_ENGINEERING'] : [],
       }
       if (status === 'malicious') {
         const occurrence = url.occurrences[0]
         body.risk_factors.push('URL 위협 목록의 전체 해시 일치')
-        body.evidence.push({ factor_code: 'URL_REPUTATION_MATCH', label: 'URL 위협 목록의 전체 해시 일치',
-          source: 'url_reputation', rule_id: 'fake-browser-match', snippet: occurrence.text, start: occurrence.start, end: occurrence.end })
+        body.evidence.push({
+          factor_code: 'URL_REPUTATION_MATCH',
+          label: 'URL 위협 목록의 전체 해시 일치',
+          source: 'url_reputation',
+          rule_id: 'fake-browser-match',
+          snippet: occurrence.text,
+          start: occurrence.start,
+          end: occurrence.end,
+        })
       }
       await route.fulfill({ response, json: body })
     })
-    await page.goto('/')
-    await page.getByRole('textbox').fill('은행입니다. 인증번호를 알려주세요. https://example.invalid/test')
+    await page.goto('/#text')
+    await page
+      .getByRole('textbox')
+      .fill('은행입니다. 인증번호를 알려주세요. https://example.invalid/test')
     await page.getByRole('button', { name: '분석하기' }).click()
-    await expect(page.getByRole('heading', { name: '위험', exact: true })).toBeVisible()
-    await expect(page.locator('q').filter({ hasText: '인증번호를 알려주세요' })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: '위험', exact: true }),
+    ).toBeVisible()
+    await page.locator('.result-details > summary').click()
+    await expect(
+      page.locator('q').filter({ hasText: '인증번호를 알려주세요' }),
+    ).toBeVisible()
     const urls = page.getByRole('region', { name: 'URL 형식 및 평판' })
     await expect(urls).toContainText(label)
     await expect(urls).toContainText('Google Safe Browsing')
@@ -90,6 +115,11 @@ for (const [status, label] of [
       await expect(urlEvidence.getByRole('link', { name: 'Advisory provided by Google' })).toHaveAttribute('href', ADVISORY)
       const ruleEvidence = page.locator('li').filter({ has: page.locator('q', { hasText: '인증번호를 알려주세요' }) })
       await expect(ruleEvidence.getByRole('link')).toHaveCount(0)
+      // 요약 카드도 Google 경고 카드에만 표기한다 (C1).
+      const googleCard = page.locator('.evidence-item').filter({ hasText: 'URL 위협 목록의 전체 해시 일치' })
+      await expect(googleCard.getByRole('link', { name: 'Advisory provided by Google' })).toHaveAttribute('href', ADVISORY)
+      const ruleCard = page.locator('.evidence-item').filter({ hasText: '인증번호·개인정보 요구' })
+      await expect(ruleCard.getByRole('link')).toHaveCount(0)
       await expect(urls.locator('a')).toHaveCount(1)
       await expect(urls.locator('a')).toHaveAttribute('href', ADVISORY)
       const hrefs = await page.locator('a[href]').evaluateAll(links => links.map(a => a.getAttribute('href')))

@@ -36,9 +36,15 @@ test('Google 근거에만 Google 표기를 붙이고 규칙 근거에는 붙이�
   const urlEvidence = screen.getAllByText('https://example.invalid/test').find(node => node.tagName === 'Q')!.closest('li')!
   const link = within(urlEvidence).getByRole('link', { name: 'Advisory provided by Google' })
   expect(link).toHaveAttribute('href', GOOGLE_ADVISORY_URL)
-  // 근거 목록 1개 + URL 결과 1개. 모든 링크는 고정 Advisory 주소이고 사용자 URL은 링크가 아니다.
+  // 요약 카드도 Google 경고 카드에만 표기하고 규칙 카드에는 붙이지 않는다.
+  const cards = document.querySelectorAll('.evidence-item')
+  const ruleCard = Array.from(cards).find(card => card.textContent?.includes('인증번호·개인정보 요구'))!
+  const googleCard = Array.from(cards).find(card => card.textContent?.includes('URL 위협 목록의 전체 해시 일치'))!
+  expect(within(ruleCard as HTMLElement).queryByRole('link')).toBeNull()
+  expect(within(googleCard as HTMLElement).getByRole('link', { name: 'Advisory provided by Google' })).toHaveAttribute('href', GOOGLE_ADVISORY_URL)
+  // 요약 카드 1개 + 상세 근거 1개 + URL 결과 1개. 모든 링크는 고정 Advisory 주소이고 사용자 URL은 링크가 아니다.
   const links = screen.getAllByRole('link')
-  expect(links).toHaveLength(2)
+  expect(links).toHaveLength(3)
   expect(links.every(a => a.getAttribute('href') === GOOGLE_ADVISORY_URL)).toBe(true)
 })
 
@@ -48,3 +54,11 @@ test.each([['other_provider', true], ['google_safe_browsing_v5', false], [null, 
     expect(screen.queryByText(/Advisory provided by Google/)).toBeNull()
     expect(screen.queryAllByRole('link')).toHaveLength(0)
   })
+
+test.each([
+  ['dangerous', '위험'], ['suspicious', '의심'], ['insufficient_information', '정보 부족'],
+] as const)('결과 제목은 계약 용어(%s → %s) 그대로이고 접미사가 없다', (level, label) => {
+  render(<AnalysisResult result={{ ...result(null, true), risk_level: level }} />)
+  // 접근 이름은 aria-hidden 접미사를 무시하므로 보이는 글자 전체를 확인한다.
+  expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(label)
+})
