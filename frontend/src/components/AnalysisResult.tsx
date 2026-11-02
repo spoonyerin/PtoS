@@ -2,43 +2,42 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import type { AnalysisResponse } from '../api/types'
 import { riskLevels } from '../riskLevels'
 import { UrlResults } from './UrlResults'
-import { Icon, type IconName } from './Icons'
 import { GoogleAdvisory, isGoogleEvidence } from './GoogleAdvisory'
 
 // These describe signals supplied by the API, not additional classifications.
-const factorDisplay: Record<string, { icon: IconName; description: string }> = {
+const factorDisplay: Record<string, { icon: string; description: string }> = {
   IMPERSONATION: {
-    icon: 'institution',
+    icon: 'risk-impersonation',
     description:
       '기관이나 지인의 명의를 내세운 표현이 있어요. 실제 발신자인지는 공식 연락처로 확인하세요.',
   },
   MONEY_REQUEST: {
-    icon: 'message',
+    icon: 'risk-money',
     description:
       '금전을 보내거나 지급하라는 요구가 있어요. 송금하기 전에 상대방을 직접 확인하세요.',
   },
   CREDENTIAL_REQUEST: {
-    icon: 'people',
+    icon: 'risk-credentials',
     description:
       '인증번호나 개인정보를 전달·입력하라는 요구가 있어요. 요청 출처를 별도로 확인하세요.',
   },
   LINK_CLICK: {
-    icon: 'link',
+    icon: 'risk-link',
     description:
       '링크를 누르거나 주소에 접속하라는 표현이 있어요. 주소를 열기 전에 공식 경로로 확인하세요.',
   },
   APP_INSTALL: {
-    icon: 'photo',
+    icon: 'risk-app',
     description:
       '앱이나 프로그램을 설치·실행하라는 요구가 있어요. 공식 배포처와 요청 출처를 확인하세요.',
   },
   URGENCY_THREAT: {
-    icon: 'warning',
+    icon: 'risk-urgency',
     description:
       '빠른 처리를 재촉하거나 불이익을 언급하는 표현이 있어요. 서두르지 말고 요청을 확인하세요.',
   },
   URL_REPUTATION_MATCH: {
-    icon: 'link',
+    icon: 'risk-link',
     description:
       'URL의 전체 해시가 위협 목록과 일치했어요. 링크를 누르지 마세요.',
   },
@@ -62,13 +61,12 @@ export function AnalysisResult({
     normal: '현재까지는 위험한 요소가 보이지 않아요.',
     insufficient_information: '정보가 부족해서 아직 알기 어려운 상태예요.',
   }
-  const statusIcon: IconName = normal
-    ? 'safe'
-    : result.risk_level === 'dangerous'
-      ? 'ban'
-      : result.risk_level === 'suspicious'
-        ? 'warning'
-        : 'uncertain'
+  const statusIcon = {
+    dangerous: 'status-danger',
+    suspicious: 'status-suspicious',
+    normal: 'status-normal',
+    insufficient_information: 'status-insufficient',
+  }[result.risk_level]
   return (
     <section
       className={`result-card ${result.risk_level}`}
@@ -76,7 +74,7 @@ export function AnalysisResult({
     >
       <div className="result-banner">
         <span className="result-symbol">
-          <Icon name={statusIcon} />
+          <img src={`/assets/${statusIcon}.png`} alt="" />
         </span>
         <div className="result-status-copy">
           <h2 id="result-title" ref={heading} tabIndex={-1}>
@@ -101,7 +99,10 @@ export function AnalysisResult({
                 <li className="evidence-item" key={factor}>
                   <h4 className="evidence-title">
                     <span className="factor-symbol">
-                      <Icon name={signal?.icon ?? 'message'} />
+                      <img
+                        src={`/assets/${signal?.icon ?? 'risk-people'}.png`}
+                        alt=""
+                      />
                     </span>
                     {factor}
                   </h4>
@@ -120,7 +121,10 @@ export function AnalysisResult({
         ) : (
           <div className={`empty-evidence${normal ? ' normal-empty' : ''}`}>
             <span className="empty-symbol">
-              <Icon name={normal ? 'check' : 'uncertain'} />
+              <img
+                src={`/assets/${normal ? 'status-normal' : 'status-insufficient'}.png`}
+                alt=""
+              />
             </span>
             <strong>
               {normal

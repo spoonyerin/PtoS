@@ -173,7 +173,7 @@ test('근거의 HTML 형태 문자열을 이미지나 링크로 해석하지 않
   expect(
     await screen.findByText(response.evidence[0].snippet),
   ).toBeInTheDocument()
-  expect(document.querySelector('.result-card img')).toBeNull()
+  expect(document.querySelector('.source-evidence img')).toBeNull()
   expect(document.querySelector('.result-card a')).toBeNull()
 })
 
