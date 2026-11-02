@@ -18,8 +18,8 @@ for (const [level, label] of [
     await page.getByRole('textbox').fill('은행 담당자입니다. 인증번호를 알려주세요. https://example.invalid/ 에 접속하세요.')
     await page.getByRole('button', { name: '분석하기', exact: true }).click()
     await expect(page.getByRole('heading', { name: label, exact: true })).toBeVisible()
-    // 결과 이름은 계약의 네 결과 용어 그대로이고 "단계" 같은 접미사를 붙이지 않는다 (정보 부족은 중간 위험도가 아니다).
-    await expect(page.locator('.result-banner h2')).toHaveText(label)
+    // 등급 옆에 작은 접미사를 표시한다. 정보 부족은 위험 단계가 아니므로 제외한다.
+    await expect(page.locator('.result-banner h2')).toHaveText(level === 'insufficient_information' ? label : `${label}단계`)
     await expect(page.locator('.result-buttons button')).toHaveCount(2)
     await expect(page.getByRole('button', { name: '가족에게 공유' })).toBeVisible()
     await expect(page.getByRole('button', { name: '홈으로', exact: true })).toBeVisible()

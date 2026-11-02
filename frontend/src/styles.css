@@ -525,6 +525,10 @@ textarea::placeholder {
   white-space: nowrap;
   letter-spacing: -1px;
 }
+.result-banner h2 small {
+  font-size: 0.53em;
+  letter-spacing: -0.5px;
+}
 .result-banner p {
   margin: 0;
   font-size: 0.98em;
