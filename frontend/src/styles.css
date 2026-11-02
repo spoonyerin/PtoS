@@ -650,8 +650,8 @@ textarea::placeholder {
 }
 .result-buttons button {
   font-size: 1.15em;
-  padding: 17px 9px;
-  min-height: 70px;
+  padding: 12px 9px;
+  min-height: 60px;
   gap: 9px;
   white-space: nowrap;
 }
