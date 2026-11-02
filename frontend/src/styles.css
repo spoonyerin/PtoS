@@ -582,6 +582,9 @@ textarea::placeholder {
   height: 21px;
   object-fit: contain;
 }
+.factor-symbol img[src="/assets/risk-impersonation.png"] {
+  transform: scale(0.8);
+}
 .evidence-item p {
   margin: 0;
   font-size: 0.94em;
