@@ -56,10 +56,10 @@ export function AnalysisResult({
     heading.current?.focus()
   }, [result.request_id])
   const descriptions = {
-    dangerous: '이 메시지는 위험해 보여요. 조심하세요.',
-    suspicious: '조금 수상한 부분이 있어요. 확인해 보세요.',
-    normal: '현재까지는 위험한 요소가 보이지 않아요.',
-    insufficient_information: '정보가 부족해서 아직 알기 어려운 상태예요.',
+    dangerous: ['이 메시지는 위험해 보여요.', '요청에 응하기 전에 확인하세요.'],
+    suspicious: ['조금 수상한 부분이 있어요.', '요청한 상대를 직접 확인하세요.'],
+    normal: ['현재까지 위험한 요소가 보이지 않아요.', '개인정보를 요구하면 주의하세요.'],
+    insufficient_information: ['정보가 부족해 판단하기 어려워요.', '요청 출처를 별도로 확인하세요.'],
   }
   const statusIcon = {
     dangerous: 'status-danger',
@@ -83,7 +83,11 @@ export function AnalysisResult({
               <small aria-hidden="true">단계</small>
             )}
           </h2>
-          <p>{descriptions[result.risk_level]}</p>
+          <p>
+            {descriptions[result.risk_level].map((line) => (
+              <span key={line}>{line}</span>
+            ))}
+          </p>
         </div>
       </div>
       <div className="result-section result-findings">
