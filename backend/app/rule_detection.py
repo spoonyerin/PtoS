@@ -56,8 +56,13 @@ IDENTITY = re.compile(
     r"(?:은행|카드사|경찰(?:청|서)?|검찰(?:청)?|금융감독원|국세청|우체국|공공기관|택배사|택배\s*기사)"
     r"\s*(?:의\s*)?(?:(?:고객\s*센터|담당자|직원|상담원|수사관|검사)\s*)?(?:입니다|인데요|이에요|예요)"
     r"|(?:엄마|아빠)[,\s]*(?:나|저)\s*(?:아들|딸)(?:이야|인데|입니다)"
-    r"|(?:아들|딸|친구)\s*(?:이야|인데|입니다)"
+    r"|(?P<kin>(?:아들|딸|친구)\s*(?:이야|인데|입니다))"
 )
+# rules-dev-v4(임시): "딸인데", "친구입니다" 같은 관계 자기소개는 구절 첫머리(머리말·인사·부모 호칭·1인칭만 앞에 허용)일 때만
+# 강한 명의로 본다. "우리 딸이 친구인데"처럼 문장 중간에서 제3자를 가리키는 표현은 명의 주장이 아니다.
+KIN_PREFIX = re.compile(
+    r"\s*(?:\[[^\]\r\n]{1,20}\]\s*)*(?:(?:안녕|여보세요)[\s,~!.]*)?"
+    r"(?:(?:엄마|아빠|어머니|아버지|어머님|아버님|할머니|할아버지)[\s,~!.]*)?(?:(?:나|저)[\s,~!.]*)?(?:(?:큰|작은|막내)\s*)?")
 URGENCY_DEADLINE = r"지금\s*바로|당장|즉시|긴급(?:히|합니다|한)|오늘\s*(?:안에|내로)|\d+\s*분\s*(?:안에|이내)"
 URGENCY_PENALTY = r"(?:계좌|서비스|거래)[^.!?\n]*(?:정지|중단)"
 URGENCY = re.compile(f"{URGENCY_DEADLINE}|{URGENCY_PENALTY}")
@@ -205,6 +210,8 @@ def scan_rules(text: str, *, url_spans: list[tuple[int, int]] | None = None) -> 
                     groups = action.groupdict()
                     add(code, left, right, rule="confirm" if groups.get("confirm") else "guided" if groups.get("guided") else "")
         for match in IDENTITY.finditer(clause):
+            if match.group("kin") and not KIN_PREFIX.fullmatch(clause[:match.start()]):
+                continue
             if asserted(clause, match.end()):
                 add(FactorCode.IMPERSONATION, start + match.start(), start + match.end())
         for match in URGENCY.finditer(clause):
