@@ -15,6 +15,14 @@ BOUNDARY = re.compile(rf"[.!?。！？;\n]+|하지만|그러나|그런데|{ON_BE
 NEGATION = re.compile(r"지\s*(?:마|말|않)|필요\s*(?:가\s*)?없|아니|아닙|아닌|아닐|안\s*해|금지|거절")
 GAP_BREAK = re.compile(rf"그리고|하지만|그러나|{ON_BEHALF}|말고|지\s*(?:마|말|않)|아니|아닙|아닌|아닐|금지|거절")
 META = re.compile(r"예시|사례|피싱|사기|예방\s*교육|거절|주의")
+# rules-dev-v4(임시): 명의·긴급·불이익 표현의 부정 범위. 첫 연결 어미(되니, 되며, 않으면, 하셔서 등)에서 끝난다.
+# 인용 연결("라고", "라며")은 범위 끝으로 보지 않는다.
+NEGATION_SCOPE_END = re.compile(
+    r"(?:으니|오니|니까|니|므로|으며|(?<!라)며|면서|지만|는데|은데|인데요?|어서|아서|해서|셔서|(?<![라다])고|면)(?=[\s,]|$)")
+# "확인하지 않으면", "납부하지 않을 경우" 같은 조건형은 앞 표현을 부정하지 않는다.
+CONDITIONAL_NEGATION = re.compile(r"지\s*않(?:으면|으시면|으실\s*(?:경우|시)|을\s*(?:시|경우|때)|는\s*경우)|안\s*하(?:면|시면)")
+# 표현 자체가 연결 어미로 끝나면("택배 기사인데요") 뒤 구절의 부정은 그 표현에 미치지 않는다.
+CLOSED_END = re.compile(r"(?:인데요?|는데|지만|니까|므로)$")
 REPORT = re.compile(r"라는|라고|라며|같은|처럼|식의")
 
 # 반말·의문형 요청(줄래?, 줄 수 있어?, 주면 안 돼?)도 요구로 본다. "줄게" 같은 약속형은 넣지 않는다.
@@ -81,9 +89,25 @@ FAMILY = re.compile(
     r"|[^\n.!?]{0,20}?(?:폰|휴대폰|핸드폰|전화기?)\s*(?:이|가)?\s*(?:고장|액정|깨[져졌]|분실|잃어버|망가|물에))")
 # 임시: 청구어는 단독으로, 상태 변화어는 예고·조건 형태일 때만 불이익으로 본다. 과거형 완료 안내는 제외한다.
 PENALTY = re.compile(
-    r"미납|연체|체납|과태료|범칙금|벌금|가산금|가산세|압류|강제\s*집행|법적\s*(?:조치|절차|처벌)"
+    r"(?P<claim>미납|연체|체납|과태료|범칙금|벌금|가산금|가산세|압류|강제\s*집행|법적\s*(?:조치|절차|처벌))"
     r"|(?:정지|중지|만료|취소|반송|제한|해지|차단|폐기|말소)(?=\s*(?:처리|조치)?\s*(?:예정|될|됩니다|되오니|되며|되니|돼요|됨|할\s*예정))"
-    r"|(?:시|경우|면)\s*(?:자동\s*)?(?:으로\s*)?(?:정지|중지|만료|취소|반송|제한|해지|차단|폐기|말소)")
+    # rules-dev-v4: "즉시·동시·수시·상시"의 '시'는 조건("미확인 시")이 아니다.
+    r"|(?:(?<![즉동수상])시|경우|면)\s*(?:자동\s*)?(?:으로\s*)?(?:정지|중지|만료|취소|반송|제한|해지|차단|폐기|말소)")
+# rules-dev-v4(임시): 청구어 뒤 같은 구절의 첫 서술어가 "없다·아니다"이면("미납 금액이 없습니다", "연체가 아니고")
+# 청구가 없다는 안내이므로 불이익 근거로 채택하지 않는다. 청구어 뒤 20자 안의 첫 서술어만 본다.
+CLAIM_PREDICATE = re.compile(r"없|아니|아닙|아닌|있|됩|되|돼|입니|이에요|예요|합니|했|하였")
+CLAIM_ABSENT = frozenset({"없", "아니", "아닙", "아닌"})
+
+
+def claim_absent(clause: str, match: re.Match) -> bool:
+    if not match.group("claim"):
+        return False
+    predicate = CLAIM_PREDICATE.search(clause, match.end(), match.end() + 20)
+    return bool(predicate) and predicate.group() in CLAIM_ABSENT
+
+
+def penalty_matches(clause: str):
+    return (match for match in PENALTY.finditer(clause) if not claim_absent(clause, match))
 # 임시: 임박 기한(당일·금일·오늘·내일·익일 + 기한 표현, 자정까지, 24시간 이내, 1일 남음). 날짜만 적힌 기한은 해석하지 않는다.
 DAY = r"(?:당일|금일|오늘|내일|익일)"
 DEADLINE = re.compile(
@@ -162,7 +186,14 @@ def scan_rules(text: str, *, url_spans: list[tuple[int, int]] | None = None) -> 
 
     def asserted(clause: str, end: int) -> bool:
         after = clause[end:]
-        return not NEGATION.search(after) and not (REPORT.search(after) and META.search(after))
+        # rules-dev-v4(임시): 부정은 표현에 바로 이어지는 서술어(첫 연결 어미까지)에만 적용한다.
+        # "해지되니 무시하지 마세요"의 뒤 구절 부정이 앞의 불이익 예고를 지우지 않게 한다.
+        if CLOSED_END.search(clause[:end]):
+            scope = ""
+        else:
+            stop = NEGATION_SCOPE_END.search(after)
+            scope = CONDITIONAL_NEGATION.sub(" ", after[:stop.end()] if stop else after)
+        return not NEGATION.search(scope) and not (REPORT.search(after) and META.search(after))
 
     # URL의 마침표와 교육 인용 안의 문장부호는 구절 경계로 사용하지 않는다.
     boundaries = [match for match in BOUNDARY.finditer(prose) if not overlaps(*match.span(), ignored)]
@@ -218,12 +249,12 @@ def scan_rules(text: str, *, url_spans: list[tuple[int, int]] | None = None) -> 
             if asserted(clause, match.end()):
                 kind = "penalty" if re.fullmatch(URGENCY_PENALTY, match.group()) else "deadline"
                 add(FactorCode.URGENCY_THREAT, start + match.start(), start + match.end(), kind)
-        for pattern, kind in ((PENALTY, "penalty"), (DEADLINE, "deadline")):
-            for match in pattern.finditer(clause):
+        for matches, kind in ((penalty_matches(clause), "penalty"), (DEADLINE.finditer(clause), "deadline")):
+            for match in matches:
                 if asserted(clause, match.end()):
                     add(FactorCode.URGENCY_THREAT, start + match.start(), start + match.end(), kind, kind)
         # 기한 표현 없는 날짜어("익일 서비스 해지 예정")는 같은 구절에 불이익 예고가 있을 때만 기한으로 본다.
-        if PENALTY.search(clause):
+        if any(True for _ in penalty_matches(clause)):
             for match in re.finditer(DAY, clause):
                 if asserted(clause, match.end()):
                     add(FactorCode.URGENCY_THREAT, start + match.start(), start + match.end(), "deadline", "deadline")
