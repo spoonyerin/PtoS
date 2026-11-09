@@ -33,6 +33,26 @@ INPUT_TYPES = ("text", "url")
 # 오류는 정보 부족으로 합치지 않고 별도 열로 센다.
 ERROR_KINDS = ("input_error", "timeout", "analysis_error")
 PREDICTION_COLUMNS = LEVELS + ERROR_KINDS
+MODES = ("levels", "binary")
+# 이진 평가: 선택 컬럼 expected_binary. 비어 있으면 expected_level에서 만든다.
+BINARY_COLUMN = "expected_binary"
+BINARY_LABELS = ("scam", "legit")
+LEVEL_TO_BINARY = {
+    RiskLevel.DANGEROUS.value: "scam",
+    RiskLevel.SUSPICIOUS.value: "scam",
+    RiskLevel.NORMAL.value: "legit",
+}
+WARNING_LEVELS = (RiskLevel.SUSPICIOUS.value, RiskLevel.DANGEROUS.value)
+NO_WARNING_LEVELS = (RiskLevel.NORMAL.value, RiskLevel.INSUFFICIENT_INFORMATION.value)
+# 경고 없음 열을 먼저, 경고함 열을 다음에, 오류 열은 따로 둔다.
+BINARY_PREDICTION_COLUMNS = NO_WARNING_LEVELS + WARNING_LEVELS + ERROR_KINDS
+# 이진 라벨 출처. suspicious에서 만든 scam은 정답이 불확실하다(사기라고 단정하기 어려움).
+BINARY_SOURCES = {
+    "direct": "직접 채운 expected_binary",
+    "from_dangerous": "dangerous에서 파생",
+    "from_suspicious": "suspicious에서 파생",
+    "from_normal": "normal에서 파생",
+}
 TRUE_VALUES = {"true", "1", "yes", "y"}
 FALSE_VALUES = {"false", "0", "no", "n"}
 
@@ -65,11 +85,26 @@ class EvalRow:
     id: str
     input_type: Literal["text", "url"]
     content: str = field(repr=False)
-    expected: str
+    # 4단계 라벨. 이진 라벨만 있는 행은 None이며 4단계 평가에서 제외한다.
+    expected: str | None
     split: str
     is_synthetic: bool
     campaign_id: str
     review_status: str
+    # 직접 채운 이진 라벨(scam/legit). 비어 있으면 None.
+    expected_binary: str | None = None
+
+
+def binary_label(row: EvalRow) -> tuple[str | None, str | None]:
+    """(이진 라벨, 출처). 직접 채운 값이 우선이고, 없으면 4단계 라벨에서 만든다.
+
+    정답이 insufficient_information이고 이진 라벨이 없으면 (None, None): 이진 평가에서 제외한다.
+    """
+    if row.expected_binary:
+        return row.expected_binary, "direct"
+    if row.expected in LEVEL_TO_BINARY:
+        return LEVEL_TO_BINARY[row.expected], f"from_{row.expected}"
+    return None, None
 
 
 @dataclass(frozen=True)
@@ -109,8 +144,16 @@ def load_rows(path: Path) -> list[EvalRow]:
                 raise DatasetError(f"{line}행: id가 중복돼요.")
             seen.add(row_id)
             expected = (record["expected_level"] or "").strip()
-            if expected not in LEVELS:
+            has_binary_column = BINARY_COLUMN in (reader.fieldnames or [])
+            binary = (record.get(BINARY_COLUMN) or "").strip()
+            if (expected and expected not in LEVELS) or (not expected and not has_binary_column):
                 raise DatasetError(f"{line}행: expected_level은 {'/'.join(LEVELS)} 중 하나여야 해요.")
+            if binary and binary not in BINARY_LABELS:
+                raise DatasetError(f"{line}행: expected_binary는 {'/'.join(BINARY_LABELS)} 중 하나여야 해요.")
+            if not expected and not binary:
+                raise DatasetError(f"{line}행: expected_level과 expected_binary가 모두 비어 있어요.")
+            if binary and expected in LEVEL_TO_BINARY and LEVEL_TO_BINARY[expected] != binary:
+                raise DatasetError(f"{line}행: expected_level과 expected_binary가 서로 맞지 않아요.")
             split = (record["split"] or "").strip()
             if split not in SPLITS:
                 raise DatasetError(f"{line}행: split은 {'/'.join(SPLITS)} 중 하나여야 해요.")
@@ -124,11 +167,12 @@ def load_rows(path: Path) -> list[EvalRow]:
                 id=row_id,
                 input_type="text" if has_text else "url",
                 content=text if has_text else url.strip(),
-                expected=expected,
+                expected=expected or None,
                 split=split,
                 is_synthetic=_parse_bool(record["is_synthetic"] or "", line),
                 campaign_id=(record["campaign_id"] or "").strip(),
                 review_status=(record["review_status"] or "").strip(),
+                expected_binary=binary or None,
             ))
     return rows
 
@@ -294,8 +338,9 @@ def _metrics_section(title: str, outcomes: list[Outcome]) -> list[str]:
     return lines
 
 
-def render_report(outcomes: list[Outcome], info: RunInfo, excluded_by_filter: int = 0,
-                  review_status_counts: Counter | None = None, excluded_by_split: int = 0) -> str:
+def _header_lines(outcomes: list[Outcome], info: RunInfo, excluded_by_filter: int, review_status_counts: Counter | None,
+                  excluded_by_split: int, extra_info_rows: list[list[str]], extra_exclusion_lines: list[str]) -> list[str]:
+    """두 모드가 함께 쓰는 머리말과 데이터 구성. 마지막 빈 줄까지 포함한다."""
     dirty = {True: "변경 있음 (커밋되지 않은 코드로 실행)", False: "변경 없음", None: "확인 불가"}[info.worktree_dirty]
     versions = sorted({o.analysis_version for o in outcomes if o.analysis_version})
     synthetic = sum(o.row.is_synthetic for o in outcomes)
@@ -307,6 +352,7 @@ def render_report(outcomes: list[Outcome], info: RunInfo, excluded_by_filter: in
             ["작업 트리", dirty],
             ["평가 CSV SHA-256", f"`{info.data_sha256}`"],
             ["분석기", info.analyzer],
+            *extra_info_rows,
             ["analysis_version", ", ".join(versions) or "없음"],
             ["실행 시각", info.run_at],
             ["review_status 필터", info.review_status_filter or "없음 (전체)"],
@@ -326,6 +372,7 @@ def render_report(outcomes: list[Outcome], info: RunInfo, excluded_by_filter: in
         lines.append(f"- review_status 필터로 제외: {excluded_by_filter}건")
     if excluded_by_split:
         lines.append(f"- split 필터로 제외: {excluded_by_split}건")
+    lines += extra_exclusion_lines
     if review_status_counts:
         lines.append("- review_status별 행 수 (필터 전): " + ", ".join(
             f"{status or '(빈 값)'} {count}" for status, count in sorted(review_status_counts.items())))
@@ -345,7 +392,19 @@ def render_report(outcomes: list[Outcome], info: RunInfo, excluded_by_filter: in
         elif info.split_filter != "test":
             lines.append("- **경고: dev 행은 모델 학습과 임계값 결정에 쓴 행이다(in-sample). dev 비교는 train-report.md의 OOF 결과를 쓴다.**")
     lines.append("")
-    for split in (SPLITS if info.split_filter == "all" else (info.split_filter,)):
+    return lines
+
+
+def _splits(info: RunInfo) -> tuple[str, ...]:
+    return SPLITS if info.split_filter == "all" else (info.split_filter,)
+
+
+def render_report(outcomes: list[Outcome], info: RunInfo, excluded_by_filter: int = 0,
+                  review_status_counts: Counter | None = None, excluded_by_split: int = 0,
+                  excluded_no_level: int = 0) -> str:
+    exclusions = [f"- 4단계 라벨(expected_level) 없음으로 제외: {excluded_no_level}건"] if excluded_no_level else []
+    lines = _header_lines(outcomes, info, excluded_by_filter, review_status_counts, excluded_by_split, [], exclusions)
+    for split in _splits(info):
         split_outcomes = [o for o in outcomes if o.row.split == split]
         lines += [f"## split: {split}", ""]
         if split == "test":
@@ -378,13 +437,163 @@ def render_report(outcomes: list[Outcome], info: RunInfo, excluded_by_filter: in
     return "\n".join(lines)
 
 
+# ---- 이진 평가 (경고함 = suspicious·dangerous, 경고 없음 = insufficient_information·normal) ----
+
+@dataclass(frozen=True)
+class BinaryMetrics:
+    total: int
+    confusion: dict[str, dict[str, int]]
+    scam_total: int
+    scam_warned: int
+    scam_missed: int  # 경고 없음(정보 부족·정상). 오류 행은 넣지 않는다.
+    scam_errors: int
+    scam_dangerous: int
+    legit_total: int
+    legit_flagged: int  # 의심·위험 (오탐)
+    legit_dangerous: int  # 위험 (심각한 오탐)
+    legit_errors: int
+    insufficient_predicted: int
+    errors: int
+
+
+def compute_binary_metrics(outcomes: Iterable[Outcome]) -> BinaryMetrics:
+    """이진 라벨이 있는 행만 받는다. 분모는 오류 행을 포함한 해당 정답의 전체 행이다."""
+    confusion = {label: {column: 0 for column in BINARY_PREDICTION_COLUMNS} for label in BINARY_LABELS}
+    total = 0
+    for outcome in outcomes:
+        label, _ = binary_label(outcome.row)
+        if label is None:
+            raise ValueError("이진 라벨이 없는 행은 이진 지표에 넣지 않는다.")
+        confusion[label][outcome.predicted] += 1
+        total += 1
+    scam, legit = confusion["scam"], confusion["legit"]
+    insufficient = RiskLevel.INSUFFICIENT_INFORMATION.value
+    return BinaryMetrics(
+        total=total,
+        confusion=confusion,
+        scam_total=sum(scam.values()),
+        scam_warned=sum(scam[level] for level in WARNING_LEVELS),
+        scam_missed=sum(scam[level] for level in NO_WARNING_LEVELS),
+        scam_errors=sum(scam[kind] for kind in ERROR_KINDS),
+        scam_dangerous=scam[RiskLevel.DANGEROUS.value],
+        legit_total=sum(legit.values()),
+        legit_flagged=sum(legit[level] for level in WARNING_LEVELS),
+        legit_dangerous=legit[RiskLevel.DANGEROUS.value],
+        legit_errors=sum(legit[kind] for kind in ERROR_KINDS),
+        insufficient_predicted=scam[insufficient] + legit[insufficient],
+        errors=sum(confusion[label][kind] for label in BINARY_LABELS for kind in ERROR_KINDS),
+    )
+
+
+def _rate(numerator: int, denominator: int) -> str:
+    return f"{numerator}/{denominator} = {_fmt(_ratio(numerator, denominator))}"
+
+
+def _binary_section(title: str, outcomes: list[Outcome]) -> list[str]:
+    lines = [f"#### {title} ({len(outcomes)}건)", ""]
+    if not outcomes:
+        return lines + ["해당 행 없음.", ""]
+    m = compute_binary_metrics(outcomes)
+    lines += ["이진 혼동행렬 (행: 정답, 열: 판정. 경고 없음 = normal·insufficient_information, 경고함 = suspicious·dangerous)", ""]
+    lines += _table(
+        ["정답 \\ 판정", *BINARY_PREDICTION_COLUMNS, "합계"],
+        ([label, *m.confusion[label].values(), sum(m.confusion[label].values())] for label in BINARY_LABELS),
+    )
+    lines += [
+        "",
+        f"- 사기 경고율 (scam 중 의심·위험): {_rate(m.scam_warned, m.scam_total)} (분모에 오류 {m.scam_errors}건 포함)",
+        f"- 사기 놓침 (scam 중 정보 부족·정상): {m.scam_missed}건",
+        f"- 정상 오탐률 (legit 중 의심·위험): {_rate(m.legit_flagged, m.legit_total)} (분모에 오류 {m.legit_errors}건 포함)",
+        f"- 정상 → 위험 (심각한 오탐): {m.legit_dangerous}건",
+        f"- 사기 중 위험 판정 비율: {_rate(m.scam_dangerous, m.scam_total)}",
+        f"- 정보 부족 판정 비율: {_rate(m.insufficient_predicted, m.total)}",
+        f"- 오류 (입력 오류·시간 초과·분석 오류, 경고 없음으로 합치지 않음): {m.errors}건",
+        "",
+    ]
+    return lines
+
+
+def _binary_summary_row(name: str, outcomes: list[Outcome]) -> list[object]:
+    m = compute_binary_metrics(outcomes)
+    return [
+        name, m.total, _rate(m.scam_warned, m.scam_total), _rate(m.legit_flagged, m.legit_total), m.legit_dangerous,
+        _rate(m.scam_dangerous, m.scam_total), _rate(m.insufficient_predicted, m.total), m.errors,
+    ]
+
+
+def _binary_summary(outcomes: list[Outcome]) -> list[str]:
+    by_source = {source: [o for o in outcomes if binary_label(o.row)[1] == source] for source in BINARY_SOURCES}
+    groups = [
+        ("전체", outcomes),
+        ("실제", [o for o in outcomes if not o.row.is_synthetic]),
+        ("합성", [o for o in outcomes if o.row.is_synthetic]),
+        *((f"출처: {name}", by_source[source]) for source, name in BINARY_SOURCES.items()),
+    ]
+    lines = ["#### 구분별 지표", "",
+             "건수/분모 = 비율. 분모는 오류 행을 포함한다. 출처별 줄은 전체 줄을 라벨 출처로 나눈 것이다.", ""]
+    lines += _table(
+        ["구분", "행", "사기 경고율", "정상 오탐률", "정상 → 위험", "사기 중 위험", "정보 부족 판정", "오류"],
+        (_binary_summary_row(name, group) for name, group in groups),
+    )
+    lines += ["", "- suspicious에서 파생한 scam은 정답이 불확실하다 (라벨링 지침상 사기라고 단정하기 어려움).", ""]
+    return lines
+
+
+def _binary_id_table(title: str, outcomes: list[Outcome]) -> list[str]:
+    lines = [f"#### {title} ({len(outcomes)}건)", ""]
+    if outcomes:
+        lines += _table(
+            ["id", "입력", "라벨 출처", "판정", "policy_reason", "근거 신호"],
+            ([o.row.id, o.row.input_type, BINARY_SOURCES[binary_label(o.row)[1]], o.predicted, o.policy_reason or "-",
+              ", ".join(o.factor_codes) or "-"] for o in outcomes),
+        )
+        lines.append("")
+    return lines
+
+
+def render_binary_report(outcomes: list[Outcome], info: RunInfo, excluded_by_filter: int = 0,
+                         review_status_counts: Counter | None = None, excluded_by_split: int = 0) -> str:
+    labeled = [o for o in outcomes if binary_label(o.row)[0] is not None]
+    unlabeled = [o for o in outcomes if binary_label(o.row)[0] is None]
+    sources = Counter(binary_label(o.row)[1] for o in labeled)
+    exclusions = [
+        f"- 정답 insufficient_information + 이진 라벨 없음으로 이진 지표에서 제외: {len(unlabeled)}건 (분석은 했고 판정 분포만 split별로 표시)",
+        "- 이진 라벨 출처: " + ", ".join(f"{name} {sources[source]}" for source, name in BINARY_SOURCES.items()),
+    ]
+    lines = _header_lines(outcomes, info, excluded_by_filter, review_status_counts, excluded_by_split,
+                          [["평가 모드", "binary (경고함 = suspicious·dangerous, 경고 없음 = insufficient_information·normal)"]],
+                          exclusions)
+    for split in _splits(info):
+        split_labeled = [o for o in labeled if o.row.split == split]
+        lines += [f"## split: {split}", ""]
+        if split == "test":
+            lines += ["최종 테스트셋은 정책·임계값 조정에 쓰지 않는다.", ""]
+        split_unlabeled = Counter(o.predicted for o in unlabeled if o.row.split == split)
+        if split_unlabeled:
+            lines += ["- 이진 지표 제외 행(정답 insufficient_information)의 판정 분포: " + ", ".join(
+                f"{column} {split_unlabeled[column]}" for column in PREDICTION_COLUMNS if split_unlabeled[column]), ""]
+        lines += _binary_section("전체", split_labeled)
+        for input_type in INPUT_TYPES:
+            lines += _binary_section(f"{input_type} 입력", [o for o in split_labeled if o.row.input_type == input_type])
+        lines += _binary_summary(split_labeled)
+        lines += _binary_id_table("놓친 사기 id (scam → 경고 없음)", [
+            o for o in split_labeled if binary_label(o.row)[0] == "scam" and o.predicted in NO_WARNING_LEVELS])
+        lines += _binary_id_table("정상 오탐 id (legit → 의심·위험)", [
+            o for o in split_labeled if binary_label(o.row)[0] == "legit" and o.predicted in WARNING_LEVELS])
+        lines += _binary_id_table("오류 id", [o for o in split_labeled if o.predicted in ERROR_KINDS])
+    return "\n".join(lines)
+
+
 def run(data_path: Path, analyzer_name: str = "rules", review_status: str | None = None,
-        timeout: float = 5.0, analyzers: dict[str, Callable[[], Analyzer]] | None = None, split: str = "all") -> str:
+        timeout: float = 5.0, analyzers: dict[str, Callable[[], Analyzer]] | None = None, split: str = "all",
+        mode: str = "levels") -> str:
     registry = analyzers if analyzers is not None else ANALYZERS
     if analyzer_name not in registry:
         raise DatasetError(f"알 수 없는 분석기예요: {analyzer_name}")
     if split not in SPLIT_FILTERS:
         raise DatasetError(f"split 필터는 {'/'.join(SPLIT_FILTERS)} 중 하나여야 해요.")
+    if mode not in MODES:
+        raise DatasetError(f"평가 모드는 {'/'.join(MODES)} 중 하나여야 해요.")
     info = run_info(data_path, analyzer_name, review_status, split_filter=split)
     rows = load_rows(data_path)
     status_counts = Counter(row.review_status for row in rows)
@@ -394,6 +603,13 @@ def run(data_path: Path, analyzer_name: str = "rules", review_status: str | None
     model = getattr(getattr(analyzer, "model_state", None), "model", None)
     if model is not None:
         info = replace(info, model={"version": model.version, **getattr(model, "info", {})})
+    excluded_by_filter, excluded_by_split = len(in_split) - len(selected), len(rows) - len(in_split)
     # split 밖의 행은 분석기에 넘기지 않는다.
-    outcomes = evaluate(selected, analyzer, timeout)
-    return render_report(outcomes, info, len(in_split) - len(selected), status_counts, len(rows) - len(in_split))
+    if mode == "binary":
+        outcomes = evaluate(selected, analyzer, timeout)
+        return render_binary_report(outcomes, info, excluded_by_filter, status_counts, excluded_by_split)
+    # 4단계 라벨이 없는(이진 라벨만 있는) 행은 4단계 평가에서 빼고 건수만 알린다.
+    with_level = [row for row in selected if row.expected is not None]
+    outcomes = evaluate(with_level, analyzer, timeout)
+    return render_report(outcomes, info, excluded_by_filter, status_counts, excluded_by_split,
+                         len(selected) - len(with_level))

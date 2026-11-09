@@ -240,6 +240,15 @@ T3과 같은 평가 CSV(SHA-256 `e65dd42f…49ea4`)로 비교했다. 보강 전 
 - 후보 5의 효과는 dev에 해당 오탐 형태가 없어 가상 문장 회귀 테스트로만 확인했다.
 - 리포트 `C:\_Coding\ptos-eval\reports\v4\`(저장소 밖, 원문 없음: 행 id·라벨·판정·rule_id만).
 
+### 이진 평가 모드 추가와 dev 1회 실행 (2026-11-09)
+
+**탐지 성능 주장이 아니다. test는 실행하지 않았다.** 하네스에 `--mode binary`(기본 `levels`)와 선택 컬럼 `expected_binary`를 추가했다(`docs/EVALUATION.md` "이진 평가"). 기존 4단계 리포트는 변경 전후로 실행 시각·작업 트리 행을 빼고 바이트 단위로 같았다(같은 CSV dev의 `rules`, `rules+model`, 가짜 고정 행 2종).
+
+- 같은 평가 CSV(SHA-256 `e65dd42f…49ea4`), 커밋 `2e408be` + 미커밋 이진 모드 변경, 분석기 `rules`, `--split dev` 79건(실제 8, 합성 71). `expected_binary` 열이 없어 라벨은 모두 파생이다(dangerous 49, suspicious 21, normal 9).
+- 사기 경고율 59/70 = 0.843, 사기 놓침 11건(모두 정보 부족), 정상 오탐률 3/9 = 0.333(모두 의심), 정상 → 위험 0건, 사기 중 위험 25/70 = 0.357, 정보 부족 판정 17/79 = 0.215, 오류 0건.
+- 출처별 사기 경고율: dangerous 파생 45/49 = 0.918, suspicious 파생 14/21 = 0.667. 실제 8건은 scam 1·legit 7이라 실제 행의 사기 경고율(0/1)은 해석할 수 없다.
+- 리포트 `C:\_Coding\ptos-eval\reports\v4\binary-rules-dev.md`(저장소 밖, 원문 없음).
+
 ## 10. 알려진 문서·코드 정합성 이슈
 
 - (T0에서 해결) README, `docs/WINDOWS_GIT_BASH.md`, `docs/CODESPACES.md`, `docs/SAFE_BROWSING.md`의 실행 안내를 저장소 기본 브랜치 기준으로 정리했다.

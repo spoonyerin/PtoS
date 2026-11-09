@@ -1,6 +1,6 @@
 # 평가 하네스
 
-고정 평가셋 CSV를 분석기로 판정해 4단계 지표를 Markdown 리포트로 낸다 (로드맵 T2).
+고정 평가셋 CSV를 분석기로 판정해 4단계 지표(기본) 또는 이진 지표(`--mode binary`)를 Markdown 리포트로 낸다 (로드맵 T2).
 탐지 성능은 이 하네스로 고정 평가셋을 측정한 결과로만 주장한다. 단위 테스트(`tests/test_evaluation.py`)는 가짜 합성 샘플로 코드 동작만 확인하며 그 수치는 탐지 성능이 아니다.
 
 ## 평가 데이터 보관
@@ -23,20 +23,22 @@
 
 ## CSV 스키마
 
-UTF-8 CSV(Excel의 UTF-8 BOM 허용). 컬럼은 HANDOVER 4절과 같다. 모든 컬럼이 헤더에 있어야 한다.
+UTF-8 CSV(Excel의 UTF-8 BOM 허용). 컬럼은 HANDOVER 4절과 같다. 아래 표에서 `expected_binary`를 뺀 모든 컬럼이 헤더에 있어야 한다.
 
 | 컬럼 | 규칙 |
 | --- | --- |
 | `id` | 비어 있지 않고 중복 없음. 리포트에서 행을 가리키는 유일한 값이다. 원문 일부를 id로 쓰지 않는다. |
 | `text`, `url` | 둘 중 **정확히 하나**만 채운다. `text`는 `input_type=text`, `url`은 `input_type=url`로 분석한다. 둘 다 있으면 형식 오류다. |
-| `expected_level` | `normal` / `suspicious` / `dangerous` / `insufficient_information` |
+| `expected_level` | `normal` / `suspicious` / `dangerous` / `insufficient_information`. `expected_binary` 컬럼이 있으면 비워도 된다. |
+| `expected_binary` (선택 컬럼) | `scam` / `legit` / 빈 값. 각 행은 `expected_level`과 `expected_binary` 중 **하나 이상**을 채운다. 둘 다 채우면 서로 맞아야 한다(`dangerous`·`suspicious` ↔ `scam`, `normal` ↔ `legit`). `insufficient_information`은 둘 중 어느 것과도 함께 쓸 수 있다. 컬럼이 없는 기존 CSV는 그대로 읽힌다. |
 | `label_reason` | 판정 근거와 경계 사례 여부. 리포트에 넣지 않는다. |
 | `source`, `is_synthetic` | 출처와 합성 여부. `is_synthetic`은 `true/false`(`1/0`, `yes/no` 허용). |
 | `campaign_id` | 같은 캠페인·변형·도메인 묶음. dev와 test에 같은 값이 있으면 리포트가 누출 경고를 낸다 (값은 표시하지 않음). |
 | `split` | `dev` / `test`. 최종 테스트셋은 정책·임계값 조정에 쓰지 않는다. |
 | `review_status` | 검수 합의 상태. 허용 값은 정해지지 않았다. |
 
-4단계 라벨은 검수 지침에 따라 직접 부여한다. 원천 데이터의 이진 라벨을 자동 변환하지 않는다.
+4단계 라벨은 검수 지침에 따라 직접 부여한다. 원천 데이터의 이진 라벨을 4단계 라벨로 자동 변환하지 않는다. 반대 방향(4단계 → 이진)은 이진 모드에서 `expected_binary`가 빈 행에만 하네스가 만든다 (아래 "이진 평가").
+`--mode levels`에서는 `expected_level`이 빈 행(이진 라벨만 있는 행)을 분석기에 넘기지 않고 리포트에 "4단계 라벨(expected_level) 없음으로 제외: N건"만 표시한다.
 형식 오류가 있으면 리포트를 만들지 않고 행 번호와 컬럼만 알린다 (셀 값은 출력하지 않음).
 
 ## 원천 데이터 변환: KR-MOB-SMISHING v1 (라벨링 전용)
@@ -67,11 +69,30 @@ cd backend
 | 옵션 | 설명 |
 | --- | --- |
 | `--data` | 평가 CSV 경로 (필수) |
+| `--mode` | `levels`(기본, 4단계 지표) / `binary`(이진 지표, 아래 "이진 평가"). |
 | `--analyzer` | 등록된 분석기 이름. `rules`(평판 미연결로 고정한 `RuleBasedAnalyzer`), `rules+model`(같은 규칙 + `PTOS_MODEL_PATH`의 학습 모델, `CompositeAnalyzer`). `rules+model`은 모델이 없거나 로드에 실패하면 "분석기 준비 오류"로 멈춘다(규칙만으로 조용히 비교되지 않게). |
 | `--split` | `dev` / `test` / `all`(기본). 고른 split의 행만 분석기에 넘기고 리포트에도 그 split만 낸다. 규칙 개발 중에는 `dev`만 쓰고, `test`는 마지막 전후 비교에 한 번만 쓴다. |
 | `--review-status` | 이 값의 행만 평가. 없으면 전체를 평가하고 값별 행 수만 표시한다. |
 | `--timeout` | 행당 분석 제한 시간(초). 기본 5초(API 기본값과 같음). |
 | `--output` | 리포트 저장 경로. 없으면 표준 출력. |
+
+### 이진 평가 (`--mode binary`)
+
+```bash
+cd backend
+../.venv/Scripts/python.exe evaluate.py --data C:/_Coding/ptos-eval/eval-v1.csv --mode binary --split dev --output C:/_Coding/ptos-eval/reports/report-rules-binary-dev.md
+```
+
+대부분의 평가 데이터를 정상/사기 이진 라벨로만 만들고 공개 이진 데이터도 쓰기 위한 모드다. 4단계 평가를 대체하지 않는다(작은 4단계 평가셋은 계속 쓴다).
+
+- **판정 묶음:** 경고함 = `suspicious`, `dangerous`. 경고 없음 = `insufficient_information`, `normal`. 정답이 scam인데 경고 없음이면 놓침이다(정보 부족도 평가에서 빼지 않는다). 정답이 legit인데 의심이면 오탐, 위험이면 심각한 오탐이다.
+- **정답:** `expected_binary`가 있으면 그 값(출처 "직접"), 없으면 `expected_level`에서 만든다(`dangerous`·`suspicious` → scam, `normal` → legit). 정답이 `insufficient_information`이고 `expected_binary`가 없으면 이진 지표에서 빼고, 제외 건수와 split별 판정 분포만 적는다.
+- **오류:** 입력 오류·시간 초과·분석 오류는 별도 열이며 경고 없음(놓침)으로 합치지 않는다. 비율의 분모는 오류 행을 포함한 해당 정답의 전체 행이고(4단계 재현율과 같은 규칙), 각 비율 옆에 분모에 포함된 오류 건수를 적는다.
+- **리포트:** 머리말에 `평가 모드: binary`, 데이터 구성에 제외 건수와 라벨 출처별 행 수. split마다 전체 / text 입력 / url 입력으로 나눠 이진 혼동행렬(정답 2 × 판정 4 + 오류 3열)과 지표를 건수/분모와 함께 낸다.
+  - 사기 경고율(scam 중 의심·위험), 사기 놓침 건수, 정상 오탐률(legit 중 의심·위험), 정상 → 위험 건수, 사기 중 위험 판정 비율, 정보 부족 판정 비율, 오류 건수.
+  - 구분별 지표 표: 전체 줄, 실제·합성 줄, 그 아래에 라벨 출처별 줄(직접 채운 `expected_binary` / `dangerous`에서 파생 / `suspicious`에서 파생 / `normal`에서 파생).
+  - 놓친 사기 id, 정상 오탐 id, 오류 id 목록(id, 입력 종류, 라벨 출처, 판정, `policy_reason`, 근거 신호 코드).
+- test split 규칙은 4단계와 같다. 개발 중에는 `--split dev`만 쓴다.
 
 다른 분석기를 평가하려면 `backend/evaluation/harness.py`의 `ANALYZERS`에 이름과 팩토리를 등록한다. 분석기는 `Analyzer.analyze(AnalysisInput) -> AnalysisResult` 경계만 지키면 된다. 외부 전송이 있는 분석기는 별도 합의 없이 등록하지 않는다.
 
@@ -92,7 +113,7 @@ cd backend
 | `--n-splits` | `campaign_id` 기준 층화 그룹 교차검증 fold 수. 기본 5. 사기·정상 라벨 각각의 campaign 수가 이보다 적으면 거부한다. |
 | `--model-version` | 기본 `tfidf-lr-v1`. manifest와 리포트에 기록한다. |
 
-- 라벨: 사기 = `suspicious` + `dangerous`, 정상 = `normal`. `insufficient_information` 라벨과 URL 입력 행은 학습에서 빼고 건수만 기록한다.
+- 라벨: 사기 = `suspicious` + `dangerous`, 정상 = `normal`. `insufficient_information` 라벨과 URL 입력 행은 학습에서 빼고 건수만 기록한다. `expected_level`이 빈 행(이진 라벨만 있는 행)도 학습에 쓰지 않고, 그런 행이 있을 때만 `no_level_label` 건수로 기록한다.
 - test 행은 형식 검사로 읽은 직후 버린다. 학습·임계값 결정·리포트 지표에 쓰지 않는다.
 - 출력: `model.joblib`, `manifest.json`(모델 버전, 시드, 설정, 평가 CSV SHA-256, 모델 SHA-256, 커밋, 라이브러리 버전, 건수, 임시 임계값과 `threshold_status: provisional-dev-cv`), `train-report.md`(OOF 모델 단독 집계, 같은 dev 행의 rules / rules+model 혼동행렬, 모델 신호로 판정이 바뀐 id). 원문·URL·campaign 값은 넣지 않는다.
 - **임계값 기준은 임시이며 팀 확정이 필요하다.** OOF 점수에서 expected=normal 행 모델 신호 0건을 지키면서 사기 재현율 최대. 같은 점수로 골랐으므로 OOF 지표도 낙관적이다.
@@ -129,6 +150,7 @@ cd backend
   - 위험 → 정상·의심 미탐 수, 위험 → 정보 부족 수(별도), 정보 부족 판정 중 expected=dangerous 비율.
 - `expected=normal` 사례 표: 실제·합성별 판정 분포 한 줄씩(방어선 확인용)과 id, 입력 종류, 판정, `policy_reason`, 근거 신호 코드. 현재 분석기는 `normal`을 반환하지 않으므로 이 사례들의 실제 판정을 따로 본다.
 - 불일치 id 목록 (expected와 판정이 다른 행).
+- 위 내용은 `--mode levels`(기본) 리포트다. `--mode binary` 리포트의 구성은 위 "이진 평가"를 본다. 머리말·데이터 구성은 같고, 평가 모드 행과 이진 라벨 제외·출처 건수가 더해진다.
 
 리포트에는 원문, URL, `label_reason`, campaign 값을 넣지 않는다.
 
@@ -137,3 +159,5 @@ cd backend
 - 행을 순서대로 하나씩 분석한다. 하네스는 처리 시간을 측정하지 않는다. 모델 지연은 `measure_model.py`로 따로 잰다 (단계별 계측은 T9).
 - URL 입력은 현재 규칙 분석기에서 항상 `url_only` 정보 부족이다. 평판 조회가 미연결이기 때문이며, 이 결과를 URL 탐지 성능으로 해석하지 않는다.
 - 합격선, 평가셋 규모, `review_status` 허용 값은 T1에서 정한다. 하네스에는 합격 판정이 없다.
+- 이진 지표는 위험과 의심의 구분을 보지 않으므로 4단계 평가를 대체하지 않는다. 현재 분석기는 `normal`을 반환하지 않으므로, legit 정답이 "경고 없음"으로 맞은 행은 모두 정보 부족 판정이다.
+- **`suspicious`에서 파생한 scam은 정답이 불확실하다** (라벨링 지침상 suspicious는 "사기라고 단정하기 어려움"). 리포트의 출처별 줄로 따로 보고, 새 데이터는 `expected_binary`를 직접 채운다.
