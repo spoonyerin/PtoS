@@ -232,7 +232,7 @@ def test_run_with_rule_analyzer_offline_and_without_raw_text(tmp_path, no_networ
     path = write_csv(tmp_path / "fake.csv", SAMPLE)
     report = run(path, "rules", review_status=None)
     assert hashlib.sha256(path.read_bytes()).hexdigest() in report
-    assert "| 분석기 | rules |" in report and "rules-reputation-dev-v2" in report
+    assert "| 분석기 | rules |" in report and "rules-reputation-dev-v3" in report
     assert "평가 행: 7건 (실제 0건, 합성 7건)" in report
     assert "expected=normal 사례 (1건)" in report
     assert "campaign_id 1개가 dev와 test에 함께" in report

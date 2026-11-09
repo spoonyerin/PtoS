@@ -106,7 +106,7 @@ URL 평판 조회는 Google Safe Browsing API(hashes.search)를 사용한다. �
 
 ## 종합 판정 · rules-reputation-dev-v2
 
-T4(2026-10-27)에서 문자 규칙이 `rules-dev-v3`(임시)로 바뀌어 `RuleBasedAnalyzer`의 `analysis_version`은 `rules-reputation-dev-v2`다. T5에서 API 응답은 모델 종합을 거쳐 `rules-model-dev-v1`이 됐다([MODEL_POLICY.md](MODEL_POLICY.md)). 평판 종합 방식은 아래와 같고 T6에서 바뀌지 않았다.
+T4(2026-10-27)에서 문자 규칙이 `rules-dev-v3`(임시)로 바뀌어 `RuleBasedAnalyzer`의 `analysis_version`은 `rules-reputation-dev-v2`다. T5에서 API 응답은 모델 종합을 거쳐 `rules-model-dev-v1`이 됐다([MODEL_POLICY.md](MODEL_POLICY.md)). 평판 종합 방식은 아래와 같고 T6에서 바뀌지 않았다. v4 1차 보강(2026-11-09)에서 문자 규칙이 `rules-dev-v4`가 되어 `RuleBasedAnalyzer`의 값은 `rules-reputation-dev-v3`, API 응답은 `rules-model-dev-v2`로 올렸다. 평판·모델 종합 방식은 바뀌지 않았다.
 
 | 확인한 근거 | 개발용 결과 |
 | --- | --- |

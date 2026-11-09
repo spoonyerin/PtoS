@@ -50,7 +50,7 @@ def test_report_shows_model_info_stage_counts_and_in_sample_warning(tmp_path):
     report = run(path, "rules+model", analyzers={"rules+model": composite_factory(info)}, split="dev")
     assert "| 모델 버전 | fake-v1 |" in report and "a" * 64 in report and "provisional-dev-cv" in report
     assert "- 모델 단계 상태: completed 40" in report
-    assert "in-sample" in report and "rules-model-dev-v1" in report
+    assert "in-sample" in report and "rules-model-dev-v2" in report
     assert TEST_MARKER not in report
     test_report = run(path, "rules+model", analyzers={"rules+model": composite_factory(info)}, split="test")
     assert "in-sample" not in test_report and "completed 4" in test_report

@@ -33,7 +33,7 @@ def test_input_drives_rule_results(client, text, level):
     assert body["explanation"] and body["action_guidance"]
     assert "규칙 기반 개발 버전" in body["limitations"][0]
     assert "규칙 결과만" in body["limitations"][1]
-    assert body["analysis_version"] == "rules-model-dev-v1"
+    assert body["analysis_version"] == "rules-model-dev-v2"
     assert body["analysis_stages"][1] == {"name": "lightweight_model", "status": "not_connected"}
     for evidence in body["evidence"]:
         assert text[evidence["start"]:evidence["end"]] == evidence["snippet"]
