@@ -20,6 +20,16 @@ for (const [level, label] of [
     await expect(page.getByRole('heading', { name: label, exact: true })).toBeVisible()
     // 등급 옆에 작은 접미사를 표시한다. 정보 부족은 위험 단계가 아니므로 제외한다.
     await expect(page.locator('.result-banner h2')).toHaveText(level === 'insufficient_information' ? label : `${label}단계`)
+    // v3.2: 정보 부족은 순서가 있는 위험 단계로 표시하지 않는다.
+    if (level === 'insufficient_information') {
+      await expect(page.locator('.risk-scale')).toHaveCount(0)
+    } else {
+      await expect(page.locator('.risk-scale-step')).toHaveCount(3)
+      await expect(page.locator('.risk-scale-step.is-current')).toHaveText(label)
+      await expect(page.locator('.risk-scale-step.is-filled')).toHaveCount(
+        ['normal', 'suspicious', 'dangerous'].indexOf(level) + 1,
+      )
+    }
     await expect(page.locator('.result-buttons button')).toHaveCount(2)
     await expect(page.getByRole('button', { name: '가족에게 공유' })).toBeVisible()
     await expect(page.getByRole('button', { name: '홈으로', exact: true })).toBeVisible()

@@ -303,8 +303,8 @@ textarea::placeholder {
   color: #737987;
   background: #e0e2e7;
   border-radius: 50%;
-  width: 27px;
-  height: 27px;
+  width: 20px;
+  height: 20px;
   display: grid;
   place-items: center;
 }
@@ -466,8 +466,8 @@ textarea::placeholder {
 }
 
 .result-header {
-  min-height: 102px;
-  padding-bottom: 25px;
+  min-height: 90px;
+  padding-bottom: 18px;
 }
 .result-card {
   --risk: #48566c;
@@ -475,32 +475,31 @@ textarea::placeholder {
 }
 .result-card.dangerous {
   --risk: #ad2a25;
-  --tint: #e5bcbc;
+  --tint: #f5d9d9;
 }
 .result-card.suspicious {
   --risk: #966200;
-  --tint: #ffe7a2;
+  --tint: #ffefbf;
 }
 .result-card.normal {
   --risk: #19733f;
-  --tint: #cfead6;
+  --tint: #dcf0e2;
 }
 .result-banner {
   display: grid;
-  grid-template-columns: 88px minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: 16px 24px;
   align-items: center;
   background: var(--tint);
-  border-block: 2px solid #111;
-  padding: 24px;
-  margin: 0 -28px 28px;
-  min-height: 148px;
+  border-radius: 16px;
+  padding: 20px 22px 16px;
+  margin: 0 0 26px;
 }
 .result-symbol {
   display: grid;
   place-items: center;
-  width: 88px;
-  height: 88px;
+  width: 70px;
+  height: 70px;
   border-radius: 50%;
   background: var(--risk);
   color: white;
@@ -511,34 +510,63 @@ textarea::placeholder {
   object-fit: contain;
 }
 .result-status-copy {
-  min-width: 0;
+  display: contents;
   text-align: left;
 }
 .result-banner h2 {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  justify-content: flex-start;
-  gap: 10px;
-  margin: 0 0 10px;
-  font-size: 2.4em;
+  gap: 8px;
+  margin: 0;
+  color: var(--risk);
+  font-size: 2.25em;
   line-height: 1.2;
   font-weight: 850;
-  white-space: nowrap;
   letter-spacing: -1px;
 }
 .result-banner h2 small {
+  color: #111;
   font-size: 0.48em;
   letter-spacing: -0.5px;
 }
 .result-banner p {
+  grid-column: 1 / -1;
   margin: 0;
-  font-size: 1em;
+  font-size: 0.94em;
   line-height: 1.5;
   word-break: keep-all;
   overflow-wrap: anywhere;
 }
-.result-banner p span {
-  display: block;
+.result-banner p span + span::before {
+  content: ' ';
+}
+.risk-scale {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: -4px;
+}
+.risk-scale-step {
+  display: grid;
+  gap: 5px;
+  text-align: center;
+  color: #596579;
+  font-size: 0.8em;
+  line-height: 1.2;
+}
+.risk-scale-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: #d4d8dc;
+}
+.risk-scale-step.is-filled .risk-scale-bar {
+  background: var(--risk);
+}
+.risk-scale-step.is-current {
+  color: var(--risk);
+  font-weight: 800;
 }
 .result-section {
   margin-top: 24px;
@@ -553,7 +581,7 @@ textarea::placeholder {
 }
 .evidence-list {
   display: grid;
-  gap: 14px;
+  gap: 11px;
   list-style: none;
   padding: 0;
   margin: 0;
@@ -562,13 +590,13 @@ textarea::placeholder {
   position: relative;
   background: var(--panel);
   border-radius: 12px;
-  padding: 18px 16px 20px 72px;
+  padding: 14px 14px 16px;
 }
 .evidence-title {
   display: flex;
   align-items: center;
   gap: 9px;
-  min-height: 42px;
+  min-height: 30px;
   word-break: keep-all;
   overflow-wrap: anywhere;
   margin: 0 0 8px;
@@ -577,21 +605,18 @@ textarea::placeholder {
   line-height: 1.3;
 }
 .factor-symbol {
-  position: absolute;
-  top: 18px;
-  left: 16px;
-  width: 42px;
-  height: 42px;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--navy);
+  background: var(--risk);
   color: white;
   flex-shrink: 0;
 }
 .factor-symbol img {
-  width: 27px;
-  height: 27px;
+  width: 20px;
+  height: 20px;
   object-fit: contain;
 }
 .factor-symbol img[src="/assets/risk-impersonation.png"] {
@@ -600,7 +625,7 @@ textarea::placeholder {
 .evidence-item p {
   margin: 0;
   font-size: 0.94em;
-  line-height: 1.55;
+  line-height: 1.4;
   word-break: keep-all;
   overflow-wrap: anywhere;
 }
@@ -709,22 +734,16 @@ textarea::placeholder {
 }
 @media (max-width: 360px) {
   .result-banner {
-    grid-template-columns: 72px minmax(0, 1fr);
-    padding-inline: 20px;
+    grid-template-columns: 60px minmax(0, 1fr);
+    padding-inline: 18px;
     gap: 14px;
   }
   .result-symbol {
-    width: 72px;
-    height: 72px;
+    width: 60px;
+    height: 60px;
   }
   .result-banner h2 {
-    font-size: 2.2em;
-  }
-  .evidence-item {
-    padding-left: 16px;
-  }
-  .evidence-title {
-    padding-left: 56px;
+    font-size: 1.9em;
   }
   .result-buttons {
     gap: 10px;
@@ -734,22 +753,16 @@ textarea::placeholder {
   }
 }
 .large-text .result-banner {
-  grid-template-columns: 72px minmax(0, 1fr);
-  padding-inline: 20px;
+  grid-template-columns: 60px minmax(0, 1fr);
+  padding-inline: 18px;
   gap: 14px;
 }
 .large-text .result-symbol {
-  width: 72px;
-  height: 72px;
+  width: 60px;
+  height: 60px;
 }
 .large-text .result-banner h2 {
-  font-size: 2em;
-}
-.large-text .evidence-item {
-  padding-left: 16px;
-}
-.large-text .evidence-title {
-  padding-left: 56px;
+  font-size: 1.8em;
 }
 .large-text .result-buttons button {
   white-space: normal;

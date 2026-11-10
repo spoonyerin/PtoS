@@ -46,6 +46,19 @@ export function AnalysisResult({
             ))}
           </p>
         </div>
+        {result.risk_level !== 'insufficient_information' && (
+          <div className="risk-scale" aria-hidden="true">
+            {(['normal', 'suspicious', 'dangerous'] as const).map((level, index) => {
+              const current = ['normal', 'suspicious', 'dangerous'].indexOf(result.risk_level)
+              return (
+                <span key={level} className={`risk-scale-step${index <= current ? ' is-filled' : ''}${level === result.risk_level ? ' is-current' : ''}`}>
+                  <span className="risk-scale-bar" />
+                  {riskLevels[level].label}
+                </span>
+              )
+            })}
+          </div>
+        )}
       </div>
       <div className="result-section result-findings">
         <h3>발견된 위험 요소</h3>
