@@ -36,12 +36,14 @@ test('수동 시작·실제 재생 이벤트·멈춤·처음부터 재시작과 
   fireEvent.click(screen.getByRole('button'))
   expect(spoken[1].text).toBe(spoken[0].text)
 })
-test('로컬 한국어 음성이 없으면 외부 음성으로 우회하지 않는다', () => {
+test('온라인 한국어 음성도 선택하고 변경한 속도로 읽는다', () => {
   getVoices.mockReturnValue([{ lang: 'ko-KR', localService: false }])
   render(<VoiceGuide result={result} />)
   fireEvent.click(screen.getByRole('button'))
-  expect(spoken).toHaveLength(0)
-  expect(screen.getByRole('status')).toHaveTextContent('한국어 음성이 준비되지')
+  expect(spoken).toHaveLength(1)
+  expect(spoken[0].voice?.localService).toBe(false)
+  expect(spoken[0].rate).toBe(1.05)
+  expect(screen.getByRole('button')).toHaveAccessibleDescription(/전송될 수 있어요/)
 })
 test('순차 재생 완료와 오류를 처리한다', () => {
   render(<VoiceGuide result={result} />)
@@ -94,4 +96,16 @@ test('정상 결과도 안전을 보장하지 않고 대응이 없으면 별도 
   const sections = buildSpeechSections({ ...result, risk_level: 'normal', action_guidance: [] })
   expect(sections[0]).toContain('안전을 보장하는 것은 아니니')
   expect(sections[1]).toContain('요청 출처를 별도로 확인해 주세요.')
+})
+
+
+test('한국어 음성이 없으면 다른 언어로 재생하지 않고 재시도 때 목록을 다시 확인한다', () => {
+  getVoices.mockReturnValue([{ name: 'English Neural', lang: 'en-US', localService: false }])
+  render(<VoiceGuide result={result} />)
+  fireEvent.click(screen.getByRole('button'))
+  expect(spoken).toHaveLength(0)
+  expect(screen.getByRole('status')).toHaveTextContent('한국어 음성이 준비되지')
+  getVoices.mockReturnValue([{ name: 'Korean', lang: 'ko-KR', localService: true }])
+  fireEvent.click(screen.getByRole('button'))
+  expect(spoken).toHaveLength(1)
 })

@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { AnalysisResponse } from '../api/types'
 import { buildSpeechSections } from '../speechScript'
+import { selectKoreanVoice } from '../speechVoice'
 
 export function VoiceGuide({ result }: { result: AnalysisResponse }) {
   const [state, setState] = useState<'idle' | 'starting' | 'playing'>('idle')
   const [message, setMessage] = useState('')
+  const noticeId = useId()
   const session = useRef(0)
   const active = useRef(false)
   const utterance = useRef<SpeechSynthesisUtterance | null>(null)
@@ -66,10 +68,8 @@ export function VoiceGuide({ result }: { result: AnalysisResponse }) {
 
     const synth = window.speechSynthesis
 
-    // 외부 공급자로 자동 전송하지 않고 한국어 로컬 음성만 선택합니다.
-    const voice = synth.getVoices().find(
-      item => /^ko(?:-|_|$)/i.test(item.lang) && item.localService,
-    )
+    // 재생할 때 최신 목록을 평가합니다. 온라인 음성도 후보에 포함합니다.
+    const voice = selectKoreanVoice(synth.getVoices())
 
     if (!voice) {
       setMessage(
@@ -97,7 +97,7 @@ export function VoiceGuide({ result }: { result: AnalysisResponse }) {
       const item = new SpeechSynthesisUtterance(sections[index])
       item.voice = voice!
       item.lang = 'ko-KR'
-      item.rate = 0.95
+      item.rate = 1.05
 
       item.onstart = () => {
         if (id === session.current) setState('playing')
@@ -137,6 +137,7 @@ export function VoiceGuide({ result }: { result: AnalysisResponse }) {
         className={`voice-control${playing ? ' is-playing' : ''}`}
         aria-label={busy ? '음성안내 멈춤' : '음성안내 듣기'}
         aria-pressed={busy}
+        aria-describedby={noticeId}
         onClick={start}
       >
         <span className="voice-disc" aria-hidden="true">
@@ -147,6 +148,10 @@ export function VoiceGuide({ result }: { result: AnalysisResponse }) {
         <span>{busy ? '멈춤' : '듣기'}</span>
       </button>
 
+      <p id={noticeId} className="voice-notice">
+        음성에 따라 안내 대본이 브라우저·기기의 음성 서비스로 전송될 수 있어요.
+        입력 원문과 주소는 읽지 않아요.
+      </p>
       {message && (
         <p className="voice-feedback" role="status">
           {message}
