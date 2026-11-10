@@ -57,7 +57,6 @@ function ShareSheet({ text, large, onClose }: { text: string; large: boolean; on
       }
       // Call directly from a click, preserving the browser's user activation.
       await navigator.share(shareData)
-      setNotice('공유 창을 닫았어요. 전송 여부는 선택한 앱에서 확인해 주세요.')
     } catch (error) {
       setNotice(error instanceof Error && error.name === 'AbortError'
         ? '공유를 취소했어요. 다시 공유하거나 내용을 복사할 수 있어요.'
