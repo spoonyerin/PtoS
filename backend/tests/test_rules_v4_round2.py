@@ -63,8 +63,9 @@ def test_credential_forms_negative(text):
 # 알려진 한계(현재 판정 기록용): 정상 인증번호·로그인 안내도 민감정보 "입력" 요구로 보아 suspicious가 된다.
 # 규칙은 발신처가 공식인지, 사용자가 직접 요청한 인증인지 알 수 없다. 정책을 바꾸면 이 기대값을 함께 고친다.
 # 1·3번은 2차 A(입력바랍니다형·조건형)부터 suspicious, 2·5번은 그 전부터 suspicious였다. 4번은 요구가 없어 정보 부족.
+# 1번은 2차 E(정상 인증번호 안내 예외)로 다시 정보 부족이 됐다. 2번은 공유 금지 경고가 없어 E가 적용되지 않는다.
 @pytest.mark.parametrize("text,level,rule_id", [
-    ("[가상서비스] 인증번호 [인증번호]를 입력바랍니다. 타인에게 알려주지 마세요.", "suspicious", "credential_request-v1"),
+    ("[가상서비스] 인증번호 [인증번호]를 입력바랍니다. 타인에게 알려주지 마세요.", "insufficient_information", None),
     ("[가상서비스] 본인 확인을 위해 인증번호 [인증번호]를 입력해 주세요.", "suspicious", "credential_request-v1"),
     ("비밀번호를 입력해야 로그인이 가능합니다.", "suspicious", "credential_request-required-v1"),
     ("[가상서비스] 인증번호는 [인증번호]입니다. 타인에게 알려주지 마세요.", "insufficient_information", None),
@@ -207,6 +208,63 @@ def test_send_form_needs_credential_target(text):
 ])
 def test_known_limitation_app_install_forms_not_detected(text):
     assert F.APP_INSTALL not in {e.factor_code for e in analyze(text).evidence}
+
+
+# --- E: 정상 인증번호 안내 예외 ---
+NOTICE_REASON = "인증번호를 직접 보여 주고 타인 공유를 경고하는 안내라 입력 요구로 채택하지 않았어요."
+
+
+@pytest.mark.parametrize("text", [
+    "[가상서비스] 인증번호 [인증번호]를 입력바랍니다. 타인에게 알려주지 마세요.",
+    "[가상몰] 인증번호 [인증번호]를 입력바랍니다. 직원을 포함해 누구에게도 알려주지 마세요.",
+    "[가상앱] 로그인 인증번호 704215를 화면에 입력해 주세요. 다른 사람과 공유하지 마세요.",
+])
+def test_code_notice_exception_removes_input_request(text):
+    result = analyze(text)
+    assert F.CREDENTIAL_REQUEST not in {e.factor_code for e in result.evidence}
+    assert result.risk_level.value == "insufficient_information"
+    assert any(reason.startswith(NOTICE_REASON) for reason in result.input_assessment.reasons)
+
+
+# 사기범이 정상 인증번호 안내를 흉내 낸 가상 문장. 예외가 적용되지 않아 suspicious로 남아야 한다.
+@pytest.mark.parametrize("text", [
+    # 조건 3: 주소가 있다.
+    "[가상은행] 인증번호 [인증번호]를 입력바랍니다. 타인에게 알려주지 마세요. http://example.invalid",
+    # 조건 4: 번호를 보내라는 요구가 있다.
+    "[가상은행] 인증번호 [인증번호]를 입력바랍니다. 타인에게 알려주지 마세요. 입력이 안 되면 인증번호를 회신해 주세요.",
+    # 조건 5: 인증번호 외 민감정보가 있다.
+    "[가상은행] 비밀번호와 인증번호 [인증번호]를 입력바랍니다. 타인에게 알려주지 마세요.",
+    # 조건 6: 긴급·불이익 근거가 있다.
+    "[가상은행] 오늘 안에 인증번호 [인증번호]를 입력바랍니다. 타인에게 알려주지 마세요.",
+    # 조건 7: 제3자·다른 경로로 번호를 확인한다는 언급이 있다(M5).
+    "[가상은행] 인증번호 482913을 입력해 주세요. 타인에게 알려주지 마세요. 상담원이 곧 전화로 번호를 확인합니다.",
+    "[가상은행] 인증번호 [인증번호]를 입력바랍니다. 타인에게 알려주지 마세요. 확인 후 고객센터에서 연락드립니다.",
+    # 조건 2: 공유 금지 경고가 교육 인용 안에만 있다.
+    "[가상은행] 인증번호 [인증번호]를 입력바랍니다. '타인에게 알려주지 마세요'라는 안내는 피싱 예방 교육 문구예요.",
+    # 빈 줄로 나뉜 여러 문단에는 적용하지 않는다.
+    "[가상은행] 인증번호 [인증번호]를 입력바랍니다.\n\n타인에게 알려주지 마세요.",
+])
+def test_code_notice_exception_not_applied_to_mimicry(text):
+    result = analyze(text)
+    assert F.CREDENTIAL_REQUEST in {e.factor_code for e in result.evidence}
+    assert result.risk_level.value == "suspicious"
+    assert not any(reason.startswith(NOTICE_REASON) for reason in result.input_assessment.reasons)
+    assert_spans(text, result)
+
+
+# 알려진 한계(현재 판정 기록용): 아래 흉내 문장은 E 이전부터 민감정보 요구 근거가 없어 정보 부족이다. E와 무관하다.
+@pytest.mark.parametrize("text", [
+    # "이 번호를 회신"처럼 대명사로 가리키면 대상어(인증번호)와 이어지지 않는다(M1).
+    "[가상은행] 이번 인증번호는 [인증번호]예요. 다른 사람에게 알려주지 마세요. 확인을 위해 이 번호를 회신해 주세요.",
+    # "입력하지 않으면"은 조건형이라 요구가 아니다(M4).
+    "[가상은행] 인증번호 [인증번호]를 입력하지 않으면 계좌가 정지됩니다. 타인에게 알려주지 마세요.",
+    # "알려주세요"가 대상어와 다른 구절에 있다(M6).
+    "[가상은행] 이번 인증번호는 [인증번호]예요. 다른 사람에게 알려주지 마세요. 단, 담당 직원에게는 알려주세요.",
+])
+def test_known_limitation_code_mimicry_without_request_evidence(text):
+    result = analyze(text)
+    assert F.CREDENTIAL_REQUEST not in {e.factor_code for e in result.evidence}
+    assert result.risk_level.value == "insufficient_information"
 
 
 def test_credential_form_spans_with_crlf_and_emoji():

@@ -170,6 +170,46 @@ class RuleScan:
     assessment: InputAssessment
 
 
+# rules-dev-v4 2차 E(임시): 정상 인증번호 안내 예외. 번호를 직접 보여 주고 공유 금지를 경고하며, 주소·다른 요구·제3자 확인
+# 언급이 없을 때만 "입력" 요구 근거를 뺀다. 발신처가 공식인지는 확인하지 않는다.
+CODE_SHOWN = re.compile(r"(?:인증\s*번호|OTP|인증\s*코드)\s*(?:는|은|:|：)?\s*(?:\[[^\]\r\n]{1,10}\]|(?<!\d)\d{4,8}(?!\d))", re.IGNORECASE)
+SHARE_WARNING = re.compile(r"(?:알려\s*주지|알리지|공유하지|전달하지|보내지|노출하지|가르쳐\s*주지)\s*(?:마|말|않)|노출\s*금지|공유\s*금지")
+# 번호를 보내라는 요구(대상어와 같은 구절이 아니어도 문자 어디든). "알려주지 마세요"는 걸리지 않는다.
+CODE_SEND_REQUEST = re.compile(r"(?:회신|전달|전송|공유|제공)\s*(?:해\s*주|하세요|하십시오|바랍니다|요망)"
+                               r"|(?:알려|보내|넘겨|건네)\s*(?:주세요|주십시오|줘|세요|십시오)")
+OTHER_CREDENTIAL = re.compile(r"비밀\s*번호|계좌\s*번호|카드\s*번호|주민\s*등록\s*번호|보안\s*카드|개인\s*정보")
+# 제3자·다른 경로로 번호를 확인한다는 언급. 공유 금지 경고 문장 안의 언급("직원에게도 알려주지 마세요")은 세지 않는다.
+THIRD_PARTY = re.compile(r"상담원|상담사|직원|담당자|고객\s*센터|콜\s*센터|전화로|통화")
+# 근거 문구에는 대상어 "인증번호"가 들어 있으므로 동사로서의 "인증"만 본다.
+INPUT_ONLY = re.compile(r"입력|인증(?!\s*(?:번호|정보|코드))")
+BLANK_PARAGRAPH = re.compile(r"\r?\n[ \t]*\r?\n")
+
+
+def code_notice_exception(prose: str, findings: list[Finding], has_url: bool, ignored: list[tuple[int, int]]) -> bool:
+    def outside(match):
+        return not any(match.start() < right and match.end() > left for left, right in ignored)
+
+    credential = [f for f in findings if f.evidence.factor_code == FactorCode.CREDENTIAL_REQUEST]
+    if not credential or has_url or BLANK_PARAGRAPH.search(prose):
+        return False
+    if any(f.evidence.factor_code in ACTION_CODES - {FactorCode.CREDENTIAL_REQUEST} or f.evidence.factor_code == FactorCode.URGENCY_THREAT
+           for f in findings):
+        return False
+    if not any(outside(m) for m in CODE_SHOWN.finditer(prose)):
+        return False
+    warnings = [m for m in SHARE_WARNING.finditer(prose) if outside(m)]
+    if not warnings:
+        return False
+    if CODE_SEND_REQUEST.search(prose) or OTHER_CREDENTIAL.search(prose):
+        return False
+    if any(not INPUT_ONLY.search(f.evidence.snippet) or CODE_SEND_REQUEST.search(f.evidence.snippet) for f in credential):
+        return False
+    warning_sentences = [m.span() for m in re.finditer(r"[^.!?\n]+", prose) if any(m.start() <= w.start() < m.end() for w in warnings)]
+    if any(not any(left <= t.start() < right for left, right in warning_sentences) for t in THIRD_PARTY.finditer(prose)):
+        return False
+    return True
+
+
 def educational_quotes(text: str) -> list[tuple[int, int]]:
     """교육·주의 대상으로 명시한 인용만 제외한다. 문서 전체를 제외하지 않는다."""
     spans = []
@@ -310,6 +350,9 @@ def scan_rules(text: str, *, url_spans: list[tuple[int, int]] | None = None) -> 
         if match and not NEGATION.search(prefix[match.start():]):
             add(FactorCode.LINK_CLICK, left - len(prefix) + match.start(), right, rule=rule)
 
+    code_notice = code_notice_exception(prose, findings, bool(urls), ignored)
+    if code_notice:
+        findings = [f for f in findings if f.evidence.factor_code != FactorCode.CREDENTIAL_REQUEST]
     findings.sort(key=lambda finding: (finding.evidence.start, finding.evidence.end, finding.evidence.factor_code))
     contexts, bridged = message_contexts(prose,
         [(f.evidence.factor_code, f.evidence.start, f.evidence.end) for f in findings],
@@ -323,6 +366,8 @@ def scan_rules(text: str, *, url_spans: list[tuple[int, int]] | None = None) -> 
         assessment = InputAssessment(status="fragment", reasons=["누가 무엇을 요구하는지 확인하기 어려워요. 보낸 사람과 앞뒤 내용을 포함해 입력해주세요."])
     if ignored:
         assessment.reasons.append("교육·주의 대상으로 명시된 인용 구절은 실제 요구로 채택하지 않았어요.")
+    if code_notice:
+        assessment.reasons.append("인증번호를 직접 보여 주고 타인 공유를 경고하는 안내라 입력 요구로 채택하지 않았어요. 발신처가 공식인지는 확인하지 못했어요.")
     if bridged:
         assessment.reasons.append("명의 주장만 있는 도입 문단과 바로 다음의 직접 요구를 제한된 연속 문맥 규칙으로 연결했어요. 표시 없는 화자 전환까지 확인한 것은 아니에요.")
     return RuleScan(findings=findings, has_url=bool(urls), assessment=assessment)
