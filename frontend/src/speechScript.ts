@@ -6,7 +6,7 @@ import { isGoogleEvidence } from './components/GoogleAdvisory'
 // 입력 원문·근거 구절·사용자 URL은 대본에 넣지 않습니다.
 const introductions = {
   dangerous: '분석 결과, 위험 단계예요. 위험 신호가 발견됐어요. 요청에 응하기 전에 꼭 확인해 주세요.',
-  suspicious: '분석 결과, 의심 단계예요. 수상한 부분이 있어요. 요청한 상대를 직접 확인해 주세요.',
+  suspicious: '분석 결과, 의심 단계예요. 수상한 부분이 있어요. 직접 확인이 필요해요.',
   normal: '분석 결과, 정상 단계예요. 현재까지 뚜렷한 위험 신호는 보이지 않아요. 그래도 안전을 보장하는 것은 아니니, 개인정보를 요구하면 주의해 주세요.',
   insufficient_information: '정보가 부족해서 아직 판단하기 어려워요. 안전하다는 뜻은 아니에요. 요청한 곳이 어디인지 별도로 확인해 주세요.',
 }
