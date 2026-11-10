@@ -1,4 +1,4 @@
-import { useRef, type FormEvent } from 'react'
+import { useLayoutEffect, useRef, type FormEvent } from 'react'
 import { characterCount, MAX_CONTENT_LENGTH } from '../input'
 import type { InputType } from '../api/types'
 import { ScreenshotInput } from './ScreenshotInput'
@@ -15,10 +15,45 @@ type Props = {
   onOcrSubmit: (text: string) => void
   onReset: () => void
 }
+function fitUrlField(field: HTMLTextAreaElement) {
+  if (!field.clientWidth) return
+  field.style.height = 'auto'
+  field.style.height = `${field.scrollHeight}px`
+}
+
 export function AnalysisForm(props: Props) {
   const textArea = useRef<HTMLTextAreaElement>(null)
   const count = characterCount(props.content)
   const url = props.inputType === 'url'
+  useLayoutEffect(() => {
+    const field = textArea.current
+    if (!field) return
+    if (url) fitUrlField(field)
+    else field.style.removeProperty('height')
+  }, [url, props.content])
+  useLayoutEffect(() => {
+    const field = textArea.current
+    if (!url || !field || typeof ResizeObserver === 'undefined') return
+    let frame = 0
+    let measured = ''
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const style = getComputedStyle(field)
+        const next = `${field.clientWidth}:${style.fontSize}:${style.lineHeight}`
+        if (next === measured) return
+        measured = next
+        fitUrlField(field)
+      })
+    })
+    observer.observe(field)
+    const shell = field.closest('.app-shell')
+    if (shell) observer.observe(shell)
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+    }
+  }, [url])
   function submit(event: FormEvent) {
     event.preventDefault()
     if (!props.content.trim() || count > MAX_CONTENT_LENGTH)

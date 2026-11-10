@@ -288,8 +288,11 @@ textarea::placeholder {
   letter-spacing: -0.6px;
 }
 .url-screen textarea {
-  min-height: 66px;
-  height: 66px;
+  min-height: 72px;
+  height: auto;
+  overflow: hidden;
+  resize: none;
+  overflow-wrap: anywhere;
 }
 .text-field textarea {
   padding-right: 48px;
