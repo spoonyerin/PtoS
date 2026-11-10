@@ -53,6 +53,8 @@ MONEY_VERB = r"(?:송금|입금|이체)"
 ACTIONS = {
     FactorCode.CREDENTIAL_REQUEST: re.compile(
         rf"{GIVE}|{CREDENTIAL_VERB}{DO}|{CREDENTIAL_VERB}\s*(?:바랍니다|요망){BOUND}"
+        # 2차 C(임시): "인증번호를 보내세요". 금전 SEND에는 넣지 않았다.
+        rf"|보내\s*(?:세요|십시오){BOUND}"
         # 연결형: "입력해 해제하세요"처럼 같은 구절 뒤에 긍정 요구 어미가 있을 때만.
         rf"|(?P<chain>{CREDENTIAL_VERB}해\s+[^.!?\n]{{0,12}}?(?:{DO}|(?:바랍니다|요망){BOUND}))"
         rf"|(?P<required>{CREDENTIAL_VERB}(?:해야|하셔야|하여야)\s*[^.!?\n]{{0,15}}?{REQUIRED_RESULT})", re.IGNORECASE),
@@ -69,8 +71,13 @@ ACTIONS = {
                                       rf"|(?P<confirm>(?:확인|조회)\s*(?:{DO}|(?:바랍니다|부탁드립니다|부탁드려요|요망){BOUND}|해\s*봐요?{BOUND}))"
                                       rf"|(?P<guided>(?:눌러|클릭해|접속해|들어가)서?[^.!?\n]{{0,30}}?(?:{END}|{DO}|해\s*봐요?|부탁(?:해요?|드려요|드립니다)|줘){BOUND}"
                                       rf"|(?<![가-힣])(?!{AVOID})[가-힣]{{1,8}}?\s*(?:{DO}|(?:바랍니다|요망){BOUND}))", re.IGNORECASE),
-    FactorCode.APP_INSTALL: re.compile(rf"(?:설치|다운로드|실행|허용){DO}|(?:설치|다운로드)받아\s*{END}{BOUND}", re.IGNORECASE),
+    FactorCode.APP_INSTALL: re.compile(rf"(?:설치|다운로드|실행|허용){DO}|(?:설치|다운로드)받아\s*{END}{BOUND}"
+                                       # 2차 C(임시): 필요형. 같은 구절에 원격 지원·제어 또는 APK가 있을 때만 채택한다(아래 REMOTE_APP).
+                                       rf"|(?P<required>(?:설치|다운로드|실행)\s*(?:이|가)?\s*필요(?:합니다|해요|하오니|하니){BOUND})",
+                                       re.IGNORECASE),
 }
+# 정상 안내("공식 앱 설치가 필요합니다")와 구분하려고 앱 설치 필요형은 원격 접속 앱·APK일 때만 요구로 본다.
+REMOTE_APP = re.compile(r"원격\s*(?:지원|제어)|APK", re.IGNORECASE)
 # "여기·이곳"은 메시지에 URL이 있을 때만, 명시적 접속 동사(눌러, 접속해 등)와 함께 링크 대상으로 본다.
 POINTER = re.compile(r"여기|이곳")
 EXPLICIT_LINK = re.compile(r"클릭|접속|방문|눌러|누르|열어|들어가")
@@ -260,6 +267,8 @@ def scan_rules(text: str, *, url_spans: list[tuple[int, int]] | None = None) -> 
                     continue
                 # 구절은 문장부호에서 잘리므로 반말 명령 뒤 원문이 물음표면 질문("이체해?")으로 보고 제외한다.
                 if groups.get("banmal") and re.match(r"\s*[?？]", prose[start + action.end():]):
+                    continue
+                if code == FactorCode.APP_INSTALL and groups.get("required") and not REMOTE_APP.search(clause):
                     continue
                 left, right = start + target[0], start + action.end()
                 if not overlaps(left, right, ignored):

@@ -153,6 +153,62 @@ def test_known_limitation_payment_billing_forms_not_detected(text):
     assert F.MONEY_REQUEST not in {e.factor_code for e in analyze(text).evidence}
 
 
+# --- C: 앱 설치 필요형(원격 접속 앱·APK만)과 "보내세요" ---
+
+@pytest.mark.parametrize("text,code,rule_id", [
+    ("[가상지원센터] 점검을 위해 원격제어 앱 설치가 필요합니다.", F.APP_INSTALL, "app_install-required-v1"),
+    ("확인 작업에는 원격 지원 프로그램 설치가 필요해요.", F.APP_INSTALL, "app_install-required-v1"),
+    ("보안 모듈 APK 다운로드가 필요합니다.", F.APP_INSTALL, "app_install-required-v1"),
+    ("확인용으로 받으신 인증번호를 이 번호로 보내세요.", F.CREDENTIAL_REQUEST, "credential_request-v1"),
+])
+def test_app_install_and_send_forms(text, code, rule_id):
+    result = analyze(text)
+    assert rule_id in rule_ids(result, code)
+    assert result.risk_level.value in {"suspicious", "dangerous"}
+    assert_spans(text, result)
+
+
+def test_remote_app_required_with_credential_is_dangerous():
+    text = "가상은행 고객센터입니다. 계좌 점검에는 원격제어 프로그램 다운로드가 필요해요. 끝나면 OTP를 보내십시오."
+    result = analyze(text)
+    assert {F.APP_INSTALL, F.CREDENTIAL_REQUEST} <= {e.factor_code for e in result.evidence}
+    assert result.risk_level.value == "dangerous"
+    assert_spans(text, result)
+
+
+@pytest.mark.parametrize("text", [
+    "앱 설치가 필요 없습니다.",
+    "[가상은행] 새 버전 앱 업데이트가 필요합니다. 앱스토어에서 업데이트해 주세요.",
+    "[가상공단] 모바일 신분증을 쓰려면 공식 앱 설치가 필요합니다.",
+    "[가상카드] 앱을 설치하고 로그인하면 이용내역을 볼 수 있어요.",
+    "[가상학교] 원격수업 앱을 설치하고 수업 10분 전에 접속해 주세요.",
+    "원격지원 프로그램 설치는 필요하지 않습니다.",
+    "'원격제어 앱 설치가 필요합니다'라는 문자는 사기예요.",
+])
+def test_app_install_forms_negative(text):
+    result = analyze(text)
+    assert F.APP_INSTALL not in {e.factor_code for e in result.evidence}
+    assert result.risk_level.value == "insufficient_information"
+
+
+@pytest.mark.parametrize("text", [
+    "사진은 문자로 보내세요.",
+    "인증번호는 아무에게도 보내지 마세요.",
+])
+def test_send_form_needs_credential_target(text):
+    assert F.CREDENTIAL_REQUEST not in {e.factor_code for e in analyze(text).evidence}
+
+
+# 알려진 한계(현재 판정 기록용): 원격 접속 앱·APK가 아닌 설치 필요형과 설치 연결형("설치하고 ~해 주세요")은
+# 정상 안내 오탐(공식 앱 설치 안내, 수업 앱 안내) 때문에 잡지 않는다.
+@pytest.mark.parametrize("text", [
+    "[가상수사과] 조사용 프로그램 다운로드가 필요합니다.",
+    "[가상센터] 점검 앱을 설치하고 바로 실행 화면을 열어 주세요.",
+])
+def test_known_limitation_app_install_forms_not_detected(text):
+    assert F.APP_INSTALL not in {e.factor_code for e in analyze(text).evidence}
+
+
 def test_credential_form_spans_with_crlf_and_emoji():
     text = "🔒 [가상은행]\r\n😀 카드번호를 입력바랍니다."
     result = analyze(text)
