@@ -494,20 +494,22 @@ textarea::placeholder {
 }
 .result-banner {
   display: grid;
-  grid-template-columns: 70px minmax(0, 1fr);
-  gap: 16px 24px;
+  grid-template-columns: 64px minmax(0, 1fr) 48px;
+  gap: 16px 12px;
   align-items: center;
   background: var(--tint);
   border-radius: 16px;
-  padding: 20px 22px 16px;
+  padding: 20px 18px 16px;
   margin: 0 0 26px;
 }
 .result-symbol {
+  grid-column: 1;
+  grid-row: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 70px;
-  height: 70px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   background: var(--risk);
   color: white;
@@ -530,13 +532,15 @@ textarea::placeholder {
   text-align: left;
 }
 .result-banner h2 {
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 8px;
   margin: 0;
   color: var(--risk);
-  font-size: 2.25em;
+  font-size: 2.1em;
   line-height: 1.2;
   font-weight: 850;
   letter-spacing: -1px;
@@ -750,13 +754,13 @@ textarea::placeholder {
 }
 @media (max-width: 360px) {
   .result-banner {
-    grid-template-columns: 60px minmax(0, 1fr);
-    padding-inline: 18px;
-    gap: 14px;
+    grid-template-columns: 52px minmax(0, 1fr) 44px;
+    padding-inline: 16px;
+    gap: 14px 8px;
   }
   .result-symbol {
-    width: 60px;
-    height: 60px;
+    width: 52px;
+    height: 52px;
   }
   .result-banner h2 {
     font-size: 1.9em;
@@ -769,13 +773,13 @@ textarea::placeholder {
   }
 }
 .large-text .result-banner {
-  grid-template-columns: 60px minmax(0, 1fr);
-  padding-inline: 18px;
-  gap: 14px;
+  grid-template-columns: 52px minmax(0, 1fr) 44px;
+  padding-inline: 16px;
+  gap: 14px 8px;
 }
 .large-text .result-symbol {
-  width: 60px;
-  height: 60px;
+  width: 52px;
+  height: 52px;
 }
 .large-text .result-banner h2 {
   font-size: 1.8em;
@@ -993,4 +997,90 @@ dialog::backdrop {
 
 .share-sheet-actions button:disabled {
   cursor: not-allowed;
+}
+
+/* TTS controls are currently an explicit UI prototype. */
+.result-card.insufficient_information .result-banner h2 {
+  font-size: 1.65em;
+}
+.voice-control {
+  grid-column: 3;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  align-self: start;
+  gap: 5px;
+  min-width: 44px;
+  min-height: 68px;
+  padding: 0;
+  color: #111;
+  background: transparent;
+  font-size: 0.8em;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.voice-disc {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: white;
+  color: var(--risk);
+}
+.voice-glyph {
+  display: block;
+  width: 28px;
+  height: 28px;
+  background: currentColor;
+  mask: var(--voice-icon) center / contain no-repeat;
+  -webkit-mask: var(--voice-icon) center / contain no-repeat;
+}
+.voice-ear {
+  --voice-icon: url('/assets/result-ear.svg');
+}
+.voice-stop {
+  --voice-icon: url('/assets/result-stop.svg');
+  width: 16px;
+  height: 16px;
+}
+.voice-control.is-playing .voice-disc {
+  color: white;
+  background: var(--risk);
+}
+.voice-control.is-playing .voice-disc::before,
+.voice-control.is-playing .voice-disc::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border: 2px solid var(--risk);
+  border-radius: 50%;
+  animation: voice-pulse 1.8s ease-out infinite;
+  pointer-events: none;
+}
+.voice-control.is-playing .voice-disc::after {
+  animation-delay: 0.9s;
+}
+@keyframes voice-pulse {
+  from { transform: scale(0.94); opacity: 0.45; }
+  to { transform: scale(1.24); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-control.is-playing .voice-disc::before,
+  .voice-control.is-playing .voice-disc::after {
+    animation: none;
+    transform: none;
+    opacity: 0.3;
+  }
+  .voice-control.is-playing .voice-disc::after {
+    display: none;
+  }
+}
+@media (max-width: 360px) {
+  .result-card.insufficient_information .result-banner h2 {
+    font-size: 1.45em;
+  }
 }

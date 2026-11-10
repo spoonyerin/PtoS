@@ -46,6 +46,27 @@ for (const [level, label] of [
       await expect(icon).toHaveCSS('filter', 'none')
     }
     await page.screenshot({ path: `test-results/result-${level}.png`, fullPage: true })
+    const listen = page.getByRole('button', { name: '음성안내 듣기', exact: true })
+    await expect(listen).toHaveAttribute('aria-pressed', 'false')
+    await page.screenshot({ path: `test-results/voice-${level}-before.png`, fullPage: true })
+    await listen.click()
+    const stop = page.getByRole('button', { name: '음성안내 멈춤', exact: true })
+    await expect(stop).toHaveAttribute('aria-pressed', 'true')
+    expect(await page.locator('.voice-disc').evaluate(el => getComputedStyle(el, '::before').animationName)).toBe('voice-pulse')
+    // Freeze a visible animation frame for a reproducible UI preview.
+    await page.locator('.voice-disc').evaluate(el => {
+      for (const animation of el.getAnimations({ subtree: true })) {
+        animation.pause()
+        animation.currentTime = 450
+      }
+    })
+    await page.screenshot({ path: `test-results/voice-${level}-playing.png`, fullPage: true })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    expect(await page.locator('.voice-disc').evaluate(el => getComputedStyle(el, '::before').animationName)).toBe('none')
+    await stop.click()
+    await expect(listen).toBeVisible()
+    await expect(page.getByRole('status')).toHaveCount(0)
+    await page.emulateMedia({ reducedMotion: 'no-preference' })
     await page.setViewportSize({ width: 320, height: 740 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     // 좁은 화면과 큰 글씨 모드에서도 판정과 설명이 배너 밖으로 나오지 않는다.

@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import type { AnalysisResponse } from '../api/types'
 import { riskLevels } from '../riskLevels'
 import { UrlResults } from './UrlResults'
+import { VoiceGuidePreview } from './VoiceGuidePreview'
 import { GoogleAdvisory, isGoogleEvidence } from './GoogleAdvisory'
 import { factorDisplay, resultDescriptions } from '../resultPresentation'
 
@@ -46,6 +47,7 @@ export function AnalysisResult({
             ))}
           </p>
         </div>
+        <VoiceGuidePreview key={result.request_id} />
         {result.risk_level !== 'insufficient_information' && (
           <div className="risk-scale" aria-hidden="true">
             {(['normal', 'suspicious', 'dangerous'] as const).map((level, index) => {
