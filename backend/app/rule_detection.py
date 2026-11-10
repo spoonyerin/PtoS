@@ -41,7 +41,7 @@ PROXY_GAP = re.compile(r"확인|조회|문의|신청|변경|취소|안내|내역
 
 TARGETS = {
     FactorCode.CREDENTIAL_REQUEST: r"인증\s*(?:번호|정보)|OTP|비밀\s*번호|주민\s*등록\s*번호|계좌\s*번호|개인\s*정보|카드\s*번호|보안\s*카드",
-    FactorCode.MONEY_REQUEST: r"돈|금액|수수료|보증금|현금|대금|송금|입금|이체|결제|상품권|기프트\s*카드|\d[\d,]*\s*(?:만\s*)?원",
+    FactorCode.MONEY_REQUEST: r"돈|금액|수수료|보증금|현금|대금|송금|선?입금|이체|결제|상품권|기프트\s*카드|\d[\d,]*\s*(?:만\s*)?원",
     FactorCode.LINK_CLICK: r"링크|URL|인터넷\s*주소|아래\s*주소",
     FactorCode.APP_INSTALL: r"앱|어플(?:리케이션)?|애플리케이션|프로그램|APK|원격\s*(?:지원|제어)",
 }
@@ -49,6 +49,7 @@ TARGETS = {
 CREDENTIAL_VERB = r"(?:입력|제공|공유|전달|회신|전송|인증)"
 # 결과 서술이 와야 조건 요구로 본다("회신해야 처리됩니다"). "해야 합니다"는 기존 DO가 잡는다.
 REQUIRED_RESULT = rf"(?:됩니다|돼요|가능합니다|가능해요|할\s*수\s*있(?:습니다|어요)){BOUND}"
+MONEY_VERB = r"(?:송금|입금|이체)"
 ACTIONS = {
     FactorCode.CREDENTIAL_REQUEST: re.compile(
         rf"{GIVE}|{CREDENTIAL_VERB}{DO}|{CREDENTIAL_VERB}\s*(?:바랍니다|요망){BOUND}"
@@ -57,7 +58,13 @@ ACTIONS = {
         rf"|(?P<required>{CREDENTIAL_VERB}(?:해야|하셔야|하여야)\s*[^.!?\n]{{0,15}}?{REQUIRED_RESULT})", re.IGNORECASE),
     FactorCode.MONEY_REQUEST: re.compile(rf"{SEND}|(?:빌려|사|부쳐)\s*{END}{BOUND}|(?:송금|입금|이체|결제|납부){DO}|내세요{BOUND}"
                                          rf"|(?:좀\s*)?부탁(?:해요?|할게요?|드려요|드립니다|합니다){BOUND}"
-                                         rf"|(?P<proxy>(?<![가-힣])(?:대신\s*)?(?:좀\s*)?해\s*{END}{BOUND})", re.IGNORECASE),
+                                         rf"|(?P<proxy>(?<![가-힣])(?:대신\s*)?(?:좀\s*)?해\s*{END}{BOUND})"
+                                         # rules-dev-v4 2차 B-1(임시): 송금·입금·이체·선입금의 활용형. 결제·납부는 넣지 않았다.
+                                         rf"|{MONEY_VERB}\s*(?:바랍니다|요망){BOUND}"
+                                         # 반말 명령은 문장 끝만("송금해."). "송금해서", "송금해 놨어", "이체해?"는 제외.
+                                         rf"|(?P<banmal>{MONEY_VERB}해(?=\s*[.!~]|\s*$))"
+                                         rf"|(?P<required>(?:선?입금|송금|이체)\s*(?:이|가)?\s*필요(?:합니다|해요|하오니|하니){BOUND}"
+                                         r"|선입금\s*(?:하면|하시면|해야|하셔야|후))", re.IGNORECASE),
     FactorCode.LINK_CLICK: re.compile(rf"(?:클릭|접속|방문){DO}|(?:눌러|열어)\s*{END}{BOUND}|누르세요{BOUND}"
                                       rf"|(?P<confirm>(?:확인|조회)\s*(?:{DO}|(?:바랍니다|부탁드립니다|부탁드려요|요망){BOUND}|해\s*봐요?{BOUND}))"
                                       rf"|(?P<guided>(?:눌러|클릭해|접속해|들어가)서?[^.!?\n]{{0,30}}?(?:{END}|{DO}|해\s*봐요?|부탁(?:해요?|드려요|드립니다)|줘){BOUND}"
@@ -247,6 +254,12 @@ def scan_rules(text: str, *, url_spans: list[tuple[int, int]] | None = None) -> 
                 groups = action.groupdict()
                 # 2차(임시): 연결형·조건형은 동작어 범위 안의 부정("입력해 두지 마세요")을 요구로 보지 않는다.
                 if (groups.get("chain") or groups.get("required")) and NEGATION.search(action.group()):
+                    continue
+                # 2차 B-1(임시): 연결형·조건형 뒤 같은 구절에 교육·사기 언급이 있으면("선입금하면 수익을 준다는 말은 사기") 요구로 보지 않는다.
+                if (groups.get("chain") or groups.get("required")) and META.search(after):
+                    continue
+                # 구절은 문장부호에서 잘리므로 반말 명령 뒤 원문이 물음표면 질문("이체해?")으로 보고 제외한다.
+                if groups.get("banmal") and re.match(r"\s*[?？]", prose[start + action.end():]):
                     continue
                 left, right = start + target[0], start + action.end()
                 if not overlaps(left, right, ignored):
