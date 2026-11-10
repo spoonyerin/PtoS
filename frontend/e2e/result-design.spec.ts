@@ -1,5 +1,36 @@
 import { expect, test } from '@playwright/test'
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(SpeechSynthesisUtterance.prototype, 'voice', {
+      configurable: true,
+      writable: true,
+      value: null,
+    })
+
+    Object.defineProperty(speechSynthesis, 'getVoices', {
+      configurable: true,
+      value: () => [
+        { lang: 'ko-KR', localService: true, name: 'Test Korean' },
+      ],
+    })
+
+    Object.defineProperty(speechSynthesis, 'speak', {
+      configurable: true,
+      value: (item: SpeechSynthesisUtterance) => {
+        item.onstart?.(
+          new SpeechSynthesisEvent('start', { utterance: item }),
+        )
+      },
+    })
+
+    Object.defineProperty(speechSynthesis, 'cancel', {
+      configurable: true,
+      value: () => {},
+    })
+  })
+})
+
 // UI-only fake risk levels; the live rules do not return normal.
 for (const [level, label] of [
   ['dangerous', '위험'], ['suspicious', '의심'],

@@ -1085,3 +1085,9 @@ dialog::backdrop {
     font-size: 1.45em;
   }
 }
+
+.result-banner .voice-feedback {
+  grid-row: 4;
+  font-size: 0.85em;
+  color: #353f50;
+}
