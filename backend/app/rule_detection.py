@@ -40,13 +40,21 @@ AVOID = r"(?:주의|조심|삭제|자제|차단|신고|무시|경계|유의|거�
 PROXY_GAP = re.compile(r"확인|조회|문의|신청|변경|취소|안내|내역")
 
 TARGETS = {
-    FactorCode.CREDENTIAL_REQUEST: r"인증\s*번호|OTP|비밀\s*번호|주민\s*등록\s*번호|계좌\s*번호|개인\s*정보|카드\s*번호|보안\s*카드",
+    FactorCode.CREDENTIAL_REQUEST: r"인증\s*(?:번호|정보)|OTP|비밀\s*번호|주민\s*등록\s*번호|계좌\s*번호|개인\s*정보|카드\s*번호|보안\s*카드",
     FactorCode.MONEY_REQUEST: r"돈|금액|수수료|보증금|현금|대금|송금|입금|이체|결제|상품권|기프트\s*카드|\d[\d,]*\s*(?:만\s*)?원",
     FactorCode.LINK_CLICK: r"링크|URL|인터넷\s*주소|아래\s*주소",
     FactorCode.APP_INSTALL: r"앱|어플(?:리케이션)?|애플리케이션|프로그램|APK|원격\s*(?:지원|제어)",
 }
+# rules-dev-v4 2차 A(임시): 민감정보 요구 동사의 활용형.
+CREDENTIAL_VERB = r"(?:입력|제공|공유|전달|회신|전송|인증)"
+# 결과 서술이 와야 조건 요구로 본다("회신해야 처리됩니다"). "해야 합니다"는 기존 DO가 잡는다.
+REQUIRED_RESULT = rf"(?:됩니다|돼요|가능합니다|가능해요|할\s*수\s*있(?:습니다|어요)){BOUND}"
 ACTIONS = {
-    FactorCode.CREDENTIAL_REQUEST: re.compile(rf"{GIVE}|(?:입력|제공|공유|전달|회신|전송){DO}", re.IGNORECASE),
+    FactorCode.CREDENTIAL_REQUEST: re.compile(
+        rf"{GIVE}|{CREDENTIAL_VERB}{DO}|{CREDENTIAL_VERB}\s*(?:바랍니다|요망){BOUND}"
+        # 연결형: "입력해 해제하세요"처럼 같은 구절 뒤에 긍정 요구 어미가 있을 때만.
+        rf"|(?P<chain>{CREDENTIAL_VERB}해\s+[^.!?\n]{{0,12}}?(?:{DO}|(?:바랍니다|요망){BOUND}))"
+        rf"|(?P<required>{CREDENTIAL_VERB}(?:해야|하셔야|하여야)\s*[^.!?\n]{{0,15}}?{REQUIRED_RESULT})", re.IGNORECASE),
     FactorCode.MONEY_REQUEST: re.compile(rf"{SEND}|(?:빌려|사|부쳐)\s*{END}{BOUND}|(?:송금|입금|이체|결제|납부){DO}|내세요{BOUND}"
                                          rf"|(?:좀\s*)?부탁(?:해요?|할게요?|드려요|드립니다|합니다){BOUND}"
                                          rf"|(?P<proxy>(?<![가-힣])(?:대신\s*)?(?:좀\s*)?해\s*{END}{BOUND})", re.IGNORECASE),
@@ -236,10 +244,14 @@ def scan_rules(text: str, *, url_spans: list[tuple[int, int]] | None = None) -> 
                     continue
                 if re.match(r"\s*(?:라고\s*)?(?:하면|해서는|하시면)\s*안", after):
                     continue
+                groups = action.groupdict()
+                # 2차(임시): 연결형·조건형은 동작어 범위 안의 부정("입력해 두지 마세요")을 요구로 보지 않는다.
+                if (groups.get("chain") or groups.get("required")) and NEGATION.search(action.group()):
+                    continue
                 left, right = start + target[0], start + action.end()
                 if not overlaps(left, right, ignored):
-                    groups = action.groupdict()
-                    add(code, left, right, rule="confirm" if groups.get("confirm") else "guided" if groups.get("guided") else "")
+                    rule = next((name for name in ("confirm", "guided", "chain", "required") if groups.get(name)), "")
+                    add(code, left, right, rule=rule)
         for match in IDENTITY.finditer(clause):
             if match.group("kin") and not KIN_PREFIX.fullmatch(clause[:match.start()]):
                 continue
