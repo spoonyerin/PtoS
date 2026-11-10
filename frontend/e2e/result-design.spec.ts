@@ -36,6 +36,13 @@ for (const [level, label] of [
     await expect(page.locator('.result-details')).not.toHaveAttribute('open', '')
     await expect(page.getByText('공식 사이트와 다른 주소가 발견됐어요.', { exact: true })).toHaveCount(0)
     if (level === 'normal') await expect(page.getByText('뚜렷한 위험 신호가 없어요.', { exact: true })).toBeVisible()
+    // Uploaded SVG assets must load successfully, including the empty-state icon.
+    const images = page.locator('.result-card img')
+    for (const icon of await images.all()) {
+      await expect(icon).toHaveAttribute('src', /\.svg$/)
+      await expect.poll(() => icon.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true)
+    }
+    await expect(page.locator('.result-symbol img')).toHaveCSS('filter', 'none')
     await page.screenshot({ path: `test-results/result-${level}.png`, fullPage: true })
     await page.setViewportSize({ width: 320, height: 740 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)

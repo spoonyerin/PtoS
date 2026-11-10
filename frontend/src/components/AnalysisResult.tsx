@@ -31,7 +31,7 @@ export function AnalysisResult({
     >
       <div className="result-banner">
         <span className="result-symbol">
-          <img src={`/assets/${statusIcon}.png`} alt="" />
+          <img src={`/assets/${statusIcon}.svg`} alt="" />
         </span>
         <div className="result-status-copy">
           <h2 id="result-title" ref={heading} tabIndex={-1}>
@@ -74,7 +74,7 @@ export function AnalysisResult({
                   <h4 className="evidence-title">
                     <span className="factor-symbol">
                       <img
-                        src={`/assets/${signal?.icon ?? 'risk-people'}.png`}
+                        src={`/assets/${signal?.icon ?? 'risk-people'}.svg`}
                         alt=""
                       />
                     </span>
@@ -96,7 +96,7 @@ export function AnalysisResult({
           <div className={`empty-evidence${normal ? ' normal-empty' : ''}`}>
             <span className="empty-symbol">
               <img
-                src={`/assets/${normal ? 'status-normal' : 'status-insufficient'}.png`}
+                src={`/assets/${normal ? 'status-normal' : 'status-insufficient'}.svg`}
                 alt=""
               />
             </span>

@@ -518,9 +518,6 @@ textarea::placeholder {
   width: 60%;
   height: 60%;
   object-fit: contain;
-  /* Thicken the transparent white glyph without changing its PNG asset. */
-  filter: drop-shadow(0.3px 0 0 white) drop-shadow(-0.3px 0 0 white)
-    drop-shadow(0 0.3px 0 white) drop-shadow(0 -0.3px 0 white);
 }
 .suspicious .result-symbol img {
   /* A triangle's visual weight sits below its bounding-box center. */
@@ -636,7 +633,7 @@ textarea::placeholder {
   height: 20px;
   object-fit: contain;
 }
-.factor-symbol img[src="/assets/risk-impersonation.png"] {
+.factor-symbol img[src="/assets/risk-impersonation.svg"] {
   transform: scale(0.8);
 }
 .evidence-item p {
