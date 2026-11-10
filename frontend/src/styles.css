@@ -508,6 +508,9 @@ textarea::placeholder {
   width: 60%;
   height: 60%;
   object-fit: contain;
+  /* Thicken the transparent white glyph without changing its PNG asset. */
+  filter: drop-shadow(0.4px 0 0 white) drop-shadow(-0.4px 0 0 white)
+    drop-shadow(0 0.4px 0 white) drop-shadow(0 -0.4px 0 white);
 }
 .result-status-copy {
   display: contents;
