@@ -496,8 +496,9 @@ textarea::placeholder {
   margin: 0 0 26px;
 }
 .result-symbol {
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 70px;
   height: 70px;
   border-radius: 50%;
@@ -505,12 +506,18 @@ textarea::placeholder {
   color: white;
 }
 .result-symbol img {
+  display: block;
+  flex-shrink: 0;
   width: 60%;
   height: 60%;
   object-fit: contain;
   /* Thicken the transparent white glyph without changing its PNG asset. */
-  filter: drop-shadow(0.4px 0 0 white) drop-shadow(-0.4px 0 0 white)
-    drop-shadow(0 0.4px 0 white) drop-shadow(0 -0.4px 0 white);
+  filter: drop-shadow(0.3px 0 0 white) drop-shadow(-0.3px 0 0 white)
+    drop-shadow(0 0.3px 0 white) drop-shadow(0 -0.3px 0 white);
+}
+.suspicious .result-symbol img {
+  /* A triangle's visual weight sits below its bounding-box center. */
+  transform: translateY(-4%);
 }
 .result-status-copy {
   display: contents;
