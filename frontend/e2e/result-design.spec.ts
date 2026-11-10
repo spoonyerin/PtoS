@@ -42,7 +42,9 @@ for (const [level, label] of [
       await expect(icon).toHaveAttribute('src', /\.svg$/)
       await expect.poll(() => icon.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true)
     }
-    await expect(page.locator('.result-symbol img')).toHaveCSS('filter', 'none')
+    for (const icon of await page.locator('.factor-symbol img').all()) {
+      await expect(icon).toHaveCSS('filter', 'none')
+    }
     await page.screenshot({ path: `test-results/result-${level}.png`, fullPage: true })
     await page.setViewportSize({ width: 320, height: 740 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)

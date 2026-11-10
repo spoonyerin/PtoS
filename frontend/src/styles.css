@@ -518,6 +518,8 @@ textarea::placeholder {
   width: 60%;
   height: 60%;
   object-fit: contain;
+  filter: drop-shadow(0.12px 0 0 white) drop-shadow(-0.12px 0 0 white)
+    drop-shadow(0 0.12px 0 white) drop-shadow(0 -0.12px 0 white);
 }
 .suspicious .result-symbol img {
   /* A triangle's visual weight sits below its bounding-box center. */
@@ -632,8 +634,6 @@ textarea::placeholder {
   width: 20px;
   height: 20px;
   object-fit: contain;
-  filter: drop-shadow(0.12px 0 0 white) drop-shadow(-0.12px 0 0 white)
-    drop-shadow(0 0.12px 0 white) drop-shadow(0 -0.12px 0 white);
 }
 .factor-symbol img[src="/assets/risk-impersonation.svg"] {
   transform: scale(0.8);
