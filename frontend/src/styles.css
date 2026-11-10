@@ -1091,10 +1091,3 @@ dialog::backdrop {
   font-size: 0.85em;
   color: #353f50;
 }
-
-.result-banner .voice-notice {
-  grid-column: 1 / -1;
-  grid-row: 5;
-  font-size: 0.85em;
-  color: #353f50;
-}

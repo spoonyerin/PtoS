@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { AnalysisResponse } from '../api/types'
 import { buildSpeechSections } from '../speechScript'
 import { selectKoreanVoice } from '../speechVoice'
@@ -6,7 +6,6 @@ import { selectKoreanVoice } from '../speechVoice'
 export function VoiceGuide({ result }: { result: AnalysisResponse }) {
   const [state, setState] = useState<'idle' | 'starting' | 'playing'>('idle')
   const [message, setMessage] = useState('')
-  const noticeId = useId()
   const session = useRef(0)
   const active = useRef(false)
   const utterance = useRef<SpeechSynthesisUtterance | null>(null)
@@ -137,7 +136,6 @@ export function VoiceGuide({ result }: { result: AnalysisResponse }) {
         className={`voice-control${playing ? ' is-playing' : ''}`}
         aria-label={busy ? '음성안내 멈춤' : '음성안내 듣기'}
         aria-pressed={busy}
-        aria-describedby={noticeId}
         onClick={start}
       >
         <span className="voice-disc" aria-hidden="true">
@@ -148,10 +146,6 @@ export function VoiceGuide({ result }: { result: AnalysisResponse }) {
         <span>{busy ? '멈춤' : '듣기'}</span>
       </button>
 
-      <p id={noticeId} className="voice-notice">
-        음성에 따라 안내 대본이 브라우저·기기의 음성 서비스로 전송될 수 있어요.
-        입력 원문과 주소는 읽지 않아요.
-      </p>
       {message && (
         <p className="voice-feedback" role="status">
           {message}

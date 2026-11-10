@@ -43,7 +43,6 @@ test('온라인 한국어 음성도 선택하고 변경한 속도로 읽는다',
   expect(spoken).toHaveLength(1)
   expect(spoken[0].voice?.localService).toBe(false)
   expect(spoken[0].rate).toBe(1.05)
-  expect(screen.getByRole('button')).toHaveAccessibleDescription(/전송될 수 있어요/)
 })
 test('순차 재생 완료와 오류를 처리한다', () => {
   render(<VoiceGuide result={result} />)
