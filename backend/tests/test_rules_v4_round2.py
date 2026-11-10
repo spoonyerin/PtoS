@@ -126,6 +126,33 @@ def test_known_limitation_legit_dues_notice(text):
     assert rule_ids(result, F.MONEY_REQUEST) == {"money_request-v1"}
 
 
+# --- B-2(보류): 결제·납부의 "바랍니다"형·필요형 ---
+# B-2를 적용하면 아래 정상 청구 안내 중 1~4번이 suspicious가 되어 보류하고 되돌렸다. 정상 청구 안내가
+# 금전 요구 근거 없이 남는지 고정한다(B-2를 다시 검토하면 이 테스트로 오탐을 먼저 확인한다).
+@pytest.mark.parametrize("text", [
+    "이번 달 관리비 납부 바랍니다.",
+    "[가상아파트] 11월 관리비 125,000원을 25일까지 납부 바랍니다.",
+    "[가상통신] 이번 달 요금 결제가 필요합니다. 자동이체 계좌 잔액을 확인해 주세요.",
+    "[가상도서관] 연체료 납부가 필요합니다. 자세한 내용은 창구로 문의 바랍니다.",
+    "어제 신청하신 강좌 수강료 결제가 처리되었어요.",
+    "정기 구독료는 매월 1일에 결제됩니다.",
+    "[가상구청] 자동차세 납부 기한은 이달 말일입니다.",
+])
+def test_legit_billing_notices_have_no_money_request(text):
+    result = analyze(text)
+    assert F.MONEY_REQUEST not in {e.factor_code for e in result.evidence}
+    assert result.risk_level.value == "insufficient_information"
+
+
+# 알려진 한계(현재 판정 기록용): B-2 보류로 결제·납부의 "바랍니다"형·필요형 요구는 잡지 않는다.
+@pytest.mark.parametrize("text", [
+    "최종 합격 전 보증비 납부가 필요합니다.",
+    "[가상몰] 미결제 주문은 오늘 중 결제바랍니다.",
+])
+def test_known_limitation_payment_billing_forms_not_detected(text):
+    assert F.MONEY_REQUEST not in {e.factor_code for e in analyze(text).evidence}
+
+
 def test_credential_form_spans_with_crlf_and_emoji():
     text = "🔒 [가상은행]\r\n😀 카드번호를 입력바랍니다."
     result = analyze(text)
