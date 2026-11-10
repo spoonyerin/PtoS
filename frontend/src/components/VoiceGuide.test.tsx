@@ -17,7 +17,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 test('대본은 정보 부족의 한계를 알리고 원문과 URL을 제외하며 대응을 중복 제거한다', () => {
   const sections = buildSpeechSections(result)
-  expect(sections[0]).toContain('안전하다는 뜻은 아닙니다')
+  expect(sections[0]).toContain('안전하다는 뜻은 아니에요')
   expect(sections.join(' ')).not.toContain('비공개 원문')
   expect(sections.filter(t => t.includes('별도 확인'))).toHaveLength(1)
   expect(buildSpeechSections({ ...result, action_guidance: ['https://example.invalid/private 를 열지 마세요.'] }).join(' ')).not.toContain('example.invalid')
@@ -68,8 +68,9 @@ test('위험 요소는 근거 구절 대신 요약을 읽고 결과 다음에 �
   const sections = buildSpeechSections({ ...result, risk_level: 'dangerous', risk_factors: ['인증번호·개인정보 요구'], evidence: [{ factor_code: 'CREDENTIAL_REQUEST', label: '인증번호·개인정보 요구', snippet: '개인 비밀 원문' }] as AnalysisResponse['evidence'] })
   expect(sections[0]).toContain('위험 단계')
   expect(sections.join(' ')).not.toContain('개인 비밀 원문')
-  expect(sections).toContain('확인된 위험 요소를 안내해 드리겠습니다.')
-  expect(sections.indexOf('확인된 위험 요소를 안내해 드리겠습니다.')).toBeLessThan(sections.indexOf('이어서 대응 방법을 안내해 드리겠습니다.'))
+  expect(sections[1]).toContain('어떤 위험 신호가 있는지 살펴볼게요. 인증번호·개인정보 요구.')
+  expect(sections[1]).toContain('인증번호나 개인정보를 전달·입력하라는 요구가 있어요.')
+  expect(sections[2]).toContain('이제 어떻게 대응하면 좋을지 알려드릴게요. 별도 확인하세요.')
 })
 
 test('지원하지 않는 브라우저에서는 안내만 표시한다', () => {
@@ -79,4 +80,18 @@ test('지원하지 않는 브라우저에서는 안내만 표시한다', () => {
   render(<VoiceGuide result={result} />)
   fireEvent.click(screen.getByRole('button'))
   expect(screen.getByRole('status')).toHaveTextContent('지원하지 않아요')
+})
+
+
+test('결과 설명과 각 대응을 한 덩어리로 묶고 순서를 말로 안내한다', () => {
+  const sections = buildSpeechSections({ ...result, action_guidance: ['송금하지 마세요.', '공식 연락처로 확인하세요.'] })
+  expect(sections).toHaveLength(5)
+  expect(sections[2]).toBe('이제 어떻게 대응하면 좋을지 알려드릴게요. 첫 번째로, 송금하지 마세요.')
+  expect(sections[3]).toBe('두 번째로, 공식 연락처로 확인하세요.')
+})
+
+test('정상 결과도 안전을 보장하지 않고 대응이 없으면 별도 확인을 안내한다', () => {
+  const sections = buildSpeechSections({ ...result, risk_level: 'normal', action_guidance: [] })
+  expect(sections[0]).toContain('안전을 보장하는 것은 아니니')
+  expect(sections[1]).toContain('요청 출처를 별도로 확인해 주세요.')
 })
