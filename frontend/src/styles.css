@@ -308,11 +308,15 @@ textarea::placeholder {
   border-radius: 50%;
   width: 20px;
   height: 20px;
-  display: grid;
-  place-items: center;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .clear-text svg {
+  display: block;
   width: 16px;
+  height: 16px;
 }
 .input-meta {
   display: flex;
