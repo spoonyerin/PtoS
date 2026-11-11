@@ -267,6 +267,43 @@ def test_known_limitation_code_mimicry_without_request_evidence(text):
     assert result.risk_level.value == "insufficient_information"
 
 
+# --- D(보류): "~ 바랍니다." 요구문 바로 뒤의 주소를 링크 요구로 보기 ---
+# D를 측정용으로 적용하면 아래 정상 안내 중 택배·행사·병원·반송 예정 안내(1·3·4·6번)가 suspicious가 되어
+# 최종 채택을 보류하고 코드를 되돌렸다. 링크가 있는 실제 정상 문자로 다시 잰 뒤 결정한다.
+# 현재 판정을 고정한다(D를 다시 검토하면 이 테스트로 오탐을 먼저 확인한다).
+@pytest.mark.parametrize("text", [
+    "[가상택배] 고객님 상품을 부재로 보관하고 있어요. 재배송 신청 바랍니다. http://example.invalid/a",
+    "[가상구청] 가을 걷기대회 참가 신청 바랍니다. http://example.invalid/c",
+    "[가상병원] 예약 변경은 아래에서 신청해 주세요. http://example.invalid/d",
+    "자세한 일정은 아래를 참고 바랍니다. http://example.invalid/e",
+    "[가상택배] 오늘 미수령 시 반송 예정입니다. 재배송 신청 바랍니다. http://example.invalid/f",
+])
+def test_legit_link_notices_have_no_link_request(text):
+    result = analyze(text)
+    assert F.LINK_CLICK not in {e.factor_code for e in result.evidence}
+    assert result.risk_level.value == "insufficient_information"
+
+
+# 알려진 한계(현재 판정 기록용): "확인 바랍니다 + 주소"는 v3부터 링크 요구(link_click-confirm-v1)로 잡혀
+# 정상 안내도 suspicious가 된다. D와 무관하다.
+def test_known_limitation_legit_confirm_before_url():
+    result = analyze("[가상은행] 예금 금리 변경 안내입니다. 자세한 내용은 확인 바랍니다. http://example.invalid/b")
+    assert result.risk_level.value == "suspicious"
+    assert rule_ids(result, F.LINK_CLICK) == {"link_click-confirm-v1"}
+
+
+# 알려진 한계(현재 판정 기록용): D 보류로 요구문 뒤에 주소만 따로 오는 사기형은 링크 요구로 잡지 않는다.
+@pytest.mark.parametrize("text", [
+    "가상재단 미지급 장려금이 남아 있어요. 기간 안에 청구 바랍니다. http://example.invalid/g",
+    "[가상증명센터] 전자서명 유효기간이 곧 끝나요. 지금 연장해 주시기 바랍니다. http://example.invalid/h",
+    "본인이 아닌 접속 기록이 있어요. 바로 보호 절차를 진행하세요. http://example.invalid/i",
+])
+def test_known_limitation_request_before_url_not_detected(text):
+    result = analyze(text)
+    assert F.LINK_CLICK not in {e.factor_code for e in result.evidence}
+    assert result.risk_level.value == "insufficient_information"
+
+
 def test_credential_form_spans_with_crlf_and_emoji():
     text = "🔒 [가상은행]\r\n😀 카드번호를 입력바랍니다."
     result = analyze(text)
