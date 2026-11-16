@@ -15,6 +15,14 @@ BOUNDARY = re.compile(rf"[.!?。！？;\n]+|하지만|그러나|그런데|{ON_BE
 NEGATION = re.compile(r"지\s*(?:마|말|않)|필요\s*(?:가\s*)?없|아니|아닙|아닌|아닐|안\s*해|금지|거절")
 GAP_BREAK = re.compile(rf"그리고|하지만|그러나|{ON_BEHALF}|말고|지\s*(?:마|말|않)|아니|아닙|아닌|아닐|금지|거절")
 META = re.compile(r"예시|사례|피싱|사기|예방\s*교육|거절|주의")
+# rules-dev-v4(임시): 명의·긴급·불이익 표현의 부정 범위. 첫 연결 어미(되니, 되며, 않으면, 하셔서 등)에서 끝난다.
+# 인용 연결("라고", "라며")은 범위 끝으로 보지 않는다.
+NEGATION_SCOPE_END = re.compile(
+    r"(?:으니|오니|니까|니|므로|으며|(?<!라)며|면서|지만|는데|은데|인데요?|어서|아서|해서|셔서|(?<![라다])고|면)(?=[\s,]|$)")
+# "확인하지 않으면", "납부하지 않을 경우" 같은 조건형은 앞 표현을 부정하지 않는다.
+CONDITIONAL_NEGATION = re.compile(r"지\s*않(?:으면|으시면|으실\s*(?:경우|시)|을\s*(?:시|경우|때)|는\s*경우)|안\s*하(?:면|시면)")
+# 표현 자체가 연결 어미로 끝나면("택배 기사인데요") 뒤 구절의 부정은 그 표현에 미치지 않는다.
+CLOSED_END = re.compile(r"(?:인데요?|는데|지만|니까|므로)$")
 REPORT = re.compile(r"라는|라고|라며|같은|처럼|식의")
 
 # 반말·의문형 요청(줄래?, 줄 수 있어?, 주면 안 돼?)도 요구로 본다. "줄게" 같은 약속형은 넣지 않는다.
@@ -32,22 +40,44 @@ AVOID = r"(?:주의|조심|삭제|자제|차단|신고|무시|경계|유의|거�
 PROXY_GAP = re.compile(r"확인|조회|문의|신청|변경|취소|안내|내역")
 
 TARGETS = {
-    FactorCode.CREDENTIAL_REQUEST: r"인증\s*번호|OTP|비밀\s*번호|주민\s*등록\s*번호|계좌\s*번호|개인\s*정보|카드\s*번호|보안\s*카드",
-    FactorCode.MONEY_REQUEST: r"돈|금액|수수료|보증금|현금|대금|송금|입금|이체|결제|상품권|기프트\s*카드|\d[\d,]*\s*(?:만\s*)?원",
+    FactorCode.CREDENTIAL_REQUEST: r"인증\s*(?:번호|정보)|OTP|비밀\s*번호|주민\s*등록\s*번호|계좌\s*번호|개인\s*정보|카드\s*번호|보안\s*카드",
+    FactorCode.MONEY_REQUEST: r"돈|금액|수수료|보증금|현금|대금|송금|선?입금|이체|결제|상품권|기프트\s*카드|\d[\d,]*\s*(?:만\s*)?원",
     FactorCode.LINK_CLICK: r"링크|URL|인터넷\s*주소|아래\s*주소",
     FactorCode.APP_INSTALL: r"앱|어플(?:리케이션)?|애플리케이션|프로그램|APK|원격\s*(?:지원|제어)",
 }
+# rules-dev-v4 2차 A(임시): 민감정보 요구 동사의 활용형.
+CREDENTIAL_VERB = r"(?:입력|제공|공유|전달|회신|전송|인증)"
+# 결과 서술이 와야 조건 요구로 본다("회신해야 처리됩니다"). "해야 합니다"는 기존 DO가 잡는다.
+REQUIRED_RESULT = rf"(?:됩니다|돼요|가능합니다|가능해요|할\s*수\s*있(?:습니다|어요)){BOUND}"
+MONEY_VERB = r"(?:송금|입금|이체)"
 ACTIONS = {
-    FactorCode.CREDENTIAL_REQUEST: re.compile(rf"{GIVE}|(?:입력|제공|공유|전달|회신|전송){DO}", re.IGNORECASE),
+    FactorCode.CREDENTIAL_REQUEST: re.compile(
+        rf"{GIVE}|{CREDENTIAL_VERB}{DO}|{CREDENTIAL_VERB}\s*(?:바랍니다|요망){BOUND}"
+        # 2차 C(임시): "인증번호를 보내세요". 금전 SEND에는 넣지 않았다.
+        rf"|보내\s*(?:세요|십시오){BOUND}"
+        # 연결형: "입력해 해제하세요"처럼 같은 구절 뒤에 긍정 요구 어미가 있을 때만.
+        rf"|(?P<chain>{CREDENTIAL_VERB}해\s+[^.!?\n]{{0,12}}?(?:{DO}|(?:바랍니다|요망){BOUND}))"
+        rf"|(?P<required>{CREDENTIAL_VERB}(?:해야|하셔야|하여야)\s*[^.!?\n]{{0,15}}?{REQUIRED_RESULT})", re.IGNORECASE),
     FactorCode.MONEY_REQUEST: re.compile(rf"{SEND}|(?:빌려|사|부쳐)\s*{END}{BOUND}|(?:송금|입금|이체|결제|납부){DO}|내세요{BOUND}"
                                          rf"|(?:좀\s*)?부탁(?:해요?|할게요?|드려요|드립니다|합니다){BOUND}"
-                                         rf"|(?P<proxy>(?<![가-힣])(?:대신\s*)?(?:좀\s*)?해\s*{END}{BOUND})", re.IGNORECASE),
+                                         rf"|(?P<proxy>(?<![가-힣])(?:대신\s*)?(?:좀\s*)?해\s*{END}{BOUND})"
+                                         # rules-dev-v4 2차 B-1(임시): 송금·입금·이체·선입금의 활용형. 결제·납부는 넣지 않았다.
+                                         rf"|{MONEY_VERB}\s*(?:바랍니다|요망){BOUND}"
+                                         # 반말 명령은 문장 끝만("송금해."). "송금해서", "송금해 놨어", "이체해?"는 제외.
+                                         rf"|(?P<banmal>{MONEY_VERB}해(?=\s*[.!~]|\s*$))"
+                                         rf"|(?P<required>(?:선?입금|송금|이체)\s*(?:이|가)?\s*필요(?:합니다|해요|하오니|하니){BOUND}"
+                                         r"|선입금\s*(?:하면|하시면|해야|하셔야|후))", re.IGNORECASE),
     FactorCode.LINK_CLICK: re.compile(rf"(?:클릭|접속|방문){DO}|(?:눌러|열어)\s*{END}{BOUND}|누르세요{BOUND}"
                                       rf"|(?P<confirm>(?:확인|조회)\s*(?:{DO}|(?:바랍니다|부탁드립니다|부탁드려요|요망){BOUND}|해\s*봐요?{BOUND}))"
                                       rf"|(?P<guided>(?:눌러|클릭해|접속해|들어가)서?[^.!?\n]{{0,30}}?(?:{END}|{DO}|해\s*봐요?|부탁(?:해요?|드려요|드립니다)|줘){BOUND}"
                                       rf"|(?<![가-힣])(?!{AVOID})[가-힣]{{1,8}}?\s*(?:{DO}|(?:바랍니다|요망){BOUND}))", re.IGNORECASE),
-    FactorCode.APP_INSTALL: re.compile(rf"(?:설치|다운로드|실행|허용){DO}|(?:설치|다운로드)받아\s*{END}{BOUND}", re.IGNORECASE),
+    FactorCode.APP_INSTALL: re.compile(rf"(?:설치|다운로드|실행|허용){DO}|(?:설치|다운로드)받아\s*{END}{BOUND}"
+                                       # 2차 C(임시): 필요형. 같은 구절에 원격 지원·제어 또는 APK가 있을 때만 채택한다(아래 REMOTE_APP).
+                                       rf"|(?P<required>(?:설치|다운로드|실행)\s*(?:이|가)?\s*필요(?:합니다|해요|하오니|하니){BOUND})",
+                                       re.IGNORECASE),
 }
+# 정상 안내("공식 앱 설치가 필요합니다")와 구분하려고 앱 설치 필요형은 원격 접속 앱·APK일 때만 요구로 본다.
+REMOTE_APP = re.compile(r"원격\s*(?:지원|제어)|APK", re.IGNORECASE)
 # "여기·이곳"은 메시지에 URL이 있을 때만, 명시적 접속 동사(눌러, 접속해 등)와 함께 링크 대상으로 본다.
 POINTER = re.compile(r"여기|이곳")
 EXPLICIT_LINK = re.compile(r"클릭|접속|방문|눌러|누르|열어|들어가")
@@ -56,8 +86,13 @@ IDENTITY = re.compile(
     r"(?:은행|카드사|경찰(?:청|서)?|검찰(?:청)?|금융감독원|국세청|우체국|공공기관|택배사|택배\s*기사)"
     r"\s*(?:의\s*)?(?:(?:고객\s*센터|담당자|직원|상담원|수사관|검사)\s*)?(?:입니다|인데요|이에요|예요)"
     r"|(?:엄마|아빠)[,\s]*(?:나|저)\s*(?:아들|딸)(?:이야|인데|입니다)"
-    r"|(?:아들|딸|친구)\s*(?:이야|인데|입니다)"
+    r"|(?P<kin>(?:아들|딸|친구)\s*(?:이야|인데|입니다))"
 )
+# rules-dev-v4(임시): "딸인데", "친구입니다" 같은 관계 자기소개는 구절 첫머리(머리말·인사·부모 호칭·1인칭만 앞에 허용)일 때만
+# 강한 명의로 본다. "우리 딸이 친구인데"처럼 문장 중간에서 제3자를 가리키는 표현은 명의 주장이 아니다.
+KIN_PREFIX = re.compile(
+    r"\s*(?:\[[^\]\r\n]{1,20}\]\s*)*(?:(?:안녕|여보세요)[\s,~!.]*)?"
+    r"(?:(?:엄마|아빠|어머니|아버지|어머님|아버님|할머니|할아버지)[\s,~!.]*)?(?:(?:나|저)[\s,~!.]*)?(?:(?:큰|작은|막내)\s*)?")
 URGENCY_DEADLINE = r"지금\s*바로|당장|즉시|긴급(?:히|합니다|한)|오늘\s*(?:안에|내로)|\d+\s*분\s*(?:안에|이내)"
 URGENCY_PENALTY = r"(?:계좌|서비스|거래)[^.!?\n]*(?:정지|중단)"
 URGENCY = re.compile(f"{URGENCY_DEADLINE}|{URGENCY_PENALTY}")
@@ -76,9 +111,25 @@ FAMILY = re.compile(
     r"|[^\n.!?]{0,20}?(?:폰|휴대폰|핸드폰|전화기?)\s*(?:이|가)?\s*(?:고장|액정|깨[져졌]|분실|잃어버|망가|물에))")
 # 임시: 청구어는 단독으로, 상태 변화어는 예고·조건 형태일 때만 불이익으로 본다. 과거형 완료 안내는 제외한다.
 PENALTY = re.compile(
-    r"미납|연체|체납|과태료|범칙금|벌금|가산금|가산세|압류|강제\s*집행|법적\s*(?:조치|절차|처벌)"
+    r"(?P<claim>미납|연체|체납|과태료|범칙금|벌금|가산금|가산세|압류|강제\s*집행|법적\s*(?:조치|절차|처벌))"
     r"|(?:정지|중지|만료|취소|반송|제한|해지|차단|폐기|말소)(?=\s*(?:처리|조치)?\s*(?:예정|될|됩니다|되오니|되며|되니|돼요|됨|할\s*예정))"
-    r"|(?:시|경우|면)\s*(?:자동\s*)?(?:으로\s*)?(?:정지|중지|만료|취소|반송|제한|해지|차단|폐기|말소)")
+    # rules-dev-v4: "즉시·동시·수시·상시"의 '시'는 조건("미확인 시")이 아니다.
+    r"|(?:(?<![즉동수상])시|경우|면)\s*(?:자동\s*)?(?:으로\s*)?(?:정지|중지|만료|취소|반송|제한|해지|차단|폐기|말소)")
+# rules-dev-v4(임시): 청구어 뒤 같은 구절의 첫 서술어가 "없다·아니다"이면("미납 금액이 없습니다", "연체가 아니고")
+# 청구가 없다는 안내이므로 불이익 근거로 채택하지 않는다. 청구어 뒤 20자 안의 첫 서술어만 본다.
+CLAIM_PREDICATE = re.compile(r"없|아니|아닙|아닌|있|됩|되|돼|입니|이에요|예요|합니|했|하였")
+CLAIM_ABSENT = frozenset({"없", "아니", "아닙", "아닌"})
+
+
+def claim_absent(clause: str, match: re.Match) -> bool:
+    if not match.group("claim"):
+        return False
+    predicate = CLAIM_PREDICATE.search(clause, match.end(), match.end() + 20)
+    return bool(predicate) and predicate.group() in CLAIM_ABSENT
+
+
+def penalty_matches(clause: str):
+    return (match for match in PENALTY.finditer(clause) if not claim_absent(clause, match))
 # 임시: 임박 기한(당일·금일·오늘·내일·익일 + 기한 표현, 자정까지, 24시간 이내, 1일 남음). 날짜만 적힌 기한은 해석하지 않는다.
 DAY = r"(?:당일|금일|오늘|내일|익일)"
 DEADLINE = re.compile(
@@ -119,6 +170,46 @@ class RuleScan:
     assessment: InputAssessment
 
 
+# rules-dev-v4 2차 E(임시): 정상 인증번호 안내 예외. 번호를 직접 보여 주고 공유 금지를 경고하며, 주소·다른 요구·제3자 확인
+# 언급이 없을 때만 "입력" 요구 근거를 뺀다. 발신처가 공식인지는 확인하지 않는다.
+CODE_SHOWN = re.compile(r"(?:인증\s*번호|OTP|인증\s*코드)\s*(?:는|은|:|：)?\s*(?:\[[^\]\r\n]{1,10}\]|(?<!\d)\d{4,8}(?!\d))", re.IGNORECASE)
+SHARE_WARNING = re.compile(r"(?:알려\s*주지|알리지|공유하지|전달하지|보내지|노출하지|가르쳐\s*주지)\s*(?:마|말|않)|노출\s*금지|공유\s*금지")
+# 번호를 보내라는 요구(대상어와 같은 구절이 아니어도 문자 어디든). "알려주지 마세요"는 걸리지 않는다.
+CODE_SEND_REQUEST = re.compile(r"(?:회신|전달|전송|공유|제공)\s*(?:해\s*주|하세요|하십시오|바랍니다|요망)"
+                               r"|(?:알려|보내|넘겨|건네)\s*(?:주세요|주십시오|줘|세요|십시오)")
+OTHER_CREDENTIAL = re.compile(r"비밀\s*번호|계좌\s*번호|카드\s*번호|주민\s*등록\s*번호|보안\s*카드|개인\s*정보")
+# 제3자·다른 경로로 번호를 확인한다는 언급. 공유 금지 경고 문장 안의 언급("직원에게도 알려주지 마세요")은 세지 않는다.
+THIRD_PARTY = re.compile(r"상담원|상담사|직원|담당자|고객\s*센터|콜\s*센터|전화로|통화")
+# 근거 문구에는 대상어 "인증번호"가 들어 있으므로 동사로서의 "인증"만 본다.
+INPUT_ONLY = re.compile(r"입력|인증(?!\s*(?:번호|정보|코드))")
+BLANK_PARAGRAPH = re.compile(r"\r?\n[ \t]*\r?\n")
+
+
+def code_notice_exception(prose: str, findings: list[Finding], has_url: bool, ignored: list[tuple[int, int]]) -> bool:
+    def outside(match):
+        return not any(match.start() < right and match.end() > left for left, right in ignored)
+
+    credential = [f for f in findings if f.evidence.factor_code == FactorCode.CREDENTIAL_REQUEST]
+    if not credential or has_url or BLANK_PARAGRAPH.search(prose):
+        return False
+    if any(f.evidence.factor_code in ACTION_CODES - {FactorCode.CREDENTIAL_REQUEST} or f.evidence.factor_code == FactorCode.URGENCY_THREAT
+           for f in findings):
+        return False
+    if not any(outside(m) for m in CODE_SHOWN.finditer(prose)):
+        return False
+    warnings = [m for m in SHARE_WARNING.finditer(prose) if outside(m)]
+    if not warnings:
+        return False
+    if CODE_SEND_REQUEST.search(prose) or OTHER_CREDENTIAL.search(prose):
+        return False
+    if any(not INPUT_ONLY.search(f.evidence.snippet) or CODE_SEND_REQUEST.search(f.evidence.snippet) for f in credential):
+        return False
+    warning_sentences = [m.span() for m in re.finditer(r"[^.!?\n]+", prose) if any(m.start() <= w.start() < m.end() for w in warnings)]
+    if any(not any(left <= t.start() < right for left, right in warning_sentences) for t in THIRD_PARTY.finditer(prose)):
+        return False
+    return True
+
+
 def educational_quotes(text: str) -> list[tuple[int, int]]:
     """교육·주의 대상으로 명시한 인용만 제외한다. 문서 전체를 제외하지 않는다."""
     spans = []
@@ -157,7 +248,14 @@ def scan_rules(text: str, *, url_spans: list[tuple[int, int]] | None = None) -> 
 
     def asserted(clause: str, end: int) -> bool:
         after = clause[end:]
-        return not NEGATION.search(after) and not (REPORT.search(after) and META.search(after))
+        # rules-dev-v4(임시): 부정은 표현에 바로 이어지는 서술어(첫 연결 어미까지)에만 적용한다.
+        # "해지되니 무시하지 마세요"의 뒤 구절 부정이 앞의 불이익 예고를 지우지 않게 한다.
+        if CLOSED_END.search(clause[:end]):
+            scope = ""
+        else:
+            stop = NEGATION_SCOPE_END.search(after)
+            scope = CONDITIONAL_NEGATION.sub(" ", after[:stop.end()] if stop else after)
+        return not NEGATION.search(scope) and not (REPORT.search(after) and META.search(after))
 
     # URL의 마침표와 교육 인용 안의 문장부호는 구절 경계로 사용하지 않는다.
     boundaries = [match for match in BOUNDARY.finditer(prose) if not overlaps(*match.span(), ignored)]
@@ -200,23 +298,37 @@ def scan_rules(text: str, *, url_spans: list[tuple[int, int]] | None = None) -> 
                     continue
                 if re.match(r"\s*(?:라고\s*)?(?:하면|해서는|하시면)\s*안", after):
                     continue
+                groups = action.groupdict()
+                # 2차(임시): 연결형·조건형은 동작어 범위 안의 부정("입력해 두지 마세요")을 요구로 보지 않는다.
+                if (groups.get("chain") or groups.get("required")) and NEGATION.search(action.group()):
+                    continue
+                # 2차 B-1(임시): 연결형·조건형 뒤 같은 구절에 교육·사기 언급이 있으면("선입금하면 수익을 준다는 말은 사기") 요구로 보지 않는다.
+                if (groups.get("chain") or groups.get("required")) and META.search(after):
+                    continue
+                # 구절은 문장부호에서 잘리므로 반말 명령 뒤 원문이 물음표면 질문("이체해?")으로 보고 제외한다.
+                if groups.get("banmal") and re.match(r"\s*[?？]", prose[start + action.end():]):
+                    continue
+                if code == FactorCode.APP_INSTALL and groups.get("required") and not REMOTE_APP.search(clause):
+                    continue
                 left, right = start + target[0], start + action.end()
                 if not overlaps(left, right, ignored):
-                    groups = action.groupdict()
-                    add(code, left, right, rule="confirm" if groups.get("confirm") else "guided" if groups.get("guided") else "")
+                    rule = next((name for name in ("confirm", "guided", "chain", "required") if groups.get(name)), "")
+                    add(code, left, right, rule=rule)
         for match in IDENTITY.finditer(clause):
+            if match.group("kin") and not KIN_PREFIX.fullmatch(clause[:match.start()]):
+                continue
             if asserted(clause, match.end()):
                 add(FactorCode.IMPERSONATION, start + match.start(), start + match.end())
         for match in URGENCY.finditer(clause):
             if asserted(clause, match.end()):
                 kind = "penalty" if re.fullmatch(URGENCY_PENALTY, match.group()) else "deadline"
                 add(FactorCode.URGENCY_THREAT, start + match.start(), start + match.end(), kind)
-        for pattern, kind in ((PENALTY, "penalty"), (DEADLINE, "deadline")):
-            for match in pattern.finditer(clause):
+        for matches, kind in ((penalty_matches(clause), "penalty"), (DEADLINE.finditer(clause), "deadline")):
+            for match in matches:
                 if asserted(clause, match.end()):
                     add(FactorCode.URGENCY_THREAT, start + match.start(), start + match.end(), kind, kind)
         # 기한 표현 없는 날짜어("익일 서비스 해지 예정")는 같은 구절에 불이익 예고가 있을 때만 기한으로 본다.
-        if PENALTY.search(clause):
+        if any(True for _ in penalty_matches(clause)):
             for match in re.finditer(DAY, clause):
                 if asserted(clause, match.end()):
                     add(FactorCode.URGENCY_THREAT, start + match.start(), start + match.end(), "deadline", "deadline")
@@ -238,6 +350,9 @@ def scan_rules(text: str, *, url_spans: list[tuple[int, int]] | None = None) -> 
         if match and not NEGATION.search(prefix[match.start():]):
             add(FactorCode.LINK_CLICK, left - len(prefix) + match.start(), right, rule=rule)
 
+    code_notice = code_notice_exception(prose, findings, bool(urls), ignored)
+    if code_notice:
+        findings = [f for f in findings if f.evidence.factor_code != FactorCode.CREDENTIAL_REQUEST]
     findings.sort(key=lambda finding: (finding.evidence.start, finding.evidence.end, finding.evidence.factor_code))
     contexts, bridged = message_contexts(prose,
         [(f.evidence.factor_code, f.evidence.start, f.evidence.end) for f in findings],
@@ -251,6 +366,8 @@ def scan_rules(text: str, *, url_spans: list[tuple[int, int]] | None = None) -> 
         assessment = InputAssessment(status="fragment", reasons=["누가 무엇을 요구하는지 확인하기 어려워요. 보낸 사람과 앞뒤 내용을 포함해 입력해주세요."])
     if ignored:
         assessment.reasons.append("교육·주의 대상으로 명시된 인용 구절은 실제 요구로 채택하지 않았어요.")
+    if code_notice:
+        assessment.reasons.append("인증번호를 직접 보여 주고 타인 공유를 경고하는 안내라 입력 요구로 채택하지 않았어요. 발신처가 공식인지는 확인하지 못했어요.")
     if bridged:
         assessment.reasons.append("명의 주장만 있는 도입 문단과 바로 다음의 직접 요구를 제한된 연속 문맥 규칙으로 연결했어요. 표시 없는 화자 전환까지 확인한 것은 아니에요.")
     return RuleScan(findings=findings, has_url=bool(urls), assessment=assessment)

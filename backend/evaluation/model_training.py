@@ -70,6 +70,11 @@ def select_training_rows(rows: list[EvalRow]) -> TrainingSet:
         if row.input_type != "text":
             excluded["url_input"] += 1
             continue
+        if row.expected is None:
+            # 이진 라벨만 있는 행. 학습 라벨 매핑은 4단계 라벨 기준이라 쓰지 않는다.
+            # 이런 행이 없는 CSV의 리포트·manifest가 그대로이도록 있을 때만 키를 만든다.
+            excluded["no_level_label"] = excluded.get("no_level_label", 0) + 1
+            continue
         if row.expected in POSITIVE_LEVELS:
             label = 1
         elif row.expected in NEGATIVE_LEVELS:

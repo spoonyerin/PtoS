@@ -1,15 +1,17 @@
-"""Run from backend: python evaluate.py --data <저장소 밖 CSV> [--split dev|test|all] [--output <md>]. 상세는 docs/EVALUATION.md."""
+"""Run from backend: python evaluate.py --data <저장소 밖 CSV> [--mode levels|binary] [--split dev|test|all] [--output <md>]. 상세는 docs/EVALUATION.md."""
 import argparse
 import csv
 import sys
 from pathlib import Path
 
-from evaluation.harness import ANALYZERS, SPLIT_FILTERS, AnalyzerSetupError, DatasetError, run
+from evaluation.harness import ANALYZERS, MODES, SPLIT_FILTERS, AnalyzerSetupError, DatasetError, run
 
 parser = argparse.ArgumentParser(description="고정 평가셋으로 분석기를 평가한다. 원문은 리포트에 넣지 않는다.")
 parser.add_argument("--data", required=True, type=Path, help="평가 CSV 경로 (저장소·동기화 폴더 밖 권장)")
 parser.add_argument("--analyzer", default="rules", choices=sorted(ANALYZERS))
 parser.add_argument("--split", default="all", choices=SPLIT_FILTERS, help="이 split의 행만 평가 (기본 all). 개발 중에는 dev만 쓴다")
+parser.add_argument("--mode", default="levels", choices=MODES,
+                    help="levels(기본): 4단계 지표. binary: 경고함(의심·위험)/경고 없음(정보 부족·정상) 이진 지표")
 parser.add_argument("--review-status", help="이 review_status 값의 행만 평가")
 parser.add_argument("--timeout", type=float, default=5.0, help="행당 분석 제한 시간(초)")
 parser.add_argument("--output", type=Path, help="Markdown 리포트 저장 경로 (없으면 표준 출력)")
@@ -19,7 +21,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
 try:
-    report = run(args.data, args.analyzer, args.review_status, args.timeout, split=args.split)
+    report = run(args.data, args.analyzer, args.review_status, args.timeout, split=args.split, mode=args.mode)
 except DatasetError as error:
     sys.exit(f"평가셋 형식 오류: {error}")
 except AnalyzerSetupError as error:
