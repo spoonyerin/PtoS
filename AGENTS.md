@@ -127,7 +127,8 @@
 | `backend/app/ocr.py` | 이미지 검증, OcrEngine |
 | `backend/evaluation/harness.py` | 평가셋 CSV 검증, Analyzer 실행, 4단계 지표와 리포트 |
 | `backend/evaluate.py` | 평가 하네스 명령줄 진입점 (`rules`, `rules+model`) |
-| `backend/evaluation/model_training.py`, `backend/train_model.py` | dev 전용 TF-IDF 기준선 학습, 그룹 교차검증, 임시 임계값, manifest |
+| `backend/evaluation/model_training.py`, `backend/train_model.py` | dev 전용 TF-IDF 기준선 학습, 그룹 교차검증, 임시 임계값, manifest. 라벨 기준 `--labels levels`(기본) / `binary`(선택, 팀 확정 필요) |
+| `backend/evaluation/model_comparison.py`, `backend/compare_models.py` | dev 전용 경량 모델 후보 교차검증 비교 (집계만, 모델 파일 없음, 채택 아님) |
 | `backend/measure_model.py` | 모델 로드·추론 지연과 메모리 측정 |
 | `scripts/convert_kr_mob_smishing.py` | KR-MOB-SMISHING v1 zip → 라벨링 전용 CSV와 별도 case_type 매핑 (데이터는 저장소 밖) |
 | `docs/EVALUATION.md` | 평가셋 스키마, 저장 위치와 개인정보 가리기, 실행·학습·측정 방법 |

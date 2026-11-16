@@ -57,12 +57,19 @@
 ## 학습과 임계값 (`backend/train_model.py`)
 
 - 라벨(D1-a): 사기 = `suspicious` + `dangerous`, 정상 = `normal`. `insufficient_information` 라벨과 URL 입력 행은 학습에서 뺀다.
+- 라벨 기준 선택(`--labels binary`, **임시, 팀 확정 필요, 기본 아님**): 이진 라벨만 있는 dev 행도 학습에 쓰려는 선택 사항이다. `expected_binary` 우선, 비어 있으면 4단계 라벨에서 만든다. 임계값 기준은 같고 "expected=normal 행" 자리에 정상(legit) 라벨 행이 들어간다. 이 기준으로 학습한 모델을 서버·평가에 쓸지는 팀이 정한다. 사용법은 [EVALUATION.md](EVALUATION.md).
 - **split=dev 행만** 학습·임계값 결정에 쓴다. test 행은 CSV 형식 검사로 읽은 직후 버리고 건수만 기록한다.
 - dev 안에서 `campaign_id` 기준 층화 그룹 교차검증(`StratifiedGroupKFold`, 기본 5 fold, 시드 고정)으로 out-of-fold(OOF) 점수를 낸다. 같은 campaign은 한 fold에만 들어간다.
 - **임계값 기준(임시, 팀 확정 필요):** OOF 점수에서 expected=normal 행이 모델 신호로 표시되는 경우 0건을 지키면서 사기 재현율이 최대인 값, 곧 normal 최고 점수보다 큰 사기 점수 중 가장 낮은 값이다. 규칙이 이미 의심으로 판정한 normal 행도 신호를 내지 않아야 하므로, 판정이 올라가는지로 따지는 것보다 엄격하다. manifest에 `threshold_status: "provisional-dev-cv"`로 기록한다. 그런 값이 없으면 `threshold_found: false`이고 서버는 그 모델로 신호를 내지 않는다.
 - 같은 OOF 점수로 임계값을 골랐으므로 OOF 지표도 낙관적이다. normal 표본이 적으면 임계값이 크게 흔들린다.
 - 최종 모델은 dev 전체로 다시 학습한다. 그래서 하네스로 dev를 다시 평가하면 in-sample이며 비교에 쓰지 않는다. dev 비교는 `train-report.md`의 OOF 결과를 쓴다.
 - manifest에는 모델 버전, 시드, 설정, fold 수, 평가 CSV SHA-256, 모델 파일 SHA-256, 코드 커밋·작업 트리 상태, 라이브러리 버전, 건수, 임계값 상태가 들어간다. 원문은 없다.
+
+## 후보 비교 (`backend/compare_models.py`, T5c 준비)
+
+- 기준선과 다른 scikit-learn 구성(문자·어절 n-gram, 로지스틱 회귀·나이브 베이즈)을 같은 dev 행·같은 fold로 비교하는 도구다. 모델 파일을 만들지 않고 서버 모델을 바꾸지 않는다.
+- **모델 선택은 팀 결정이다(AGENTS.md 결정 필요 3). 어느 후보도 채택하지 않았다.** 트랜스포머 후보는 포함하지 않았다.
+- 결과는 dev 수치라 부풀려져 있고 탐지 성능이 아니다. 사용법과 리포트 구성은 [EVALUATION.md](EVALUATION.md).
 
 ## 의존성
 

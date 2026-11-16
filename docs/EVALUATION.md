@@ -112,8 +112,10 @@ cd backend
 | `--seed` | 기본 20261027. 교차검증 분할과 분류기에 쓴다. |
 | `--n-splits` | `campaign_id` 기준 층화 그룹 교차검증 fold 수. 기본 5. 사기·정상 라벨 각각의 campaign 수가 이보다 적으면 거부한다. |
 | `--model-version` | 기본 `tfidf-lr-v1`. manifest와 리포트에 기록한다. |
+| `--labels` | 학습 라벨 기준. `levels`(기본, 4단계 라벨) / `binary`(이진 라벨, 선택 사항). 어느 기준을 쓸지는 임시이며 팀 확정이 필요하다. |
 
-- 라벨: 사기 = `suspicious` + `dangerous`, 정상 = `normal`. `insufficient_information` 라벨과 URL 입력 행은 학습에서 빼고 건수만 기록한다. `expected_level`이 빈 행(이진 라벨만 있는 행)도 학습에 쓰지 않고, 그런 행이 있을 때만 `no_level_label` 건수로 기록한다.
+- 라벨(`--labels levels`, 기본): 사기 = `suspicious` + `dangerous`, 정상 = `normal`. `insufficient_information` 라벨과 URL 입력 행은 학습에서 빼고 건수만 기록한다. `expected_level`이 빈 행(이진 라벨만 있는 행)도 학습에 쓰지 않고, 그런 행이 있을 때만 `no_level_label` 건수로 기록한다.
+- 라벨(`--labels binary`): 이진 평가와 같은 기준이다. `expected_binary`가 있으면 그 값(scam = 사기, legit = 정상), 비어 있으면 `expected_level`에서 만든다(`dangerous`·`suspicious` → 사기, `normal` → 정상). 정답이 `insufficient_information`이고 `expected_binary`가 없는 행은 뺀다. manifest에 `label_source: "binary"`와 라벨 출처별 행 수(`label_source_counts`)를 적고, `train-report.md`의 종합 판정 비교는 이진 혼동행렬로 낸다. `suspicious`에서 파생한 사기 라벨은 정답이 불확실하다. `levels`로 학습한 모델과 수치를 비교하지 않는다(학습 행과 라벨 기준이 다르다). 기본값으로 학습한 결과(manifest·리포트)는 이 옵션을 넣기 전과 같다.
 - test 행은 형식 검사로 읽은 직후 버린다. 학습·임계값 결정·리포트 지표에 쓰지 않는다.
 - 출력: `model.joblib`, `manifest.json`(모델 버전, 시드, 설정, 평가 CSV SHA-256, 모델 SHA-256, 커밋, 라이브러리 버전, 건수, 임시 임계값과 `threshold_status: provisional-dev-cv`), `train-report.md`(OOF 모델 단독 집계, 같은 dev 행의 rules / rules+model 혼동행렬, 모델 신호로 판정이 바뀐 id). 원문·URL·campaign 값은 넣지 않는다.
 - **임계값 기준은 임시이며 팀 확정이 필요하다.** OOF 점수에서 expected=normal 행 모델 신호 0건을 지키면서 사기 재현율 최대. 같은 점수로 골랐으므로 OOF 지표도 낙관적이다.
@@ -128,6 +130,29 @@ export PTOS_MODEL_PATH=C:/_Coding/ptos-eval/models/tfidf-lr-v1
 
 - **dev 행은 모델 학습과 임계값 결정에 쓴 행이다.** 하네스로 dev를 평가하면 in-sample이며 리포트가 경고를 낸다. dev 비교는 `train-report.md`의 OOF 결과를 쓴다. 학습 CSV와 평가 CSV의 SHA-256이 다르면 리포트가 그 사실을 적는다.
 - test는 코드와 임계값을 확정한 뒤 `rules`와 `rules+model`을 각각 **한 번만** 실행해 비교한다.
+
+## 경량 모델 후보 비교 (T5c 준비)
+
+`backend/compare_models.py`가 평가 CSV의 **split=dev 행만** 써서 경량 모델 후보를 같은 시드·같은 fold(`campaign_id` 기준 `StratifiedGroupKFold`)로 교차검증하고 집계만 비교한다. 모델 파일을 만들지 않고 서버가 쓰는 모델도 바꾸지 않는다. **어느 모델을 쓸지는 팀이 정한다(AGENTS.md 결정 필요 3). 이 도구는 후보를 채택하지 않는다.**
+
+```bash
+cd backend
+../.venv/Scripts/python.exe compare_models.py --data C:/_Coding/ptos-eval/eval-v1.csv --output C:/_Coding/ptos-eval/reports/compare-models-dev.md
+```
+
+| 옵션 | 설명 |
+| --- | --- |
+| `--data` | 평가 CSV (필수). 하네스와 같은 스키마 검사를 한다. |
+| `--seed`, `--n-splits` | `train_model.py`와 같은 뜻, 같은 기본값(20261027, 5). |
+| `--labels` | `levels`(기본) / `binary`. `train_model.py`와 같은 라벨 기준이다. |
+| `--candidates` | 비교할 후보 이름들. 없으면 전체. |
+| `--output` | 리포트 저장 경로. 저장소 안이면 거부한다. 없으면 표준 출력. |
+
+- 후보(개발용 목록, 성능 근거로 고른 것이 아님): `tfidf-char_wb-2-4-lr`(현재 기준선, `train_model.py`의 기본 설정과 같음), `tfidf-char-1-3-lr`, `tfidf-word-1-2-lr`, `tfidf-char_wb-2-4-nb`. 모두 내려받을 것이 없는 scikit-learn 구성이다. **트랜스포머 후보(KoELECTRA 등)는 없다.** 모델 내려받기와 이용 조건 확인이 필요해 따로 합의한 뒤 추가한다.
+- 리포트: 후보별 임시 임계값(학습과 같은 기준), OOF 모델 단독 신호(사기·정상), 임계값과 무관한 순위 지표(ROC AUC, 평균 정밀도), 교차검증 시간(한 번 잰 참고값), 그리고 현재 임시 종합 정책(정보 부족 → 의심만)을 그대로 적용한 `rules` 대 `rules+후보`의 사기 경고율·사기 놓침·정상 오탐률·정상 → 위험.
+- 리포트에는 집계만 있다. 원문·URL·행 id·campaign 값을 넣지 않는다. test 행은 읽은 직후 버린다.
+- **(dev, 부풀려진 수치)** 후보마다 같은 OOF 점수로 임계값을 골랐고, 이 결과로 후보를 고르면 dev에 맞춘 선택이 된다. 탐지 성능 수치가 아니다. 같은 평가 CSV SHA-256·같은 라벨 기준·같은 시드와 fold 수의 리포트끼리만 비교한다.
+- 추론 지연·메모리는 재지 않는다. 후보를 고른 뒤 그 모델을 `train_model.py`로 학습해 `measure_model.py`로 잰다(현재 `train_model.py`는 기준선 설정만 학습한다).
 
 ## 모델 지연·메모리 측정
 
