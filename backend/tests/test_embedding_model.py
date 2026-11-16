@@ -81,7 +81,7 @@ def test_embedding_model_loads_with_the_recorded_encoder_and_runs_in_composite(t
     assert 0.0 <= state.model.score("이번 주 토요일 모임은 공원에서 열립니다") <= 1.0
     analyzer = CompositeAnalyzer(RuleBasedAnalyzer(), state)
     result = asyncio.run(analyzer.analyze(AnalysisInput(input_type="text", content="이번 주 토요일 모임은 공원에서 열립니다")))
-    assert result.analysis_stages[1].status == "completed" and result.confidence is None and result.risk_level != "normal"
+    assert result.analysis_stages[1].status == "completed" and result.confidence is None and result.risk_level in ("normal", "insufficient_information")
 
 
 def test_missing_torch_or_encoder_turns_the_model_stage_off_without_breaking_rules(trained, monkeypatch):

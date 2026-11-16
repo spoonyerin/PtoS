@@ -181,7 +181,7 @@ def test_trained_model_loads_and_runs_in_composite(data_csv, tmp_path):
     analyzer = CompositeAnalyzer(RuleBasedAnalyzer(DisconnectedReputationProvider("test")), state)
     result = asyncio.run(analyzer.analyze(AnalysisInput(input_type="text", content="이번 주 토요일 모임은 공원에서 열립니다")))
     assert result.analysis_stages[1].status == "completed"
-    assert result.confidence is None and result.risk_level != "normal"
+    assert result.confidence is None and result.risk_level in ("normal", "insufficient_information")
 
 
 # ---- 이진 라벨 기준(--labels binary, 선택 사항). 기본 levels 동작은 그대로여야 한다. ----

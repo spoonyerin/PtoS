@@ -23,6 +23,7 @@ RULE_TEMPLATES = {
     "link_click-confirm-v1": ("주소를 보여주며 확인하도록 안내하는 표현이 있어요. 이 표현만으로 링크의 악성 여부를 판단하지 않아요.", TEMPLATES[F.LINK_CLICK][1]),
 }
 HEADINGS = {
+    RiskLevel.NORMAL: "특별한 위험 신호를 찾지 못했어요. 그렇다고 안전을 보증하는 것은 아니에요.",
     RiskLevel.DANGEROUS: "위험 신호가 함께 발견됐어요. 임시 규칙 정책에 따른 경고이며 사기 확정은 아니에요.",
     RiskLevel.SUSPICIOUS: "확인이 필요한 요구 표현을 발견했어요. 규칙만으로 전체 위험을 판단할 수는 없어요.",
     RiskLevel.INSUFFICIENT_INFORMATION: "현재 입력과 규칙만으로 판단하기 어려워요. 분석하지 못한 단계가 있어 정상으로 판단하지 않았어요.",

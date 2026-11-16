@@ -3,7 +3,7 @@
 import asyncio
 from typing import Protocol
 
-from .contracts import AnalysisInput, AnalysisResult, AnalysisStage, InputAssessment, UrlFinding, UrlOccurrence, UrlReputation
+from .contracts import AnalysisInput, AnalysisResult, AnalysisStage, InputAssessment, RiskLevel, UrlFinding, UrlOccurrence, UrlReputation
 from .rule_detection import RuleScan, scan_rules
 from .rule_policy import decide
 from .rule_templates import render
@@ -12,7 +12,9 @@ from .urls import extract_urls
 from .llm_policy import SENT_NOTICE, LlmScope, combine_llm, limitation_for, should_review
 from .llm_review import LlmReview, LlmReviewer, mask_for_llm
 from .model_adapter import ModelState, prepare_model_text
-from .model_policy import BASE_LIMITATION, MODEL_LIMITATIONS, STAGE_STATUS, ModelOutcome, combine_model
+from .model_policy import (
+    BASE_LIMITATION, MODEL_LIMITATIONS, NORMAL_ACTIONS, STAGE_STATUS, ModelOutcome, combine_model, normal_eligible,
+)
 from .url_reputation import DisconnectedReputationProvider, UrlReputationProvider
 
 
@@ -98,7 +100,7 @@ class CompositeAnalyzer:
     모델 단계가 없거나 실패하면 규칙 결과와 근거를 그대로 두고 analysis_stages와 limitations에만 표시한다.
     """
 
-    VERSION = "rules-model-dev-v4"
+    VERSION = "rules-model-dev-v5"
 
     def __init__(self, rules: RuleBasedAnalyzer, model_state: ModelState, model_timeout: float = 1.0,
                  llm: LlmReviewer | None = None, llm_scope: LlmScope = "weak_evidence", llm_timeout: float = 3.0):
@@ -137,11 +139,21 @@ class CompositeAnalyzer:
         except Exception:
             # 예외 문자열에 입력이 섞일 수 있어 기록하지 않는다.
             return "error"
-        return "flagged" if score >= model.threshold else "not_flagged"
+        if score >= model.threshold:
+            return "flagged"
+        # 정상 임계값이 있는 모델만: 교차검증에서 어떤 사기 문자의 점수보다도 낮은 구간.
+        normal_threshold = getattr(model, "normal_threshold", None)
+        return "clear" if normal_threshold is not None and score < normal_threshold else "not_flagged"
 
     async def analyze(self, data: AnalysisInput) -> AnalysisResult:
         result, outcome = await asyncio.gather(self.rules.analyze(data), self._model_outcome(data))
-        level, reason, explanation = combine_model(result.risk_level, result.policy_reason, result.explanation, outcome)
+        reputation_stage = next(stage.status for stage in result.analysis_stages if stage.name == "url_reputation")
+        eligible = normal_eligible(result.risk_level, result.input_assessment.status, {e.rule_id for e in result.evidence},
+                                   bool(result.urls), reputation_stage)
+        level, reason, explanation = combine_model(result.risk_level, result.policy_reason, result.explanation, outcome, eligible)
+        actions = result.action_guidance
+        if level == RiskLevel.NORMAL and not result.evidence:
+            actions = NORMAL_ACTIONS
         limitations = [BASE_LIMITATION, MODEL_LIMITATIONS[outcome], *(text for text in result.limitations if text != RULES_ONLY_LIMITATION)]
         stages = [stage if stage.name != "lightweight_model" else AnalysisStage(name="lightweight_model", status=STAGE_STATUS[outcome])
                   for stage in result.analysis_stages]
@@ -151,6 +163,7 @@ class CompositeAnalyzer:
             level, reason, explanation = combine_llm(level, reason, explanation, review)
             limitations += [SENT_NOTICE, limitation_for(review)]
         return result.model_copy(update={
+            "action_guidance": actions,
             "risk_level": level, "policy_reason": reason, "explanation": explanation,
             "limitations": limitations, "analysis_version": self.VERSION, "analysis_stages": stages,
         })

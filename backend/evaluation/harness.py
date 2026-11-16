@@ -506,6 +506,8 @@ def _binary_section(title: str, outcomes: list[Outcome]) -> list[str]:
         "",
         f"- 사기 경고율 (scam 중 의심·위험): {_rate(m.scam_warned, m.scam_total)} (분모에 오류 {m.scam_errors}건 포함)",
         f"- 사기 놓침 (scam 중 정보 부족·정상): {m.scam_missed}건",
+        f"- 사기 → 정상 판정 (가장 나쁜 오류, 위 놓침에 포함): {m.confusion['scam'][RiskLevel.NORMAL.value]}건"
+        f" / 정상 → 정상 판정: {_rate(m.confusion['legit'][RiskLevel.NORMAL.value], m.legit_total)}",
         f"- 정상 오탐률 (legit 중 의심·위험): {_rate(m.legit_flagged, m.legit_total)} (분모에 오류 {m.legit_errors}건 포함)",
         f"- 정상 → 위험 (심각한 오탐): {m.legit_dangerous}건",
         f"- 사기 중 위험 판정 비율: {_rate(m.scam_dangerous, m.scam_total)}",

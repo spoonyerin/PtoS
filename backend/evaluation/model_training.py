@@ -30,6 +30,7 @@ from .harness import (
 
 MODEL_FILE = "model.joblib"
 REPORT_FILE = "train-report.md"
+NORMAL_THRESHOLD_RULE = "OOF 사기 점수 최솟값. 그보다 낮은 점수만 정상 후보 (OOF에서 사기 행 정상 후보 0건, 임시, 팀 확정 필요)"
 THRESHOLD_STATUS = "provisional-dev-cv"
 THRESHOLD_RULE = "OOF 점수에서 expected=normal 행 모델 신호 0건을 지키며 사기 재현율 최대 (임시, 팀 확정 필요)"
 POSITIVE_LEVELS = (RiskLevel.SUSPICIOUS.value, RiskLevel.DANGEROUS.value)
@@ -176,6 +177,27 @@ def choose_threshold(scores: list[float], labels: list[int]) -> float | None:
     return min(above) if above else None
 
 
+def choose_normal_threshold(scores: list[float], labels: list[int], threshold: float | None) -> float | None:
+    """정상 임계값(임시): 사기 점수 최솟값. 그보다 낮은 점수만 정상 후보다 (OOF에서 사기 행이 정상 후보가 되는 경우 0건).
+
+    그보다 낮은 정상 행이 하나도 없거나 모델 신호 임계값보다 크면 None(이 모델로는 정상을 반환하지 않음).
+    """
+    fraud = [s for s, y in zip(scores, labels) if y == 1]
+    if not fraud:
+        return None
+    lowest = min(fraud)
+    if not any(s < lowest for s, y in zip(scores, labels) if y == 0) or (threshold is not None and lowest > threshold):
+        return None
+    return lowest
+
+
+def normal_counts(scores: list[float], labels: list[int], normal_threshold: float | None) -> dict[str, int]:
+    below = [normal_threshold is not None and s < normal_threshold for s in scores]
+    return {"legit_below": sum(b and y == 0 for b, y in zip(below, labels)),
+            "scam_below": sum(b and y == 1 for b, y in zip(below, labels)),
+            "legit_total": labels.count(0), "scam_total": labels.count(1)}
+
+
 def model_counts(scores: list[float], labels: list[int], threshold: float | None) -> dict[str, int]:
     flagged = [threshold is not None and s >= threshold for s in scores]
     return {
@@ -189,21 +211,21 @@ def model_counts(scores: list[float], labels: list[int], threshold: float | None
 class _FixedScoreModel:
     """OOF 종합 평가용: 해당 행의 fold 밖 모델 점수를 그대로 낸다."""
 
-    def __init__(self, score: float, threshold: float, version: str):
-        self._score, self.threshold, self.version = score, threshold, version
+    def __init__(self, score: float, threshold: float, version: str, normal_threshold: float | None = None):
+        self._score, self.threshold, self.version, self.normal_threshold = score, threshold, version, normal_threshold
 
     def score(self, text: str) -> float:
         return self._score
 
 
-async def oof_outcomes(data: TrainingSet, scores: list[float], threshold: float | None,
-                       version: str, timeout: float) -> tuple[list[Outcome], list[Outcome]]:
+async def oof_outcomes(data: TrainingSet, scores: list[float], threshold: float | None, version: str, timeout: float,
+                       normal_threshold: float | None = None) -> tuple[list[Outcome], list[Outcome]]:
     rules = RuleBasedAnalyzer(DisconnectedReputationProvider("training_offline"))
     rules_only, combined = [], []
     for row, score in zip(data.rows, scores):
         rules_only.append(await _analyze_one(rules, row, timeout))
         # 임계값이 없으면 1보다 큰 값을 넣어 모델 신호가 나오지 않게 한다.
-        model = _FixedScoreModel(score, threshold if threshold is not None else 2.0, version)
+        model = _FixedScoreModel(score, threshold if threshold is not None else 2.0, version, normal_threshold)
         combined.append(await _analyze_one(CompositeAnalyzer(rules, ModelState("loaded", model)), row, timeout))
     return rules_only, combined
 
@@ -281,7 +303,13 @@ def render_training_report(manifest: dict, data: TrainingSet, counts: dict[str, 
         "## 모델 단독 (OOF, 임계값 적용)", "",
         *_table(["", "모델 신호", "신호 없음"], [[positive_name, counts["tp"], counts["fn"]],
                                               [negative_name, counts["fp"], counts["tn"]]]), "",
-        f"- 사기 재현율 {_fmt(recall)}, 정밀도 {_fmt(precision)}. 임계값을 같은 OOF 점수로 골랐으므로 낙관적인 값이다.", "",
+        f"- 사기 재현율 {_fmt(recall)}, 정밀도 {_fmt(precision)}. 임계값을 같은 OOF 점수로 골랐으므로 낙관적인 값이다.",
+        "- 정상 임계값(임시): " + (
+            f"{_fmt(manifest['normal_threshold'])}. 이 값 미만인 OOF 점수는 정상 행 "
+            f"{manifest['oof_normal_counts']['legit_below']}/{manifest['oof_normal_counts']['legit_total']}건, 사기 행 "
+            f"{manifest['oof_normal_counts']['scam_below']}/{manifest['oof_normal_counts']['scam_total']}건(기준상 0건)이다. "
+            "정상 판정에는 규칙·입력·주소 조건이 더 붙는다."
+            if manifest["normal_threshold_found"] else "찾지 못함 (이 모델로는 정상을 반환하지 않는다)"), "",
         "## 종합 판정 비교 (같은 dev 행, 모델 점수는 OOF)", "",
         "### rules", "", *section("전체", rules_only),
         "### rules+model", "", *section("전체", combined),
@@ -317,7 +345,8 @@ def train(data_path: Path, out_dir: Path, seed: int, n_splits: int, model_versio
     scores, folds = cross_validate(data, config, seed, n_splits, pipeline_factory)
     threshold = choose_threshold(scores, data.labels)
     counts = model_counts(scores, data.labels, threshold)
-    rules_only, combined = asyncio.run(oof_outcomes(data, scores, threshold, model_version, timeout))
+    normal_threshold = choose_normal_threshold(scores, data.labels, threshold)
+    rules_only, combined = asyncio.run(oof_outcomes(data, scores, threshold, model_version, timeout, normal_threshold))
 
     final = pipeline_factory(config, seed)
     final.fit(data.texts, data.labels)
@@ -325,8 +354,10 @@ def train(data_path: Path, out_dir: Path, seed: int, n_splits: int, model_versio
     if data.held_out is not None and data.held_out.rows:
         # 학습에서 뺀 출처 행은 다 학습한 모델로 채점만 한다. 임계값은 위에서 학습 행만으로 이미 정했다.
         held_scores = score_texts(final, data.held_out.texts)
-        held_rules, held_combined = asyncio.run(oof_outcomes(data.held_out, held_scores, threshold, model_version, timeout))
+        held_rules, held_combined = asyncio.run(
+            oof_outcomes(data.held_out, held_scores, threshold, model_version, timeout, normal_threshold))
         held = {"counts": model_counts(held_scores, data.held_out.labels, threshold),
+                "normal_counts": normal_counts(held_scores, data.held_out.labels, normal_threshold),
                 "rules_only": held_rules, "combined": held_combined}
     out_dir.mkdir(parents=True, exist_ok=True)
     # 임시 파일에 쓴 뒤 옮겨 반쯤 쓴 모델 파일이 남지 않게 한다.
@@ -349,6 +380,11 @@ def train(data_path: Path, out_dir: Path, seed: int, n_splits: int, model_versio
         "threshold_found": threshold is not None,
         "threshold_status": THRESHOLD_STATUS,
         "threshold_rule": THRESHOLD_RULE,
+        # 정상 임계값(임시): 이 값 미만의 점수만 정상 후보다. 찾지 못하면 이 모델로는 정상을 반환하지 않는다.
+        "normal_threshold": normal_threshold if normal_threshold is not None else 0.0,
+        "normal_threshold_found": normal_threshold is not None,
+        "normal_threshold_rule": NORMAL_THRESHOLD_RULE,
+        "oof_normal_counts": normal_counts(scores, data.labels, normal_threshold),
         "label_mapping": {"positive": list(POSITIVE_LEVELS), "negative": list(NEGATIVE_LEVELS)},
         "text_preprocessing": "URL 구간을 '<URL>'로 치환 (app.model_adapter.prepare_model_text)",
         "seed": seed,
@@ -376,7 +412,8 @@ def train(data_path: Path, out_dir: Path, seed: int, n_splits: int, model_versio
                      "text_preprocessing": manifest["text_preprocessing"] + ", 그 뒤 고정 인코더로 임베딩"}
     if data.excluded_sources:
         manifest |= {"excluded_sources": list(data.excluded_sources),
-                     "held_out_model_counts": held["counts"] if held else None}
+                     "held_out_model_counts": held["counts"] if held else None,
+                     "held_out_normal_counts": held["normal_counts"] if held else None}
     (out_dir / MANIFEST_NAME).write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     (out_dir / REPORT_FILE).write_text(render_training_report(manifest, data, counts, folds, rules_only, combined, held) + "\n", encoding="utf-8")
     return manifest

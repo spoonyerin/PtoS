@@ -28,6 +28,8 @@ class TextRiskModel(Protocol):
 
     version: str
     threshold: float
+    # 선택: 이 값 미만이면 정상 후보로 본다. 없으면(None) 이 모델로는 정상을 반환하지 않는다.
+    normal_threshold: float | None
 
     def score(self, text: str) -> float: ...
 
@@ -72,7 +74,8 @@ def file_sha256(path: Path) -> str:
 class JoblibTextModel:
     """predict_proba와 classes_를 가진 학습 파이프라인(예: TF-IDF + 로지스틱 회귀)을 감싼다."""
 
-    def __init__(self, pipeline, version: str, threshold: float, info: dict | None = None):
+    def __init__(self, pipeline, version: str, threshold: float, info: dict | None = None,
+                 normal_threshold: float | None = None):
         classes = list(getattr(pipeline, "classes_", []))
         if not hasattr(pipeline, "predict_proba") or 1 not in classes:
             raise ModelLoadError("MODEL_INTERFACE_INVALID")
@@ -80,6 +83,7 @@ class JoblibTextModel:
         self._positive = classes.index(1)
         self.version = version
         self.threshold = threshold
+        self.normal_threshold = normal_threshold
         # 재현 기록용 manifest 일부 (모델·학습 CSV SHA-256, 임계값 상태). 원문은 없다.
         self.info = dict(info or {})
 
@@ -138,6 +142,17 @@ def _with_encoder(classifier, embedding: object):
     return EncodedClassifier(classifier, encode)
 
 
+def _normal_threshold(manifest: dict) -> float | None:
+    """정상 임계값(선택). 없거나 찾지 못한 모델은 None이며 그 모델로는 정상을 반환하지 않는다."""
+    if manifest.get("normal_threshold_found") is not True:
+        return None
+    value = manifest.get("normal_threshold")
+    if (isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+            or not 0 < value <= manifest["threshold"]):
+        raise ModelLoadError("MANIFEST_INVALID")
+    return float(value)
+
+
 def load_model(directory: Path) -> TextRiskModel:
     if is_inside_repo(directory):
         raise ModelLoadError("MODEL_PATH_INSIDE_REPO")
@@ -167,7 +182,7 @@ def load_model(directory: Path) -> TextRiskModel:
     threshold = float(manifest["threshold"]) if manifest.get("threshold_found", True) is not False else math.inf
     info = {"model_sha256": manifest["model_sha256"].lower(), "data_sha256": manifest.get("data_sha256"),
             "threshold_status": manifest.get("threshold_status"), "threshold_found": manifest.get("threshold_found", True)}
-    return JoblibTextModel(pipeline, manifest["model_version"], threshold, info)
+    return JoblibTextModel(pipeline, manifest["model_version"], threshold, info, _normal_threshold(manifest))
 
 
 def load_configured_model(env: dict[str, str] | None = None) -> ModelState:
