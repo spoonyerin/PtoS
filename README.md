@@ -168,7 +168,7 @@ Codespaces는 해당 환경의 전달 호스트만 허용합니다. `allowedHost
 { "input_type": "text", "content": "은행 담당자입니다. 인증번호를 알려주세요." }
 ```
 
-응답은 `request_id`, `risk_level`, `confidence: null`, `risk_factors`, `explanation`, `action_guidance`, `limitations`, `analysis_version: rules-model-dev-v4`, `analysis_mode: rules`(모델이 함께 돌아도 계약상 `rules`, 알려진 한계), `is_demo: false`와 다음을 포함합니다.
+응답은 `request_id`, `risk_level`, `confidence: null`, `risk_factors`, `explanation`, `action_guidance`, `limitations`, `analysis_version: rules-model-dev-v5`, `analysis_mode: rules`(모델이 함께 돌아도 계약상 `rules`, 알려진 한계), `is_demo: false`와 다음을 포함합니다.
 
 - `evidence`: 코드·표시 이름·규칙 ID·`source: rule | url_reputation`·원문 구절·`start`/`end`. URL 근거는 검증된 전체 해시와 위협 유형 일치가 있어야 하며 기본 미연결 앱에서는 생성하지 않습니다. 좌표는 원문 유니코드 코드포인트의 시작 포함·끝 제외입니다. JS에서는 `Array.from(content).slice(start, end)`가 같은 구절이어야 합니다. 현재 화면은 좌표로 강조하지 않고 받은 구절을 그대로 표시합니다.
 - `input_assessment`: `action_identified` / `sentence_present` / `fragment` / `url_only`와 이유. 글자 수만으로 충분성을 정하지 않습니다.
@@ -178,7 +178,7 @@ Codespaces는 해당 환경의 전달 호스트만 허용합니다. `allowedHost
 
 평판 계약에는 `auth_error`·`rate_limited`와 `reason`, `full_hash_verified`, `threat_types`, `cache_expires_at`, `cache_hit`을 추가했습니다. `unknown/no_match`는 안전 판정이 아니며 이 어댑터는 `benign`을 생성하지 않습니다. 전체 해시와 위협 유형이 일치할 때만 임시 위험 경고를 추가합니다. 장애 reason은 `network_error`, `server_error`, `http_error`, `invalid_response`, 꺼짐 reason은 `key_missing`, `policy_pending`, `invalid_config`, `not_configured`로 구분합니다. [종합 정책·상태 표](docs/SAFE_BROWSING.md)를 참고하세요.
 
-`risk_level` 계약은 `normal | suspicious | dangerous | insufficient_information`을 유지하지만 현재 정책에서는 normal을 생성하지 않습니다. 지원하는 표현이 제한적이므로 우회 표현·복잡한 부정·인용·다른 대화 주체를 놓치거나 잘못 경고할 수 있습니다.
+`risk_level` 계약은 `normal | suspicious | dangerous | insufficient_information`을 유지하지만 현재 정책에서는 제한된 조건(docs/MODEL_POLICY.md “정상 반환”)에서만 normal을 생성하며, 모델 없이 규칙만 실행하면 생성하지 않습니다. 지원하는 표현이 제한적이므로 우회 표현·복잡한 부정·인용·다른 대화 주체를 놓치거나 잘못 경고할 수 있습니다.
 
 오류는 422(`INVALID_INPUT`/`INPUT_TOO_LONG`/`INVALID_URL`/`TOO_MANY_URLS`), 503(`ANALYSIS_UNAVAILABLE`), 서버 분석 5초 제한 초과 시 504(`ANALYSIS_TIMEOUT`)로 구분하며 `{ "error": { "code", "message", "retryable" }, "request_id" }` 형태입니다. 브라우저 대기 제한은 별도로 10초입니다. 정보 부족은 오류가 아닌 HTTP 200 분석 결과입니다.
 

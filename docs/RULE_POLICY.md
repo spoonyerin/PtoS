@@ -4,14 +4,14 @@
 
 PRD v1.2 FR-04~09와 개발설계서 5~7장의 **입력 충분성 → 근거 → 설명·행동** 원칙을 적용한다. 아래 내용은 이번 개발 증분의 검수 가능한 기준선이다. PRD가 확정한 판정 경계·정확도·신뢰도·점수 임계값이 아니다. 점수를 합산하거나 안전 확률을 만들지 않는다.
 
-이 문서는 문자 규칙의 기준선이다. 후속 종합 정책은 [SAFE_BROWSING.md](SAFE_BROWSING.md)의 종합 판정(`RuleBasedAnalyzer`의 `analysis_version: rules-reputation-dev-v5`)과 [MODEL_POLICY.md](MODEL_POLICY.md)의 모델 종합(API 응답 `analysis_version: rules-model-dev-v4`)을 따른다. 2026-11-17: v4 3차 보강과 문장 중간 줄바꿈 처리를 묶어 문자 규칙을 `rules-dev-v5`로 부르고, `RuleBasedAnalyzer`의 값을 `rules-reputation-dev-v5`, API 응답을 `rules-model-dev-v4`로 올렸다. 평판·모델 종합 방식은 바뀌지 않았다. 두 값은 v4 1차(2026-11-09)에서 `rules-reputation-dev-v3`·`rules-model-dev-v2`로, v4 2차(2026-11-11)에서 `rules-reputation-dev-v4`·`rules-model-dev-v3`로 올렸다. 두 번 모두 문자 규칙이 바뀌었음을 구분하려는 것이며 평판·모델 종합 방식은 바뀌지 않았다. 검증된 전체 해시 위협 일치만 URL 근거로 추가하며, 기존 문자 근거는 유지한다. 실제 외부 조회는 계속 보류 상태다.
+이 문서는 문자 규칙의 기준선이다. 후속 종합 정책은 [SAFE_BROWSING.md](SAFE_BROWSING.md)의 종합 판정(`RuleBasedAnalyzer`의 `analysis_version: rules-reputation-dev-v5`)과 [MODEL_POLICY.md](MODEL_POLICY.md)의 모델 종합(API 응답 `analysis_version: rules-model-dev-v5`)을 따른다. 2026-11-17: v4 3차 보강과 문장 중간 줄바꿈 처리를 묶어 문자 규칙을 `rules-dev-v5`로 부르고, `RuleBasedAnalyzer`의 값을 `rules-reputation-dev-v5`, API 응답을 `rules-model-dev-v4`로 올렸다. 평판·모델 종합 방식은 바뀌지 않았다. 두 값은 v4 1차(2026-11-09)에서 `rules-reputation-dev-v3`·`rules-model-dev-v2`로, v4 2차(2026-11-11)에서 `rules-reputation-dev-v4`·`rules-model-dev-v3`로 올렸다. 두 번 모두 문자 규칙이 바뀌었음을 구분하려는 것이며 평판·모델 종합 방식은 바뀌지 않았다. 검증된 전체 해시 위협 일치만 URL 근거로 추가하며, 기존 문자 근거는 유지한다. 실제 외부 조회는 계속 보류 상태다.
 
 ## 현재 가능한 분석과 없는 분석
 
 - 실행: 한국어 표현 패턴으로 실제 입력의 명의 주장, 금전·민감정보 요구, 링크 클릭·앱 설치 유도, 긴급성·불이익 압박을 찾는다. 문자열은 정규화하지 않으며 유연한 공백 패턴만 사용한다.
 - 경량 모델: TF-IDF 기준선만 연결했고 규칙의 정보 부족을 의심으로 올릴 수만 있다([MODEL_POLICY.md](MODEL_POLICY.md)). 이 문서의 규칙 판정은 모델과 별개다.
 - 미구현: URL 평판 조회. 유효한 URL이 있으면 기본 평판 단계는 `not_connected`, 없으면 `not_applicable`로 보고한다. 무효 후보는 평판 조회를 하지 않는다. URL 입력·추출 기준은 [URL_POLICY.md](URL_POLICY.md)에 분리했다. 조회를 수행한 것처럼 `benign`이나 `unknown`을 반환하지 않는다.
-- 현재는 어떠한 입력에도 `normal`을 반환하지 않는다. 일상 안내·예방 교육에 위험 요구가 없더라도 미구현 분석 때문에 `insufficient_information`이다. 정상 안내문을 사기라고 단정하지도 않는다.
+- 규칙 분석기(`RuleBasedAnalyzer`)만으로는 어떠한 입력에도 `normal`을 반환하지 않는다. 규칙에 걸리지 않았다는 것만으로는 정상이 아니기 때문이다. `normal`은 모델까지 본 종합 단계에서 제한된 조건을 모두 만족할 때만 나온다([MODEL_POLICY.md](MODEL_POLICY.md) “정상 반환”). 정상 안내문을 사기라고 단정하지도 않는다.
 - `confidence`는 항상 `null`, `analysis_mode`는 `rules`, `is_demo`는 `false`다. 규칙의 경고도 실제 사기 확정이나 안전 보증이 아니다.
 
 ## 입력 충분성과 근거
