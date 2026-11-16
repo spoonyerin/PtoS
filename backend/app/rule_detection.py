@@ -222,6 +222,19 @@ def code_notice_exception(prose: str, findings: list[Finding], has_url: bool, ig
     return True
 
 
+# rules-dev-v5(임시): 문장 중간의 줄바꿈. 화면 폭이나 OCR 때문에 "인증번호를⏎알려주세요"처럼 끊긴 줄을 구절 검사에서만 잇는다.
+# 글자 수와 좌표가 바뀌지 않도록 줄바꿈 글자를 같은 길이의 표시 글자로 바꾼다. 표시 글자는 공백으로 취급되고 구절 경계가 아니다.
+SOFT_BREAK = " "
+# 앞줄이 한글·영문·숫자·쉼표로 끝나고(문장부호로 끝나지 않고), 빈 줄이 아니며, 다음 줄이 한글·영문으로 시작할 때만 잇는다.
+# 다음 줄이 번호 목록("1) …"), 항목 이름·화자 표시("확인: …", "A: …"), 대괄호 머리말, 기호로 시작하면 잇지 않는다.
+SOFT_LINE_BREAK = re.compile(
+    r"(?<=[가-힣A-Za-z0-9,])[ \t]*\r?\n[ \t]*(?=[가-힣A-Za-z])(?![^\s:：]{1,10}[ \t]*[:：])")
+
+
+def soften_line_breaks(prose: str) -> str:
+    return SOFT_LINE_BREAK.sub(lambda match: re.sub(r"[\r\n]", SOFT_BREAK, match.group()), prose)
+
+
 def educational_quotes(text: str) -> list[tuple[int, int]]:
     """교육·주의 대상으로 명시한 인용만 제외한다. 문서 전체를 제외하지 않는다."""
     spans = []
@@ -241,6 +254,8 @@ def scan_rules(text: str, *, url_spans: list[tuple[int, int]] | None = None) -> 
         prose[left:right] = " " * (right - left)
     prose = "".join(prose)
     ignored = educational_quotes(prose)
+    # 구절 단위 검사만 문장 중간 줄바꿈을 이어서 본다. 줄 단위 형태(머리말·호칭·주소 앞 안내)와 문맥 경계는 원래 줄바꿈 그대로다.
+    flow = soften_line_breaks(prose)
     findings: list[Finding] = []
 
     def overlaps(start: int, end: int, spans: list[tuple[int, int]]) -> bool:
@@ -259,7 +274,8 @@ def scan_rules(text: str, *, url_spans: list[tuple[int, int]] | None = None) -> 
         findings.append(Finding(evidence, 0, kind))
 
     def asserted(clause: str, end: int) -> bool:
-        after = clause[end:]
+        # 부정 범위는 이어 붙인 다음 줄로 넘기지 않는다 (원래 줄 안에서만 본다).
+        after = clause[end:].split(SOFT_BREAK)[0]
         # rules-dev-v4(임시): 부정은 표현에 바로 이어지는 서술어(첫 연결 어미까지)에만 적용한다.
         # "해지되니 무시하지 마세요"의 뒤 구절 부정이 앞의 불이익 예고를 지우지 않게 한다.
         if CLOSED_END.search(clause[:end]):
@@ -270,7 +286,7 @@ def scan_rules(text: str, *, url_spans: list[tuple[int, int]] | None = None) -> 
         return not NEGATION.search(scope) and not (REPORT.search(after) and META.search(after))
 
     # URL의 마침표와 교육 인용 안의 문장부호는 구절 경계로 사용하지 않는다.
-    boundaries = [match for match in BOUNDARY.finditer(prose) if not overlaps(*match.span(), ignored)]
+    boundaries = [match for match in BOUNDARY.finditer(flow) if not overlaps(*match.span(), ignored)]
     cursor = 0
     clauses = []
     for boundary in boundaries:
@@ -279,7 +295,7 @@ def scan_rules(text: str, *, url_spans: list[tuple[int, int]] | None = None) -> 
     clauses.append((cursor, len(text)))
 
     for start, end in clauses:
-        clause = prose[start:end]
+        clause = flow[start:end]
         targets = [(m.start(), m.end(), m.lastgroup) for m in TARGET_PATTERN.finditer(clause) if not overlaps(start + m.start(), start + m.end(), urls)]
         targets.extend((left - start, right - start, FactorCode.LINK_CLICK.value) for left, right in urls if start <= left and right <= end)
         if urls:
