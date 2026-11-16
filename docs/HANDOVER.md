@@ -289,6 +289,61 @@ T3과 같은 평가 CSV(SHA-256 `e65dd42f…49ea4`)로 비교했다. 보강 전 
   - (직접 지은 문장 측정, dev 수치 아님) 직접 지은 정상 안내 6건 중 4건(택배 재배송 신청, 행사 참가 신청, 병원 예약 변경, 택배 반송 예정 안내)이 의심으로 올라가 보류하고 코드를 되돌렸다. 링크가 있는 실제 정상 문자로 다시 잰 뒤 결정한다.
 - 리포트는 `C:\_Coding\ptos-eval\reports\v4\round2-*.md`와 `C:\_Coding\ptos-eval\reports\v4r2\`에 있다(저장소 밖, 원문 없음: 행 id·판정·`policy_reason`·근거 신호 코드만).
 
+### eval-v2.1 dev: 규칙 3차 보강, 모델 재학습, 조건부 LLM 구조 (2026-11-16)
+
+**(dev, 부풀려진 수치)** **탐지 성능 주장이 아니다. test는 열지도 실행하지도 않았다.** 이 절의 수치는 모두 평가 CSV `eval-v2.1-dev.csv`(SHA-256 `2dc10e524f492fcd368f6d50d313419470cbede23b9164d1fdbac6b86374f359`)의 값이며, 다른 평가 CSV를 쓴 앞 절의 수치와 비교하지 않는다. 코드는 커밋 `190b9c9` + 미커밋 변경, Windows 11 / Git Bash. PRD 원문은 경로를 받지 못해 읽지 않았고, 남은 작업 목록은 `AGENTS.md`와 이 문서의 PRD 요약을 기준으로 잡았다.
+
+- 데이터: dev 515건, 모두 문자 입력, 라벨은 모두 직접 채운 `expected_binary`(scam 258, legit 257). 실제 43건은 모두 legit이라 실제 행의 사기 경고율은 N/A다. 출처별: LGAI 192(scam 100, legit 92), KR-MOB-SMISHING 파생 103, 직접 작성 177, 공공기관 안내 32, 본인 수신 11. campaign 99개.
+- **공공기관 정상 문자 16건(PTOS-00639~00654)은 본문의 주소가 10개를 넘어 입력 오류다.** 평가 파일은 고치지 않았다. 아래 정상 오탐률은 이 16건을 분모에 넣은 값과 뺀 값을 함께 적는다. 모델 학습·후보 비교에서는 이 16건이 빠진다(`url_extraction_error`).
+
+**(dev, 부풀려진 수치)** 규칙만(`rules`, 평판 미연결, 모델 없음), dev 515건, `--mode binary`:
+
+| 단계 | 사기 경고 | 사기 놓침 | 정상 오탐 (16건 포함 분모) | 정상 오탐 (16건 제외 분모) | 정상 → 위험 | 사기 중 위험 | 리포트 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 3차 전 (`6c6385e` + 미커밋, 사용자 실행) | 162/258 = 0.628 | 96 | 10/257 = 0.039 | 10/241 = 0.041 | 0 | 21/258 = 0.081 | `v2.1/binary-baseline-dev.md` |
+| 3차 후 (`190b9c9` + 미커밋) | 190/258 = 0.736 | 68 | 10/257 = 0.039 | 10/241 = 0.041 | 0 | 21/258 = 0.081 | `v2.1-ai/binary-rules-r3-dev.md` |
+
+- 3차 보강 내용은 `docs/RULE_POLICY.md` "v4 3차 보강". 정상 오탐 10건의 id는 3차 전후가 같다.
+- 남은 놓침 68건의 유형(id는 리포트): 확인 계열이 아닌 요구문 뒤 주소(D 보류), 결제 승인 통지 + 전화 문의 유도(새 신호, 계약 변경 필요), 줄바꿈으로 끊긴 금전 요구, 링크만 있는 통지.
+
+**(dev, 부풀려진 수치)** 모델(`tfidf-lr-v2`, 기준선 구성, 이진 라벨, **LGAI 192건은 학습·교차검증·임계값에 쓰지 않음**). 학습에 쓴 행과 쓰지 않은 행을 나눠 적는다. 두 값을 섞어 말하지 않는다.
+
+| 구분 | 행 | 모델 단독 신호 (사기 / 정상) | `rules` 사기 경고 | `rules+model` 사기 경고 | 정상 오탐 (`rules` = `rules+model`) | 정상 → 위험 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 학습에 쓴 행 (OOF) | 307 (scam 158, legit 149) | 65/158, 0/149 | 141/158 = 0.892 | 152/158 = 0.962 | 10/149 = 0.067 | 0 |
+| 학습에 쓰지 않은 LGAI 행 | 192 (scam 100, legit 92) | 6/100, 0/92 | 49/100 = 0.490 | 52/100 = 0.520 | 0/92 = 0.000 | 0 |
+
+- 위 표는 3차 규칙 적용 후다(`v2.1-ai/compare-noLGAI-r3-dev.md`). 3차 전 같은 구성은 학습 행 137/158 → 148/158, LGAI 행 25/100 → 30/100이었다(`v2.1-ai/compare-noLGAI-dev.md`).
+- 모델: 임시 임계값 0.694(`provisional-dev-cv`), 모델 파일 SHA-256 `854a426fe80db90344d7f31bff9e0807503409e9e2795593e3598dd6c5dc79f1`, 저장소 밖 `C:/_Coding/ptos-eval/models/tfidf-lr-v2-dev21-noLGAI/`. 학습 행 OOF 수치는 같은 점수로 임계값을 골라 낙관적이다.
+- **LGAI를 학습에 넣은 수치는 이 표에 없다.** 사용자가 먼저 실행한 `v2.1/model-compare-dev.md`(커밋 `190b9c9`, LGAI 포함 499건 학습)는 LGAI를 학습에 쓴 결과라 위 표와 비교하지 않는다.
+- scikit-learn 후보 4개의 `rules+후보` 사기 경고는 학습 행 151~153/158, LGAI 행 50~54/100으로 차이가 작아 기준선 구성을 유지했다. 정한 것과 대안은 `docs/MODEL_POLICY.md` "재학습 기준".
+- **읽는 법:** 학습에 쓰지 않은 출처에서는 규칙과 모델을 합쳐도 사기의 절반가량만 경고한다. 합성 문체에 맞춘 규칙·모델이 다른 출처로 일반화하지 못하고 있다.
+
+이번에 추가한 것과 검증:
+
+- 도구: `train_model.py --exclude-source / --candidate`, `compare_models.py --exclude-source / --embedding`, 이진 리포트의 "오류 행 제외 시" 줄.
+- 조건부 LLM: 어댑터, 가리기, 켜는 조건, 호출 조건, 임시 종합(`docs/LLM_POLICY.md`). **앱에 연결하지 않았고 실제 외부 LLM 호출은 없다.** 테스트는 가짜 전송기·가짜 검토기다.
+- 트랜스포머 비교: 사용자 승인 후 저장소 밖 가상환경에 `torch`·`transformers`를 설치하고 인코더 모델 2개를 내려받아 고정 임베딩 후보를 dev로 비교했다. **(dev, 부풀려진 수치)** `rules+후보` 사기 경고는 학습 행 OOF에서 기준선 152/158, `multilingual-e5-small` 150/158, `koelectra-small-v3` 141/158이고, 학습에 쓰지 않은 LGAI 행에서 기준선 52/100, `multilingual-e5-small` 65/100, `koelectra-small-v3` 61/100이다. 정상 오탐은 모두 `rules`와 같다. 서버 모델은 바꾸지 않았다(의존성·모델 크기·지연 측정이 먼저). 상세와 이용 조건은 `docs/MODEL_POLICY.md` "고정 임베딩 후보 비교". `koelectra-small-v3-discriminator`의 라이선스는 확인하지 못했다.
+- 규칙·모델·LLM 단위마다 실행: 백엔드 전체 `pytest -q` 883 passed(모델 도구 후) → 901 passed(규칙 3차 후) → 965 passed(LLM·임베딩 후), 각 2 skipped, 1 warning. `export_openapi.py --check` 종료 코드 0(계약 변경 없음). 프론트엔드 `npm test` 13 files 98 passed, `npm run build` 통과(세 단위 모두). 중간 실패 3건은 모두 새로 쓴 테스트 쪽 문제였고(함수 안 클래스의 pickle 불가, 기대값 2건) 1건은 실제 결함이었다(추가 검토용 숫자 가리기 정규식이 쉼표 앞 인증번호와 하이픈 계좌번호 뒷부분을 놓침, 수정함).
+- 미실행: `npm run api:check`(Windows 줄바꿈 문제로 실패하는 기존 상태, 위 표 참고), Playwright, 실제 OCR(`RUN_REAL_OCR=1`), 새 모델을 켠 서버의 화면 확인, 새 모델의 지연·메모리 측정.
+- **`analysis_version`은 올리지 않았다.** 규칙이 바뀌었으므로 리포트의 `rules-reputation-dev-v4`는 3차 전후가 같은 값으로 찍힌다. 단계는 코드 커밋으로 구분한다.
+
+**임베딩 모델을 서버 모델로 (2026-11-17, 선택 기능):** 사용자가 `multilingual-e5-small` 임베딩 + 로지스틱 회귀를 써도 된다고 정했다. 서버 로더(`backend/app/embedding_encoder.py`, `model_adapter.py`), 학습 옵션(`train_model.py --embedding`), 선택 의존성 파일(`backend/requirements-embedding.txt`)을 추가했다. 기본 설치·기본 동작·종합 정책·API 계약·`analysis_version`은 그대로다.
+
+- 학습한 모델 `e5-small-lr-v1`(저장소 밖 `C:/_Coding/ptos-eval/models/e5-small-lr-v1-dev21-noLGAI/`, 이진 라벨, **LGAI는 학습·교차검증·임계값에 쓰지 않음**, 임시 임계값 0.631). **(dev, 부풀려진 수치, eval-v2.1-dev `2dc10e52…`)** 모델 단독 사기 신호는 학습에 쓴 행 OOF 67/158, 학습에 쓰지 않은 LGAI 행 34/100이고 정상 신호는 0/149, 0/92다. `rules+model` 사기 경고는 학습 행 150/158, LGAI 행 65/100이다(TF-IDF 기준선은 152/158, 52/100).
+- 지연·메모리(개발 PC에서 한 번 잰 값): 로드 약 16.5초, 상주 메모리 +1,107 MiB, 규칙+모델 p95 111 ms(dev 문자 499건), 최대 길이 입력 p95 329 ms.
+- 검증: 가짜 인코더 테스트는 저장소 `.venv`에서(`tests/test_embedding_model.py` 14 passed, 1 skipped), 실제 e5 인코더 테스트는 저장소 밖 가상환경에서 `PTOS_TEST_ENCODER_DIR`을 주고 실행했다(15 passed, Windows 11 / Git Bash). **이 모델을 켠 서버의 화면 확인, Playwright, 배포 사양 측정은 하지 않았다.**
+- 서버에서 쓰려면(사용자가 직접): 서버 가상환경에 `requirements-embedding.txt` 설치 → `PTOS_MODEL_PATH`를 위 모델 폴더로 → 재시작. 설치하지 않으면 모델 단계만 `unavailable`이고 규칙 결과는 그대로다.
+- `koelectra-small-v3-discriminator`의 라이선스는 사용자가 Apache License 2.0이라고 확인해 알려 주었다. 비교에만 썼다.
+
+계약 변경이 필요해 이 브랜치에서 하지 않은 것(별도 브랜치):
+
+| 바꿀 곳 | 왜 |
+| --- | --- |
+| `FactorCode`에 전화·콜백 유도, 답장·연락 유도, 과도한 혜택·당첨, 비밀유지 요구 | PRD FR-04 신호. 지금 놓치는 결제 승인 통지 + 전화 문의 유형의 근거를 표현할 코드가 없다 |
+| `ReadyResponse.llm_review`, `AnalysisStage.name`의 `llm_review` | 가린 본문의 외부 전송 고지와 단계 표시 (`docs/LLM_POLICY.md`) |
+| `analysis_mode: "rules+model"`, 단계 상태 `timeout`·`load_failed` | 기존 B안 |
+
 ## 10. 알려진 문서·코드 정합성 이슈
 
 - (T0에서 해결) README, `docs/WINDOWS_GIT_BASH.md`, `docs/CODESPACES.md`, `docs/SAFE_BROWSING.md`의 실행 안내를 저장소 기본 브랜치 기준으로 정리했다.

@@ -9,6 +9,8 @@ from .rule_policy import decide
 from .rule_templates import render
 from .reputation_policy import combine_reputation
 from .urls import extract_urls
+from .llm_policy import SENT_NOTICE, LlmScope, combine_llm, limitation_for, should_review
+from .llm_review import LlmReview, LlmReviewer, mask_for_llm
 from .model_adapter import ModelState, prepare_model_text
 from .model_policy import BASE_LIMITATION, MODEL_LIMITATIONS, STAGE_STATUS, ModelOutcome, combine_model
 from .url_reputation import DisconnectedReputationProvider, UrlReputationProvider
@@ -98,10 +100,26 @@ class CompositeAnalyzer:
 
     VERSION = "rules-model-dev-v3"
 
-    def __init__(self, rules: RuleBasedAnalyzer, model_state: ModelState, model_timeout: float = 1.0):
+    def __init__(self, rules: RuleBasedAnalyzer, model_state: ModelState, model_timeout: float = 1.0,
+                 llm: LlmReviewer | None = None, llm_scope: LlmScope = "weak_evidence", llm_timeout: float = 3.0):
         self.rules = rules
         self.model_state = model_state
         self.model_timeout = model_timeout
+        # 조건부 추가 검토. 기본은 없음이고 create_app은 넣지 않는다 (docs/LLM_POLICY.md).
+        self.llm = llm
+        self.llm_scope = llm_scope
+        self.llm_timeout = llm_timeout
+
+    async def _llm_review(self, data: AnalysisInput) -> LlmReview:
+        masked = mask_for_llm(data.content, extract_urls(data.content).spans)
+        try:
+            async with asyncio.timeout(self.llm_timeout):
+                return await self.llm.review(masked)
+        except TimeoutError:
+            return LlmReview("timeout")
+        except Exception:
+            # 예외 문자열에 입력이 섞일 수 있어 기록하지 않는다.
+            return LlmReview("unavailable")
 
     async def _model_outcome(self, data: AnalysisInput) -> ModelOutcome:
         if data.input_type == "url":
@@ -127,6 +145,11 @@ class CompositeAnalyzer:
         limitations = [BASE_LIMITATION, MODEL_LIMITATIONS[outcome], *(text for text in result.limitations if text != RULES_ONLY_LIMITATION)]
         stages = [stage if stage.name != "lightweight_model" else AnalysisStage(name="lightweight_model", status=STAGE_STATUS[outcome])
                   for stage in result.analysis_stages]
+        # 조건부 추가 검토: 규칙과 모델을 모두 본 뒤, 판단하기 어려운 경우에만 호출한다. 실패해도 앞의 결과와 근거는 그대로다.
+        if self.llm is not None and should_review(level, outcome, result.input_assessment.status, bool(result.evidence), self.llm_scope):
+            review = await self._llm_review(data)
+            level, reason, explanation = combine_llm(level, reason, explanation, review)
+            limitations += [SENT_NOTICE, limitation_for(review)]
         return result.model_copy(update={
             "risk_level": level, "policy_reason": reason, "explanation": explanation,
             "limitations": limitations, "analysis_version": self.VERSION, "analysis_stages": stages,

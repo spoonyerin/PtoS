@@ -87,6 +87,7 @@ cd backend
 
 - **판정 묶음:** 경고함 = `suspicious`, `dangerous`. 경고 없음 = `insufficient_information`, `normal`. 정답이 scam인데 경고 없음이면 놓침이다(정보 부족도 평가에서 빼지 않는다). 정답이 legit인데 의심이면 오탐, 위험이면 심각한 오탐이다.
 - **정답:** `expected_binary`가 있으면 그 값(출처 "직접"), 없으면 `expected_level`에서 만든다(`dangerous`·`suspicious` → scam, `normal` → legit). 정답이 `insufficient_information`이고 `expected_binary`가 없으면 이진 지표에서 빼고, 제외 건수와 split별 판정 분포만 적는다.
+- **오류 행 제외 수치:** 오류 행이 있으면 "오류 행 제외 시" 사기 경고율·정상 오탐률을 한 줄 더 적는다. 오류 포함 비율을 대체하지 않으며 둘을 함께 본다. (예: 본문의 주소가 10개를 넘어 입력 오류가 되는 행)
 - **오류:** 입력 오류·시간 초과·분석 오류는 별도 열이며 경고 없음(놓침)으로 합치지 않는다. 비율의 분모는 오류 행을 포함한 해당 정답의 전체 행이고(4단계 재현율과 같은 규칙), 각 비율 옆에 분모에 포함된 오류 건수를 적는다.
 - **리포트:** 머리말에 `평가 모드: binary`, 데이터 구성에 제외 건수와 라벨 출처별 행 수. split마다 전체 / text 입력 / url 입력으로 나눠 이진 혼동행렬(정답 2 × 판정 4 + 오류 3열)과 지표를 건수/분모와 함께 낸다.
   - 사기 경고율(scam 중 의심·위험), 사기 놓침 건수, 정상 오탐률(legit 중 의심·위험), 정상 → 위험 건수, 사기 중 위험 판정 비율, 정보 부족 판정 비율, 오류 건수.
@@ -114,6 +115,11 @@ cd backend
 | `--model-version` | 기본 `tfidf-lr-v1`. manifest와 리포트에 기록한다. |
 | `--labels` | 학습 라벨 기준. `levels`(기본, 4단계 라벨) / `binary`(이진 라벨, 선택 사항). 어느 기준을 쓸지는 임시이며 팀 확정이 필요하다. |
 
+| `--exclude-source` | `source` 열에 이 글자가 든 dev 행(대소문자 무시)을 학습·교차검증·임계값에서 빼고, 다 학습한 모델로 채점만 한다. 여러 번 지정할 수 있다. 예: `--exclude-source LGAI` |
+| `--candidate` | 학습할 모델 구성(`compare_models.py`의 기본 후보 이름). 기본은 현재 기준선이다. |
+| `--embedding 이름=폴더`, `--embedding-prefix` | 미리 내려받은 인코더 폴더(저장소 밖)의 고정 임베딩 + 로지스틱 회귀를 학습한다. `--candidate` 대신 쓴다. `torch`·`transformers`가 있는 환경의 파이썬으로 실행한다. 모델 파일에는 분류기만 저장하고 manifest에 인코더 폴더·가중치 SHA-256을 적는다 ([MODEL_POLICY.md](MODEL_POLICY.md) "임베딩 모델을 서버 모델로 쓰기"). |
+
+- `--exclude-source`를 쓰면 manifest에 `excluded_sources`와 뺀 행의 모델 신호 집계가 들어가고, `train-report.md`에 "학습에서 뺀 출처 행" 절이 따로 생긴다. **학습에 쓴 행의 OOF 수치와 학습에 쓰지 않은 행의 수치를 섞어 말하지 않는다.**
 - 라벨(`--labels levels`, 기본): 사기 = `suspicious` + `dangerous`, 정상 = `normal`. `insufficient_information` 라벨과 URL 입력 행은 학습에서 빼고 건수만 기록한다. `expected_level`이 빈 행(이진 라벨만 있는 행)도 학습에 쓰지 않고, 그런 행이 있을 때만 `no_level_label` 건수로 기록한다.
 - 라벨(`--labels binary`): 이진 평가와 같은 기준이다. `expected_binary`가 있으면 그 값(scam = 사기, legit = 정상), 비어 있으면 `expected_level`에서 만든다(`dangerous`·`suspicious` → 사기, `normal` → 정상). 정답이 `insufficient_information`이고 `expected_binary`가 없는 행은 뺀다. manifest에 `label_source: "binary"`와 라벨 출처별 행 수(`label_source_counts`)를 적고, `train-report.md`의 종합 판정 비교는 이진 혼동행렬로 낸다. `suspicious`에서 파생한 사기 라벨은 정답이 불확실하다. `levels`로 학습한 모델과 수치를 비교하지 않는다(학습 행과 라벨 기준이 다르다). 기본값으로 학습한 결과(manifest·리포트)는 이 옵션을 넣기 전과 같다.
 - test 행은 형식 검사로 읽은 직후 버린다. 학습·임계값 결정·리포트 지표에 쓰지 않는다.
@@ -145,13 +151,17 @@ cd backend
 | `--data` | 평가 CSV (필수). 하네스와 같은 스키마 검사를 한다. |
 | `--seed`, `--n-splits` | `train_model.py`와 같은 뜻, 같은 기본값(20261027, 5). |
 | `--labels` | `levels`(기본) / `binary`. `train_model.py`와 같은 라벨 기준이다. |
-| `--candidates` | 비교할 후보 이름들. 없으면 전체. |
+| `--candidates` | 비교할 기본 후보 이름들. 없으면 전체. |
+| `--exclude-source` | `train_model.py`와 같다. 뺀 행은 후보마다 학습 행 전체로 학습한 모델로 채점해 별도 표로 낸다. |
+| `--embedding 이름=폴더` | 미리 내려받은 인코더 모델 폴더를 "고정 임베딩 + 로지스틱 회귀" 후보로 더한다(여러 번 지정 가능). `torch`·`transformers`가 설치된 환경에서만 된다. 이 도구는 모델을 내려받지 않는다. |
+| `--embedding-prefix` | 임베딩 입력 앞에 붙일 글자. 모델이 요구할 때만 쓴다. |
 | `--output` | 리포트 저장 경로. 저장소 안이면 거부한다. 없으면 표준 출력. |
 
 - 후보(개발용 목록, 성능 근거로 고른 것이 아님): `tfidf-char_wb-2-4-lr`(현재 기준선, `train_model.py`의 기본 설정과 같음), `tfidf-char-1-3-lr`, `tfidf-word-1-2-lr`, `tfidf-char_wb-2-4-nb`. 모두 내려받을 것이 없는 scikit-learn 구성이다. **트랜스포머 후보(KoELECTRA 등)는 없다.** 모델 내려받기와 이용 조건 확인이 필요해 따로 합의한 뒤 추가한다.
 - 리포트: 후보별 임시 임계값(학습과 같은 기준), OOF 모델 단독 신호(사기·정상), 임계값과 무관한 순위 지표(ROC AUC, 평균 정밀도), 교차검증 시간(한 번 잰 참고값), 그리고 현재 임시 종합 정책(정보 부족 → 의심만)을 그대로 적용한 `rules` 대 `rules+후보`의 사기 경고율·사기 놓침·정상 오탐률·정상 → 위험.
 - 리포트에는 집계만 있다. 원문·URL·행 id·campaign 값을 넣지 않는다. test 행은 읽은 직후 버린다.
 - **(dev, 부풀려진 수치)** 후보마다 같은 OOF 점수로 임계값을 골랐고, 이 결과로 후보를 고르면 dev에 맞춘 선택이 된다. 탐지 성능 수치가 아니다. 같은 평가 CSV SHA-256·같은 라벨 기준·같은 시드와 fold 수의 리포트끼리만 비교한다.
+- 임베딩 후보: `torch`·`transformers`는 저장소 의존성이 아니므로 저장소 밖 별도 가상환경(예: `C:/_Coding/ptos-eval/venv-transformer`)의 파이썬으로 실행하고, 모델도 저장소 밖 폴더에 내려받아 이용 조건을 확인한 뒤 쓴다. 실행할 때 `HF_HUB_OFFLINE=1`을 두면 내려받기를 시도하지 않는다. 2026-11-16에 두 모델로 실행한 결과는 [MODEL_POLICY.md](MODEL_POLICY.md) "고정 임베딩 후보 비교"에 있다. 자동 테스트는 가짜 인코더로 연결 방식만 확인한다. 임베딩 모델은 가중치를 고정하고 그 위의 로지스틱 회귀만 학습하므로 미세조정(fine-tuning) 비교가 아니다.
 - 추론 지연·메모리는 재지 않는다. 후보를 고른 뒤 그 모델을 `train_model.py`로 학습해 `measure_model.py`로 잰다(현재 `train_model.py`는 기준선 설정만 학습한다).
 
 ## 모델 지연·메모리 측정

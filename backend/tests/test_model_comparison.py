@@ -108,3 +108,56 @@ def test_cli_writes_report_outside_repo_only(data_csv, tmp_path, capsys):
     assert compare_models.main([*base, "--n-splits", "9"]) == 1
     err = capsys.readouterr().err
     assert "저장소 밖" in err and "fold 수" in err and str(tmp_path) not in err
+
+
+def test_excluded_source_rows_are_scored_but_never_fitted(tmp_path):
+    from test_model_training import HELD_MARKER, held_rows
+
+    fitted: list[str] = []
+
+    class FitSpy(SpyCandidate):
+        def fit(self, texts, labels):
+            fitted.extend(texts)
+            return super().fit(texts, labels)
+
+    path = write_csv(tmp_path / "eval.csv", held_rows())
+    result = compare(path, seed=7, n_splits=4, names=[BASELINE], pipeline_factory=FitSpy, exclude_sources=["FakeSet"])
+    assert fitted and not any(HELD_MARKER in text for text in fitted)
+    candidate = result.candidates[0]
+    assert len(result.data.rows) == 40 and result.held_rules_only.total == 6
+    assert sum(candidate.held_counts.values()) == 6 and candidate.held_combined.total == 6
+    report = render_comparison_report(result)
+    assert "| 학습에서 뺀 출처 | fakeset |" in report and "학습에서 뺀 출처 행" in report and HELD_MARKER not in report
+    plain = render_comparison_report(compare(path, seed=7, n_splits=4, names=[BASELINE]))
+    assert "| 학습에서 뺀 출처 | 없음 |" in plain and "학습에서 뺀 출처 행" not in plain
+
+
+# ---- 고정 임베딩 후보 (가짜 인코더로 연결 방식만 확인. 실제 트랜스포머 결과가 아니다) ----
+
+def fake_encoder(calls):
+    def encode(texts):
+        calls.append(len(texts))
+        return [[float("납부" in t or "돈" in t or "반송" in t), len(t) / 100.0, 1.0] for t in texts]
+    return encode
+
+
+def test_embedding_candidate_runs_in_the_same_comparison_and_caches_vectors(data_csv):
+    from evaluation.embedding_models import cached, embedding_candidate
+
+    calls: list[int] = []
+    extra = {"fake-embed": embedding_candidate("fake-embed", cached(fake_encoder(calls)))}
+    result = compare(data_csv, seed=7, n_splits=4, names=[BASELINE, "fake-embed"], extra_candidates=extra)
+    assert [c.name for c in result.candidates] == [BASELINE, "fake-embed"]
+    embed = result.candidates[1]
+    assert embed.counts["tp"] + embed.counts["fn"] == 24 and embed.counts["fp"] == 0
+    # 같은 문장은 fold가 달라도 한 번만 인코딩한다.
+    assert sum(calls) == len(set(result.data.texts))
+    assert "| rules+fake-embed |" in render_comparison_report(result)
+
+
+def test_embedding_cli_reports_missing_folder_or_bad_format(data_csv, tmp_path, capsys):
+    base = ["--data", str(data_csv), "--seed", "7", "--n-splits", "4"]
+    assert compare_models.main([*base, "--embedding", "no-folder"]) == 1
+    assert compare_models.main([*base, "--embedding", f"x={tmp_path / 'missing'}"]) == 1
+    err = capsys.readouterr().err
+    assert "이름=폴더" in err and "임베딩 후보 준비 오류" in err and str(tmp_path) not in err

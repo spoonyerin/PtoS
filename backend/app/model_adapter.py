@@ -108,6 +108,36 @@ def read_manifest(directory: Path) -> dict:
     return manifest
 
 
+def _with_encoder(classifier, embedding: object):
+    """임베딩 모델(선택): manifest에 적힌 로컬 인코더를 확인하고 분류기 앞에 붙인다.
+
+    인코더 폴더도 저장소 밖이어야 하고, 가중치 파일의 SHA-256이 manifest와 같을 때만 연다.
+    """
+    from .embedding_encoder import EncodedClassifier, EncoderUnavailable, local_transformer_encoder
+
+    if not isinstance(embedding, dict):
+        raise ModelLoadError("MANIFEST_INVALID")
+    directory, weights, sha = embedding.get("directory"), embedding.get("weights_file"), embedding.get("weights_sha256")
+    prefix, max_length = embedding.get("prefix", ""), embedding.get("max_length")
+    if (embedding.get("kind") != "local-transformer-mean-pool" or not isinstance(directory, str) or not directory
+            or not isinstance(weights, str) or Path(weights).name != weights or not isinstance(sha, str)
+            or not isinstance(prefix, str) or isinstance(max_length, bool) or not isinstance(max_length, int)
+            or not 1 <= max_length <= 512):
+        raise ModelLoadError("MANIFEST_INVALID")
+    encoder_dir = Path(directory)
+    if is_inside_repo(encoder_dir):
+        raise ModelLoadError("MODEL_PATH_INSIDE_REPO")
+    if not (encoder_dir / weights).is_file():
+        raise ModelLoadError("ENCODER_FILE_MISSING")
+    if file_sha256(encoder_dir / weights) != sha.lower():
+        raise ModelLoadError("ENCODER_SHA256_MISMATCH")
+    try:
+        encode = local_transformer_encoder(encoder_dir, prefix, max_length=max_length)
+    except EncoderUnavailable:
+        raise ModelLoadError("ENCODER_UNAVAILABLE") from None
+    return EncodedClassifier(classifier, encode)
+
+
 def load_model(directory: Path) -> TextRiskModel:
     if is_inside_repo(directory):
         raise ModelLoadError("MODEL_PATH_INSIDE_REPO")
@@ -131,6 +161,8 @@ def load_model(directory: Path) -> TextRiskModel:
         pipeline = joblib.load(model_path)
     except Exception:
         raise ModelLoadError("MODEL_LOAD_ERROR") from None
+    if "embedding" in manifest:
+        pipeline = _with_encoder(pipeline, manifest["embedding"])
     # dev 교차검증에서 임계값을 찾지 못한 모델은 신호를 내지 않는다.
     threshold = float(manifest["threshold"]) if manifest.get("threshold_found", True) is not False else math.inf
     info = {"model_sha256": manifest["model_sha256"].lower(), "data_sha256": manifest.get("data_sha256"),

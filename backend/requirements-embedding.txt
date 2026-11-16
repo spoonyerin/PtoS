@@ -1,0 +1,7 @@
+# 선택 사항: 임베딩 모델(PTOS_MODEL_PATH의 manifest에 embedding이 있는 모델)을 쓸 때만 설치한다.
+# 기본 설치(requirements.txt)에는 넣지 않았다. 없으면 임베딩 모델 단계만 꺼지고 규칙 결과는 그대로 나온다.
+# torch는 CPU 휠을 쓴다: pip install -r requirements-embedding.txt --extra-index-url https://download.pytorch.org/whl/cpu
+# 인코더 모델 파일은 이 설치로 받아지지 않는다. 저장소 밖 폴더에 따로 내려받는다 (docs/MODEL_POLICY.md).
+-r requirements.txt
+torch==2.15.0
+transformers==5.23.0

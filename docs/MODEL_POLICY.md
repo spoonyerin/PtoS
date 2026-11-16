@@ -68,8 +68,56 @@
 ## 후보 비교 (`backend/compare_models.py`, T5c 준비)
 
 - 기준선과 다른 scikit-learn 구성(문자·어절 n-gram, 로지스틱 회귀·나이브 베이즈)을 같은 dev 행·같은 fold로 비교하는 도구다. 모델 파일을 만들지 않고 서버 모델을 바꾸지 않는다.
-- **모델 선택은 팀 결정이다(AGENTS.md 결정 필요 3). 어느 후보도 채택하지 않았다.** 트랜스포머 후보는 포함하지 않았다.
+- **모델 선택은 팀 결정이다(AGENTS.md 결정 필요 3).** 2026-11-16에는 기준선 구성을 임시로 유지했다(아래 "재학습 기준"). 트랜스포머는 고정 임베딩 후보 2개를 dev로 비교했고 서버 모델로 채택하지는 않았다.
 - 결과는 dev 수치라 부풀려져 있고 탐지 성능이 아니다. 사용법과 리포트 구성은 [EVALUATION.md](EVALUATION.md).
+
+## 2026-11-16 재학습 기준 (임시, 팀 확정 필요)
+
+eval-v2.1 dev에는 4단계 라벨이 없고 이진 라벨만 있어 다음과 같이 정해 재학습했다. 모두 한 사람이 dev만 보고 정한 임시 선택이다.
+
+| 항목 | 정한 것 | 이유 | 대안 |
+| --- | --- | --- | --- |
+| 학습 라벨 | `--labels binary` | v2.1 dev 행에 `expected_level`이 없어 `levels`로는 학습할 행이 0건이다 | 4단계 라벨을 다시 붙여 `levels`로 학습 |
+| 학습에서 뺀 출처 | `--exclude-source LGAI` (192건) | 원문 라이선스를 확인하지 못했다. 이 행들은 학습·교차검증·임계값에 쓰지 않고 채점만 한다 | 라이선스 확인 후 포함해 재학습 |
+| 모델 구성 | 기준선 유지 (`tfidf-char_wb-2-4-lr`) | scikit-learn 후보 4개의 종합 판정 차이가 0~2건으로 fold 편차 안이다. 바꿀 근거가 없고 지연·메모리 측정 기록이 기준선에 있다 | 모델 단독 신호가 가장 많은 `tfidf-char-1-3-lr` |
+| 임계값 기준 | 그대로 (정상 라벨 행 신호 0건, 사기 재현율 최대) | 모델 신호는 원문 근거가 없어 정상 문자를 근거 없이 의심으로 올리는 비용이 크다 | 정상 신호를 일정 비율까지 허용해 재현율을 높임 |
+| 트랜스포머 비교 | 고정 임베딩 2개를 dev로 비교함(아래). 2026-11-17에 `multilingual-e5-small` 임베딩 모델을 서버 모델로 쓸 수 있게 했다(선택 기능, 아래 "임베딩 모델을 서버 모델로 쓰기") | 학습에 쓰지 않은 출처에서 임베딩 후보의 신호가 뚜렷이 많았다 | TF-IDF 기준선(`tfidf-lr-v2`)을 계속 사용. 의존성과 메모리가 훨씬 작다 |
+
+### 고정 임베딩 후보 비교 (2026-11-16)
+
+**(dev, 부풀려진 수치)** 평가 CSV `eval-v2.1-dev.csv`(SHA-256 `2dc10e52…`), 이진 라벨, 시드 20261027, 5 fold, **LGAI 192건은 학습·교차검증·임계값에 쓰지 않음**, 3차 규칙 적용 후. 탐지 성능 수치가 아니다. 임베딩 모델은 가중치를 고정했고 그 위의 로지스틱 회귀만 학습했다(미세조정 아님).
+
+| 후보 | 학습 행 OOF: 모델 단독 사기 신호 | 학습 행 OOF: `rules+후보` 사기 경고 | LGAI 행(학습 안 함): 모델 단독 사기 신호 | LGAI 행: `rules+후보` 사기 경고 | 정상 신호 (학습 행 / LGAI 행) |
+| --- | --- | --- | --- | --- | --- |
+| (`rules`만) | - | 141/158 | - | 49/100 | - |
+| `tfidf-char_wb-2-4-lr` (현재 기준선) | 65/158 | 152/158 | 6/100 | 52/100 | 0/149, 0/92 |
+| `koelectra-small-v3` 임베딩 | 9/158 | 141/158 | 36/100 | 61/100 | 0/149, 0/92 |
+| `multilingual-e5-small` 임베딩 (입력 앞 `query: `) | 67/158 | 150/158 | 34/100 | 65/100 | 0/149, 0/92 |
+
+- 정상 오탐은 세 후보 모두 `rules`와 같다(학습 행 10/149, LGAI 행 0/92). 모델 신호가 정상 행을 올린 경우는 없었다.
+- **읽는 법:** TF-IDF 기준선은 학습한 출처 안에서만 신호를 낸다. `multilingual-e5-small`은 학습 행에서 기준선과 비슷하고, 학습하지 않은 출처에서 신호가 훨씬 많다. `koelectra-small-v3`는 학습 행에서 거의 신호를 내지 못했다. 임계값을 각 후보의 같은 OOF 점수로 골랐고 campaign이 76개뿐이라 차이의 크기는 믿을 만하지 않다. 방향만 참고한다.
+- 받은 것(저장소 밖): `C:/_Coding/ptos-eval/venv-transformer`(torch 2.15.0 CPU, transformers 5.23.0), `C:/_Coding/ptos-eval/hf-models/`의 `monologg/koelectra-small-v3-discriminator`(약 57 MB), `intfloat/multilingual-e5-small`(약 470 MB × 2 형식). 출처는 huggingface.co다.
+- 이용 조건: `multilingual-e5-small`의 모델 카드는 `license: mit`이다. `koelectra-small-v3-discriminator`는 받은 파일에 모델 카드가 없었고, 사용자가 원 저장소의 라이선스가 Apache License 2.0이라고 확인해 알려 주었다(2026-11-17).
+- 재지 않은 것: 임베딩 후보의 요청당 지연과 메모리, 미세조정 성능, KLUE-RoBERTa·KoBERT.
+- 리포트: `C:/_Coding/ptos-eval/reports/v2.1-ai/compare-embed-koelectra-dev.md`, `compare-embed-e5-dev.md`.
+
+- 학습한 모델: 버전 `tfidf-lr-v2`, 저장소 밖 `C:/_Coding/ptos-eval/models/tfidf-lr-v2-dev21-noLGAI/`. 서버가 쓰려면 `PTOS_MODEL_PATH`를 이 폴더로 바꾼다(사용자가 직접). 수치는 HANDOVER 9절.
+- **학습에 쓰지 않은 LGAI 행에서는 모델 신호가 거의 나오지 않았다.** 합성 문체에 맞춰진 모델이 다른 출처의 사기 문자로 일반화하지 못한다는 뜻이며, 이 모델로 탐지 성능을 주장할 수 없다.
+
+## 임베딩 모델을 서버 모델로 쓰기 (2026-11-17, 선택 기능, 임시)
+
+사용자가 `multilingual-e5-small` 임베딩 + 로지스틱 회귀를 서버 모델로 써도 된다고 정했다(2026-11-17). 기본 설치와 기본 동작은 그대로이고, 이 모델 폴더를 `PTOS_MODEL_PATH`로 줄 때만 쓰인다. **종합 정책은 바뀌지 않았다**(정보 부족 → 의심만, 점수 비노출, `confidence: null`). API 계약과 `analysis_version`도 그대로다.
+
+- 구조: 모델 파일(`model.joblib`)에는 분류기(로지스틱 회귀)만 들어 있다. 인코더는 manifest의 `embedding`(로컬 폴더, 입력 앞 글자, 최대 토큰 수 256, 가중치 파일 이름과 SHA-256)을 보고 서버 시작 때 한 번 읽는다(`backend/app/embedding_encoder.py`). 학습과 추론이 같은 인코더 함수를 쓴다.
+- 로드 전 확인(기존 확인에 더해): 인코더 폴더가 저장소 밖일 것, 가중치 파일의 SHA-256이 manifest와 같을 것, `torch`·`transformers`가 설치돼 있을 것. 어긋나면 `load_failed`(고정 코드 `ENCODER_SHA256_MISMATCH`, `ENCODER_FILE_MISSING`, `ENCODER_UNAVAILABLE` 등)이고 **규칙 결과와 근거는 그대로 나온다.**
+- 네트워크: 인코더는 로컬 폴더에서만 읽는다(`local_files_only`). 서버는 모델을 내려받지 않는다. 실행할 때 `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`을 함께 두기를 권한다.
+- 의존성: 선택 파일 `backend/requirements-embedding.txt`(`torch==2.15.0` CPU, `transformers==5.23.0`). 서버를 띄우는 가상환경에 사용자가 직접 설치한다. 저장소의 `.venv`에는 설치하지 않았다.
+- 학습한 모델: 버전 `e5-small-lr-v1`, 저장소 밖 `C:/_Coding/ptos-eval/models/e5-small-lr-v1-dev21-noLGAI/`. 이진 라벨, **LGAI 192건은 학습·교차검증·임계값에 쓰지 않음**, 임시 임계값 0.631(`provisional-dev-cv`), 모델 파일 SHA-256 `849cda9e…5816`, 인코더 가중치 `model.safetensors` SHA-256 `1a55775f…8477`. manifest에는 인코더 폴더의 절대 경로가 들어 있어 이 컴퓨터에서만 그대로 쓸 수 있다. 다른 컴퓨터에서는 같은 인코더 파일을 받아 다시 학습하거나 manifest의 폴더를 맞춘다.
+- **(dev, 부풀려진 수치)** 수치는 위 "고정 임베딩 후보 비교" 표의 `multilingual-e5-small` 줄과 같다(같은 CSV·시드·fold).
+- 이용 조건: `intfloat/multilingual-e5-small`의 모델 카드는 `license: mit`이다. 모델 파일은 저장소에 넣지 않는다. 학습 데이터 조건(CC BY-NC 4.0 합성 자료 포함)은 분류기에도 그대로 적용되므로 분류기 파일도 커밋하지 않는다.
+- `monologg/koelectra-small-v3-discriminator`: 사용자가 원 저장소(monologg/KoELECTRA)의 라이선스가 Apache License 2.0이라고 확인해 알려 주었다(2026-11-17). 받은 모델 파일에는 모델 카드가 없어 파일만으로는 확인하지 못했다. 이번에는 비교에만 썼고 서버 모델로 쓰지 않는다. 쓰게 되면 저작권·라이선스 고지를 `docs/THIRD_PARTY_NOTICES.md`에 넣는다.
+- 지연·메모리(`measure_model.py`, Windows 11 개발 PC·CPU 12개·단일 스레드에서 한 번 잰 값, 성능 보장 아님): 로드 약 16.5초(라이브러리 import 포함), **상주 메모리 +1,107 MiB**(TF-IDF 기준선은 2026-10-27 기록으로 +82.6 MiB). 규칙+모델 요청당 p50 / p95: dev 문자 499건 45 ms / 111 ms(최대 359 ms), 최대 길이(10,000자) 입력 246 ms / 329 ms. 모델 단계 제한 시간 1초(개발 제안) 안이었고 제한은 그대로 두었다. 동시 요청과 배포 사양은 재지 않았다. **메모리가 1 GiB 넘게 늘어나므로 배포 서버 사양을 정할 때 먼저 확인한다.** 리포트 `C:/_Coding/ptos-eval/reports/v2.1-ai/measure-e5.md`.
+- 남은 것: 배포 서버(Linux) 사양에서의 지연·메모리, 동시 요청, 미세조정 비교, 새로 봉인한 test 1회 비교, 이 모델을 켠 서버의 화면 확인.
 
 ## 의존성
 

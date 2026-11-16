@@ -146,6 +146,9 @@ def test_binary_report_rates_with_denominators_and_lists():
     assert "사기 중 위험 판정 비율: 1/3 = 0.333" in whole
     assert "정보 부족 판정 비율: 2/5 = 0.400" in whole
     assert "경고 없음으로 합치지 않음): 1건" in whole
+    # 오류 행을 분모에서 뺀 값을 따로 적는다 (오류 포함 비율은 그대로 둔다).
+    assert "오류 행 제외 시: 사기 경고율 1/2 = 0.500, 정상 오탐률 1/2 = 0.500" in whole
+    assert "오류 행 제외 시" not in render_binary_report(outcomes[:2] + outcomes[3:], info())
     assert "#### url 입력 (0건)" in dev
     missed = section(dev, "#### 놓친 사기 id (scam → 경고 없음) (1건)", "#### 정상 오탐 id")
     assert "| S2 | text | suspicious에서 파생 | insufficient_information |" in missed

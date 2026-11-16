@@ -31,4 +31,7 @@ def decide(scan: RuleScan) -> tuple[RiskLevel, str]:
             return RiskLevel.DANGEROUS, "COMBINED_FAMILY_MONEY_LINK"
     if any({f.evidence.factor_code for f in found} & ACTION_CODES for found in contexts.values()):
         return RiskLevel.SUSPICIOUS, "ACTIONABLE_SIGNAL"
+    # 3차(임시): 가족 호칭 + 휴대폰 사정 + 답장·메신저 추가 요청. 금전·링크 요구가 없어도 의심으로 본다(위험으로 올리지 않는다).
+    if any(f.kind == "contact" for f in scan.findings):
+        return RiskLevel.SUSPICIOUS, "FAMILY_DEVICE_CONTACT"
     return RiskLevel.INSUFFICIENT_INFORMATION, "ANALYSIS_INCOMPLETE"

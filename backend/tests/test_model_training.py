@@ -69,6 +69,7 @@ class SpyPipeline:
     """실제 파이프라인을 감싸 학습·추론에 들어간 문장을 기록한다."""
 
     seen: list[str] = []
+    fitted: list[str] = []
 
     def __init__(self, config, seed):
         self._inner = build_pipeline(config, seed)
@@ -79,6 +80,7 @@ class SpyPipeline:
 
     def fit(self, texts, labels):
         SpyPipeline.seen.extend(texts)
+        SpyPipeline.fitted.extend(texts)
         self._inner.fit(texts, labels)
         return self
 
@@ -242,3 +244,46 @@ def test_train_with_binary_labels_records_source_and_marks_dev_numbers(tmp_path)
         assert not any(NORMAL[0].split()[0] in line for line in output.splitlines())
     state = load_configured_model({MODEL_PATH_ENV: str(out)})
     assert state.status == "loaded" and state.model.version == "test-bin-v1"
+
+
+# ---- 학습에서 뺄 출처(--exclude-source). 뺀 행은 학습·교차검증·임계값에 쓰지 않고 채점만 한다. ----
+
+HELD_MARKER = "학습제외출처전용문장"
+
+
+def held_rows(count=6):
+    return [{"id": f"H{i}", "text": f"{HELD_MARKER} {(FRAUD if i % 2 else NORMAL)[0].format(i=i)}",
+             "expected_level": "dangerous" if i % 2 else "normal", "campaign_id": f"CH{i}", "split": "dev",
+             "source": "FakeSet class=2 (합성)"} for i in range(count)]
+
+
+def test_excluded_source_rows_are_held_out_of_training(tmp_path):
+    rows = load_rows(write_csv(tmp_path / "eval.csv", held_rows()))
+    everything = select_training_rows(rows)
+    assert len(everything.rows) == 46 and everything.held_out is None and "excluded_source" not in everything.excluded
+    data = select_training_rows(rows, exclude_sources=["fakeset", " "])
+    assert len(data.rows) == 40 and data.excluded["excluded_source"] == 6 and data.excluded_sources == ("fakeset",)
+    assert not any(HELD_MARKER in text for text in data.texts)
+    assert [row.id for row in data.held_out.rows] == [f"H{i}" for i in range(6)]
+    assert data.held_out.labels == [0, 1, 0, 1, 0, 1]
+
+
+def test_train_never_fits_on_excluded_source_and_reports_it_separately(tmp_path):
+    SpyPipeline.fitted = []
+    out = tmp_path / "model"
+    manifest = train(write_csv(tmp_path / "eval.csv", held_rows()), out, seed=7, n_splits=4, model_version="test-v1",
+                     pipeline_factory=SpyPipeline, exclude_sources=["FakeSet"])
+    assert SpyPipeline.fitted and not any(HELD_MARKER in text for text in SpyPipeline.fitted)
+    assert manifest["counts"]["train_rows"] == 40 and manifest["counts"]["excluded_source"] == 6
+    assert manifest["excluded_sources"] == ["fakeset"]
+    held = manifest["held_out_model_counts"]
+    assert held["tp"] + held["fn"] == 3 and held["fp"] + held["tn"] == 3
+    report = (out / "train-report.md").read_text(encoding="utf-8")
+    assert "학습에서 뺀 출처 행" in report and "두 값을 섞어 말하지 않는다" in report
+    assert HELD_MARKER not in report and HELD_MARKER not in (out / "manifest.json").read_text(encoding="utf-8")
+
+
+def test_default_manifest_has_no_excluded_source_keys(data_csv, tmp_path):
+    manifest = train(data_csv, tmp_path / "m", seed=7, n_splits=4, model_version="test-v1")
+    assert "excluded_sources" not in manifest and "held_out_model_counts" not in manifest
+    assert "학습에서 뺀 출처 행" not in (tmp_path / "m" / "train-report.md").read_text(encoding="utf-8")

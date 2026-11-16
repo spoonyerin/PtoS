@@ -71,6 +71,9 @@ class TrainingSet:
     test_rows_dropped: int = 0
     excluded: dict[str, int] = field(default_factory=dict)
     label_source: str = "levels"
+    # 학습에서 뺀 출처의 dev 행. 학습·교차검증·임계값에 쓰지 않고, 다 학습한 모델로 채점만 한다.
+    held_out: "TrainingSet | None" = None
+    excluded_sources: tuple[str, ...] = ()
 
 
 def _training_label(row: EvalRow, label_source: str, excluded: dict[str, int]) -> int | None:
@@ -94,9 +97,13 @@ def _training_label(row: EvalRow, label_source: str, excluded: dict[str, int]) -
     return None
 
 
-def select_training_rows(rows: list[EvalRow], label_source: str = "levels") -> TrainingSet:
+def select_training_rows(rows: list[EvalRow], label_source: str = "levels",
+                         exclude_sources: tuple[str, ...] | list[str] = ()) -> TrainingSet:
+    """exclude_sources: source 열에 이 글자가 들어 있는 행(대소문자 무시)은 학습에서 빼고 held_out에 둔다."""
     if label_source not in LABEL_SOURCES:
         raise TrainingError(f"라벨 기준은 {'/'.join(LABEL_SOURCES)} 중 하나여야 해요.")
+    needles = tuple(dict.fromkeys(value.strip().casefold() for value in exclude_sources if value.strip()))
+    held = TrainingSet([], [], [], [], label_source=label_source) if needles else None
     dev = [row for row in rows if row.split == "dev"]
     excluded = {"url_input": 0, "insufficient_label": 0, "url_extraction_error": 0, "empty_campaign_id": 0}
     selected, texts, labels, groups = [], [], [], []
@@ -115,11 +122,22 @@ def select_training_rows(rows: list[EvalRow], label_source: str = "levels") -> T
         if not row.campaign_id:
             # 묶음 정보가 없으면 행 하나를 하나의 묶음으로 본다.
             excluded["empty_campaign_id"] += 1
-        selected.append(row)
-        texts.append(prepare_model_text(row.content, spans))
-        labels.append(label)
-        groups.append(row.campaign_id or f"row:{row.id}")
-    return TrainingSet(selected, texts, labels, groups, len(rows) - len(dev), excluded, label_source)
+        target = TrainingSet(selected, texts, labels, groups)
+        if held is not None and any(needle in row.source.casefold() for needle in needles):
+            excluded["excluded_source"] = excluded.get("excluded_source", 0) + 1
+            target = held
+        target.rows.append(row)
+        target.texts.append(prepare_model_text(row.content, spans))
+        target.labels.append(label)
+        target.groups.append(row.campaign_id or f"row:{row.id}")
+    return TrainingSet(selected, texts, labels, groups, len(rows) - len(dev), excluded, label_source, held, needles)
+
+
+def score_texts(pipeline, texts: list[str]) -> list[float]:
+    if not texts:
+        return []
+    positive = list(pipeline.classes_).index(1)
+    return [float(proba[positive]) for proba in pipeline.predict_proba(texts)]
 
 
 def label_source_counts(data: TrainingSet) -> dict[str, int]:
@@ -203,8 +221,25 @@ def _fmt(value: float | None) -> str:
     return "N/A" if value is None else f"{value:.3f}"
 
 
+def _held_out_report(data: TrainingSet, held: dict, section) -> list[str]:
+    """학습에서 뺀 출처 행의 집계. 이 행들은 학습·임계값에 쓰지 않았다."""
+    counts = held["counts"]
+    lines = [
+        "## 학습에서 뺀 출처 행 (학습·임계값에 쓰지 않음, 다 학습한 모델로 채점)", "",
+        f"- 뺀 기준(source 열에 포함된 글자): {', '.join(data.excluded_sources)}",
+        f"- {len(data.held_out.rows)}건 (사기 {sum(data.held_out.labels)}, 정상 {len(data.held_out.labels) - sum(data.held_out.labels)})",
+        "- 위 OOF 수치는 학습에 쓴 행만의 값이고, 아래는 학습에 쓰지 않은 행만의 값이다. 두 값을 섞어 말하지 않는다.",
+        "- **(dev, 부풀려진 수치)** 학습에는 쓰지 않았지만 규칙 보강에는 쓴 dev 행이다.", "",
+        *_table(["", "모델 신호", "신호 없음"], [["사기", counts["tp"], counts["fn"]], ["정상", counts["fp"], counts["tn"]]]), "",
+        "### rules", "", *section("학습에서 뺀 행", held["rules_only"]),
+        "### rules+model", "", *section("학습에서 뺀 행", held["combined"]),
+    ]
+    return lines
+
+
 def render_training_report(manifest: dict, data: TrainingSet, counts: dict[str, int],
-                           folds: list[int], rules_only: list[Outcome], combined: list[Outcome]) -> str:
+                           folds: list[int], rules_only: list[Outcome], combined: list[Outcome],
+                           held: dict | None = None) -> str:
     recall = counts["tp"] / (counts["tp"] + counts["fn"]) if counts["tp"] + counts["fn"] else None
     precision = counts["tp"] / (counts["tp"] + counts["fp"]) if counts["tp"] + counts["fp"] else None
     raised = [c for r, c in zip(rules_only, combined) if r.predicted != c.predicted]
@@ -256,12 +291,16 @@ def render_training_report(manifest: dict, data: TrainingSet, counts: dict[str, 
         lines += _table(["id", "expected", "판정"], (
             [o.row.id, binary_label(o.row)[0] if binary else o.row.expected, o.predicted] for o in raised))
     lines.append("")
+    if held:
+        lines += _held_out_report(data, held, section)
     return "\n".join(lines)
 
 
 def train(data_path: Path, out_dir: Path, seed: int, n_splits: int, model_version: str,
           config: dict | None = None, timeout: float = 5.0,
-          pipeline_factory: Callable[[dict, int], object] = build_pipeline, label_source: str = "levels") -> dict:
+          pipeline_factory: Callable[[dict, int], object] = build_pipeline, label_source: str = "levels",
+          exclude_sources: tuple[str, ...] | list[str] = (), embedding: dict | None = None) -> dict:
+    """embedding: 임베딩 후보로 학습할 때 manifest에 적을 인코더 정보(evaluation.embedding_models.embedding_manifest)."""
     import joblib
 
     config = config or DEFAULT_CONFIG
@@ -271,7 +310,7 @@ def train(data_path: Path, out_dir: Path, seed: int, n_splits: int, model_versio
         raise TrainingError("출력 폴더에 이미 모델이 있어요. 새 폴더를 지정해주세요.")
     data_sha = file_sha256(data_path)
     rows = load_rows(data_path)
-    data = select_training_rows(rows, label_source)
+    data = select_training_rows(rows, label_source, exclude_sources)
     del rows  # test 행 원문을 더 들고 있지 않는다.
     if not data.rows:
         raise DatasetError("학습할 dev 행이 없어요.")
@@ -282,12 +321,20 @@ def train(data_path: Path, out_dir: Path, seed: int, n_splits: int, model_versio
 
     final = pipeline_factory(config, seed)
     final.fit(data.texts, data.labels)
+    held = None
+    if data.held_out is not None and data.held_out.rows:
+        # 학습에서 뺀 출처 행은 다 학습한 모델로 채점만 한다. 임계값은 위에서 학습 행만으로 이미 정했다.
+        held_scores = score_texts(final, data.held_out.texts)
+        held_rules, held_combined = asyncio.run(oof_outcomes(data.held_out, held_scores, threshold, model_version, timeout))
+        held = {"counts": model_counts(held_scores, data.held_out.labels, threshold),
+                "rules_only": held_rules, "combined": held_combined}
     out_dir.mkdir(parents=True, exist_ok=True)
     # 임시 파일에 쓴 뒤 옮겨 반쯤 쓴 모델 파일이 남지 않게 한다.
     with tempfile.NamedTemporaryFile(dir=out_dir, suffix=".tmp", delete=False) as handle:
         temp_path = Path(handle.name)
     try:
-        joblib.dump(final, temp_path)
+        # 임베딩 후보는 인코더를 뺀 분류기만 저장한다. 인코더는 manifest의 로컬 폴더에서 다시 읽는다.
+        joblib.dump(final.export() if hasattr(final, "export") else final, temp_path)
         temp_path.replace(out_dir / MODEL_FILE)
     finally:
         temp_path.unlink(missing_ok=True)
@@ -324,6 +371,12 @@ def train(data_path: Path, out_dir: Path, seed: int, n_splits: int, model_versio
         # 기본(levels) manifest가 그대로이도록 binary일 때만 값을 바꾸고 키를 더한다.
         manifest |= {"threshold_rule": BINARY_THRESHOLD_RULE, "label_mapping": BINARY_LABEL_MAPPING,
                      "label_source": label_source, "label_source_counts": label_source_counts(data)}
+    if embedding:
+        manifest |= {"embedding": embedding,
+                     "text_preprocessing": manifest["text_preprocessing"] + ", 그 뒤 고정 인코더로 임베딩"}
+    if data.excluded_sources:
+        manifest |= {"excluded_sources": list(data.excluded_sources),
+                     "held_out_model_counts": held["counts"] if held else None}
     (out_dir / MANIFEST_NAME).write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    (out_dir / REPORT_FILE).write_text(render_training_report(manifest, data, counts, folds, rules_only, combined) + "\n", encoding="utf-8")
+    (out_dir / REPORT_FILE).write_text(render_training_report(manifest, data, counts, folds, rules_only, combined, held) + "\n", encoding="utf-8")
     return manifest
