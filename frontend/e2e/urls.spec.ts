@@ -99,3 +99,27 @@ test('최대 고유 URL 초과를 자르지 않고 안내한다', async ({ page 
     page.getByRole('region', { name: 'URL 형식 및 평판' }),
   ).toHaveCount(0)
 })
+
+test('링크 입력칸은 줄바꿈·화면 폭에 맞춰 늘어나고 지우면 다시 줄어든다', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/#url')
+  const input = page.getByRole('textbox', { name: 'URL 주소' })
+  await expect(input).toHaveCSS('overflow-y', 'hidden')
+  await expect(input).toHaveCSS('resize', 'none')
+  const initial = (await input.boundingBox())!.height
+  await input.fill('https://example.invalid/' + 'long-address-segment/'.repeat(12))
+  await expect.poll(async () => (await input.boundingBox())!.height).toBeGreaterThan(initial)
+  expect(await input.evaluate(el => el.scrollHeight <= el.clientHeight + 1)).toBe(true)
+  const wide = (await input.boundingBox())!.height
+  await page.setViewportSize({ width: 320, height: 740 })
+  await expect.poll(async () => (await input.boundingBox())!.height).toBeGreaterThan(wide)
+  expect(await input.evaluate(el => el.scrollHeight <= el.clientHeight + 1)).toBe(true)
+  await page.screenshot({ path: 'test-results/url-auto-height.png', fullPage: true })
+  await page.getByRole('button', { name: '입력 내용 지우기' }).click()
+  await expect(input).toHaveValue('')
+  await expect.poll(async () => (await input.boundingBox())!.height).toBeLessThan(wide)
+  expect(await input.evaluate(el => el.scrollHeight <= el.clientHeight + 1)).toBe(true)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect.poll(async () => (await input.boundingBox())!.height).toBeLessThanOrEqual(initial + 1)
+  await expect(input).toBeFocused()
+})

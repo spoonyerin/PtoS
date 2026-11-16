@@ -12,6 +12,7 @@ export type IconName =
   | 'check'
   | 'close'
   | 'share'
+  | 'copy'
   | 'safe'
   | 'ban'
   | 'warning'
@@ -20,6 +21,12 @@ export type IconName =
   | 'people'
 export function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, ReactNode> = {
+    copy: (
+      <>
+        <rect x="8" y="7" width="12" height="15" rx="2" />
+        <path d="M16 7V4a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3m3-7h6m-6 4h6" />
+      </>
+    ),
     share: (
       <>
         <circle cx="5" cy="12" r="3" />

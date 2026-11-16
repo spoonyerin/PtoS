@@ -279,15 +279,17 @@ test('홈과 알림에는 고정된 "연결되지 않았어요" 문구 대신 �
   expect(dialog).not.toHaveTextContent(FALSE_FIXED_NOTE)
 })
 
-test('가족에게 공유는 준비 중 안내만 보이고 요청을 보내지 않는다', async () => {
+test('가족에게 공유는 미리보기를 먼저 열고 추가 요청을 보내지 않는다', async () => {
+  stubDialog()
   const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(ruleResponse())))
   vi.stubGlobal('fetch', fetchMock)
   render(<App />)
   fireEvent.change(screen.getByRole('textbox', { name: '문자 내용' }), { target: { value: '은행입니다. 인증번호를 알려주세요.' } })
   await userEvent.click(screen.getByRole('button', { name: '분석하기' }))
   await screen.findByRole('heading', { name: '위험' })
-  await userEvent.click(screen.getByRole('button', { name: '가족에게 공유 (준비 중)' }))
-  expect(screen.getByRole('status')).toHaveTextContent('준비 중')
+  await userEvent.click(screen.getByRole('button', { name: '가족에게 공유' }))
+  expect(screen.getByRole('dialog', { name: '가족에게 공유하기' })).toBeVisible()
+  expect((screen.getByRole('textbox', { name: '공유할 내용' }) as HTMLTextAreaElement).value).toContain('[PtoS 분석 결과 공유]')
   expect(fetchMock).toHaveBeenCalledTimes(1)
 })
 

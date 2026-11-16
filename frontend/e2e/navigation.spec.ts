@@ -51,7 +51,7 @@ test('모바일 홈에서 세 입력 화면으로 이동하고 뒤로 돌아온�
   ).toBeVisible()
 })
 
-test('결과 공유는 준비 중 안내만 표시하고 원문을 전달하지 않는다', async ({
+test('공유 미리보기를 닫고 다시 수정하면 원문을 유지한다', async ({
   page,
 }) => {
   await page.goto('/#text')
@@ -61,14 +61,15 @@ test('결과 공유는 준비 중 안내만 표시하고 원문을 전달하지 
     page.getByRole('heading', { name: '위험', exact: true }),
   ).toBeVisible()
   await page.getByRole('button', { name: '가족에게 공유' }).click()
-  await expect(page.getByRole('status')).toContainText('준비 중')
+  await expect(page.getByRole('dialog', { name: '가족에게 공유하기' })).toBeVisible()
+  await page.keyboard.press('Escape')
   await page.getByRole('button', { name: '다시 확인하기' }).click()
   await expect(page.getByRole('textbox')).toHaveValue(
     '은행입니다. 인증번호를 알려주세요.',
   )
 })
 
-test('가족에게 공유(준비 중)를 눌러도 네트워크 요청·새 창·클립보드 쓰기가 없다', async ({ page }) => {
+test('공유 미리보기만 열면 네트워크 요청·새 창·클립보드 쓰기가 없다', async ({ page }) => {
   await page.addInitScript(() => {
     // 공유가 원문을 클립보드나 공유 시트로 넘기지 않는지 기록한다. 값은 저장하지 않는다.
     const calls: string[] = []
@@ -84,10 +85,8 @@ test('가족에게 공유(준비 중)를 눌러도 네트워크 요청·새 창�
   page.on('request', request => requests.push(request.url()))
   const popups: unknown[] = []
   page.on('popup', popup => popups.push(popup))
-  await page.getByRole('button', { name: '가족에게 공유 (준비 중)', exact: true }).click()
-  await expect(page.getByRole('status')).toContainText('준비 중')
-  await expect(page.getByRole('status')).toContainText('공유되지 않았어요')
-  await page.waitForTimeout(500)
+  await page.getByRole('button', { name: '가족에게 공유', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: '가족에게 공유하기' })).toBeVisible()
   expect(requests).toEqual([])
   expect(popups).toEqual([])
   expect(await page.evaluate(() => (window as unknown as { __shareCalls: string[] }).__shareCalls)).toEqual([])

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnalysisForm } from './components/AnalysisForm'
 import { AnalysisResult } from './components/AnalysisResult'
+import { FamilyShare } from './components/FamilyShare'
 import { Icon } from './components/Icons'
 import { useAnalysis } from './hooks/useAnalysis'
 import type { InputType } from './api/types'
@@ -20,7 +21,6 @@ export default function App() {
   const [panel, setPanel] = useState<'guide' | 'settings' | 'notice' | null>(
     null,
   )
-  const [shareNotice, setShareNotice] = useState(false)
   const [large, setLarge] = useState(false)
   const analysis = useAnalysis()
   const urlReputation = useUrlReputationStatus()
@@ -32,7 +32,6 @@ export default function App() {
       analysis.reset()
       // 뒤로/앞으로 이동으로 다른 확인 화면에 원문이 넘어가지 않게 지운다.
       setContent('')
-      setShareNotice(false)
     }
     window.addEventListener('hashchange', change)
     window.addEventListener('popstate', change)
@@ -52,7 +51,6 @@ export default function App() {
   function navigate(next: Page) {
     analysis.reset()
     setContent('')
-    setShareNotice(false)
     history.pushState(
       null,
       '',
@@ -218,16 +216,7 @@ export default function App() {
               <>
                 <AnalysisResult result={analysis.result}>
                   <div className="result-buttons">
-                    <button
-                      className="primary-button"
-                      onClick={() => setShareNotice(true)}
-                    >
-                      <Icon name="share" />
-                      {/* 좁은 화면에서 가로로 넘치지 않도록 "준비 중"은 둘째 줄에 둔다. */}
-                      <span className="button-label">
-                        가족에게 공유 <small>(준비 중)</small>
-                      </span>
-                    </button>
+                    <FamilyShare result={analysis.result} large={large} />
                     <button
                       className="primary-button"
                       onClick={() => navigate('home')}
@@ -236,12 +225,6 @@ export default function App() {
                       홈으로
                     </button>
                   </div>
-                  {shareNotice && (
-                    <p role="status" className="share-notice">
-                      가족에게 공유 기능은 준비 중이에요. 현재 내용은 공유되지
-                      않았어요.
-                    </p>
-                  )}
                 </AnalysisResult>
               </>
             )}
