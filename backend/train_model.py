@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from evaluation.harness import DatasetError
-from evaluation.model_training import TrainingError, train
+from evaluation.model_training import LABEL_SOURCES, TrainingError, train
 
 parser = argparse.ArgumentParser(description="dev split으로 TF-IDF + 로지스틱 회귀 기준선을 학습한다. 원문은 리포트에 넣지 않는다.")
 parser.add_argument("--data", required=True, type=Path, help="평가 CSV 경로 (저장소·동기화 폴더 밖 권장)")
@@ -16,12 +16,14 @@ parser.add_argument("--out-dir", required=True, type=Path, help="모델을 저�
 parser.add_argument("--seed", type=int, default=20261027)
 parser.add_argument("--n-splits", type=int, default=5, help="campaign_id 기준 교차검증 fold 수")
 parser.add_argument("--model-version", default="tfidf-lr-v1")
+parser.add_argument("--labels", choices=LABEL_SOURCES, default="levels",
+                    help="학습 라벨 기준. levels(기본): 4단계 라벨. binary: expected_binary 우선, 없으면 4단계에서 파생 (임시, 팀 확정 필요)")
 args = parser.parse_args()
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
 try:
-    manifest = train(args.data, args.out_dir, args.seed, args.n_splits, args.model_version)
+    manifest = train(args.data, args.out_dir, args.seed, args.n_splits, args.model_version, label_source=args.labels)
 except (DatasetError, TrainingError) as error:
     sys.exit(f"학습 입력 오류: {error}")
 except (OSError, UnicodeDecodeError, csv.Error) as error:
