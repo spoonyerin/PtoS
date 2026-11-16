@@ -81,7 +81,7 @@ class RuleBasedAnalyzer:
             risk_level=level, confidence=None,
             risk_factors=list(dict.fromkeys(item.label for item in evidence)),
             explanation=explanation, action_guidance=actions,
-            limitations=limitations, analysis_version="rules-reputation-dev-v4",
+            limitations=limitations, analysis_version="rules-reputation-dev-v5",
             evidence=evidence, input_assessment=scan.assessment,
             analysis_stages=[
                 AnalysisStage(name="rules", status="completed"),
@@ -98,7 +98,7 @@ class CompositeAnalyzer:
     모델 단계가 없거나 실패하면 규칙 결과와 근거를 그대로 두고 analysis_stages와 limitations에만 표시한다.
     """
 
-    VERSION = "rules-model-dev-v3"
+    VERSION = "rules-model-dev-v4"
 
     def __init__(self, rules: RuleBasedAnalyzer, model_state: ModelState, model_timeout: float = 1.0,
                  llm: LlmReviewer | None = None, llm_scope: LlmScope = "weak_evidence", llm_timeout: float = 3.0):
