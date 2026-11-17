@@ -70,7 +70,7 @@ export function FamilyProtectionFlow({ model, setModel, onHome }: {
         <section className="family-alert-intro"><h2>위험한 결과로 나오면 가족에게 자동으로 알릴까요?</h2><p>분석 결과가 ‘위험’이면 공유 버튼을 누르지 않아도 연결된 가족에게 바로 알려요.</p></section>
         <section className="family-disclosure">
           <div><h2>가족에게 보내는 내용</h2><ul>{['위험 단계와 분석 결과', '발견된 위험 요소', '원문 요약'].map(text => <li key={text}><span className="family-disclosure-check" aria-hidden="true"><img src="/assets/icon-check.svg" alt="" /></span>{text}</li>)}</ul></div>
-          <div><h2>보내지 않는 내용</h2><ul>{['다른 문자와 사진', '내 위치', '내 연락처 목록'].map(text => <li key={text}><span className="family-disclosure-no" aria-hidden="true">×</span>{text}</li>)}</ul></div>
+          <div><h2>보내지 않는 내용</h2><ul>{['다른 문자와 사진', '내 위치', '내 연락처 목록'].map(text => <li key={text}><span className="family-disclosure-no" aria-hidden="true"><Icon name="close" /></span>{text}</li>)}</ul></div>
         </section>
         <div className="family-recipient"><span className="family-avatar" aria-hidden="true">{recipient ? Array.from(recipient.name)[0] : '?'}</span><div><strong>받는 가족</strong><p>{recipient ? `${recipient.name}(${recipient.relation})` : '받을 가족을 선택해 주세요.'}</p></div><button className="family-outline-small" onClick={() => openModal('recipient')}>바꾸기</button></div>
         {!recipient && <p className="family-help">수락을 완료한 가족을 선택해야 알림을 켤 수 있어요.</p>}
