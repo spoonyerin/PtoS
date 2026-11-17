@@ -47,7 +47,7 @@ def test_plain_sentence_with_a_clear_model_score_is_normal_without_claiming_safe
     assert result.explanation == HEADINGS[RiskLevel.NORMAL] and "보증하는 것은 아니에요" in result.explanation
     assert result.action_guidance == NORMAL_ACTIONS and result.evidence == [] and result.confidence is None
     assert MODEL_LIMITATIONS["clear"] in result.limitations
-    assert [stage.status for stage in result.analysis_stages] == ["completed", "completed", "not_applicable"]
+    assert [stage.status for stage in result.analysis_stages] == ["completed", "completed", "not_applicable", "not_connected"]
 
 
 def test_header_only_notice_can_be_normal_and_keeps_its_evidence_and_guidance():

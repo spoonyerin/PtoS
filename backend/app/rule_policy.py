@@ -29,8 +29,19 @@ def decide(scan: RuleScan) -> tuple[RiskLevel, str]:
         # 규칙 B(임시): 가족 호칭 + 금전 요구 + 링크 요구. 답장 유도는 아직 신호가 없다.
         if (F.IMPERSONATION, "family") in kinds and {F.MONEY_REQUEST, F.LINK_CLICK} <= codes:
             return RiskLevel.DANGEROUS, "COMBINED_FAMILY_MONEY_LINK"
+        # v6(임시): 혜택·당첨 또는 비밀 유지 요구가 금전·민감정보 요구와 같은 문맥에 있으면 위험.
+        if F.BENEFIT_LURE in codes and codes & {F.MONEY_REQUEST, F.CREDENTIAL_REQUEST}:
+            return RiskLevel.DANGEROUS, "COMBINED_BENEFIT_REQUEST"
+        if F.SECRECY_REQUEST in codes and codes & {F.MONEY_REQUEST, F.CREDENTIAL_REQUEST}:
+            return RiskLevel.DANGEROUS, "COMBINED_SECRECY_REQUEST"
     if any({f.evidence.factor_code for f in found} & ACTION_CODES for found in contexts.values()):
         return RiskLevel.SUSPICIOUS, "ACTIONABLE_SIGNAL"
+    # v6(임시): 결제·승인 통지나 "본인 아닐 시"와 함께 문자 속 번호로 전화하도록 유도. 단독 문의 번호 안내는 올리지 않는다.
+    if any(f.kind == "payment_callback" for f in scan.findings):
+        return RiskLevel.SUSPICIOUS, "UNEXPECTED_PAYMENT_CALLBACK"
+    # v6(임시): 혜택·당첨 + 기한·소멸 압박 + 주소. 혜택 안내 단독이나 주소 없는 안내는 올리지 않는다.
+    if scan.has_url and any(f.kind == "benefit_pressure" for f in scan.findings):
+        return RiskLevel.SUSPICIOUS, "BENEFIT_PRESSURE_LINK"
     # 3차(임시): 가족 호칭 + 휴대폰 사정 + 답장·메신저 추가 요청. 금전·링크 요구가 없어도 의심으로 본다(위험으로 올리지 않는다).
     if any(f.kind == "contact" for f in scan.findings):
         return RiskLevel.SUSPICIOUS, "FAMILY_DEVICE_CONTACT"

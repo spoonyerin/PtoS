@@ -76,7 +76,7 @@ def test_model_only_raises_insufficient_to_suspicious(text, score, level, reason
     assert result.evidence == base.evidence and result.risk_factors == base.risk_factors
     assert result.action_guidance == base.action_guidance
     assert result.analysis_stages[1].status == "completed"
-    assert result.analysis_version == "rules-model-dev-v5"
+    assert result.analysis_version == "rules-model-dev-v6"
     flagged = score >= model.threshold
     assert (MODEL_SIGNAL_EXPLANATION in result.explanation) is flagged
     assert result.limitations[:2] == [BASE_LIMITATION, MODEL_LIMITATIONS["flagged" if flagged else "not_flagged"]]
@@ -117,7 +117,9 @@ def test_model_failure_keeps_rule_result(state, outcome, stage, text, caplog):
     assert (result.risk_level, result.policy_reason, result.evidence) == (base.risk_level, base.policy_reason, base.evidence)
     assert result.explanation == base.explanation and result.action_guidance == base.action_guidance
     assert result.analysis_stages[1].status == stage
-    assert [s.name for s in result.analysis_stages] == [s.name for s in base.analysis_stages]
+    # 종합 분석기는 규칙 분석기의 세 단계 뒤에 추가 검토 단계를 붙인다(꺼져 있으면 not_connected).
+    assert [s.name for s in result.analysis_stages] == [*(s.name for s in base.analysis_stages), "llm_review"]
+    assert result.analysis_stages[3].status == "not_connected"
     assert result.analysis_stages[2] == base.analysis_stages[2]
     assert result.limitations[:2] == [BASE_LIMITATION, MODEL_LIMITATIONS[outcome]]
     assert text not in caplog.text

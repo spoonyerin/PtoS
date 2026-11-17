@@ -12,8 +12,9 @@ def analyze(text):
     return asyncio.run(RuleBasedAnalyzer().analyze(AnalysisInput(input_type="text", content=text)))
 
 
-def rule_ids(result, code=F.IMPERSONATION):
-    return {e.rule_id for e in result.evidence if e.factor_code == code}
+def rule_ids(result, code=None):
+    # 연락 요청 근거는 v6에서 CONTACT_REQUEST 코드로 옮겼다. 코드를 주지 않으면 모든 근거의 rule_id를 본다.
+    return {e.rule_id for e in result.evidence if code is None or e.factor_code == code}
 
 
 def assert_spans(text, result):
@@ -21,7 +22,7 @@ def assert_spans(text, result):
         assert e.snippet == text[e.start:e.end] and e.start < e.end
 
 
-CONTACT_IDS = {"impersonation-family-device-v1", "impersonation-contact-v1"}
+CONTACT_IDS = {"impersonation-family-device-v1", "contact_request-family-v1"}
 
 
 # --- 가족·형제 호칭 + 휴대폰 사정 + 답장·메신저 추가 요청 → 의심 ---
@@ -38,7 +39,7 @@ def test_family_device_contact_is_suspicious_not_dangerous(text):
     assert result.risk_level == "suspicious" and result.policy_reason == "FAMILY_DEVICE_CONTACT"
     ids = rule_ids(result)
     # 휴대폰 사정 구절을 기존 가족 호칭 근거가 이미 잡았으면 같은 구절을 두 번 내지 않는다.
-    assert "impersonation-contact-v1" in ids and ids & {"impersonation-family-device-v1", "impersonation-family-v1"}
+    assert "contact_request-family-v1" in ids and ids & {"impersonation-family-device-v1", "impersonation-family-v1"}
     assert result.input_assessment.status == "action_identified"
     assert "평소와 다른 번호·계정일 수 있어요" in result.explanation
     assert any("직접 전화해 확인" in action for action in result.action_guidance)
@@ -67,7 +68,7 @@ def test_educational_quote_is_not_a_contact_request():
 
 def test_reported_contact_request_is_not_adopted():
     result = analyze("엄마\n폰 고장났다며 문자 줘라는 연락은 피싱이니 조심해")
-    assert "impersonation-contact-v1" not in rule_ids(result)
+    assert "contact_request-family-v1" not in rule_ids(result)
 
 
 def test_existing_combinations_keep_priority_over_contact_rule():

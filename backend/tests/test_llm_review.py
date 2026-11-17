@@ -8,10 +8,10 @@ import pytest
 
 from app.analyzers import CompositeAnalyzer, RuleBasedAnalyzer
 from app.contracts import AnalysisInput, RiskLevel
-from app.llm_policy import LLM_LIMITATIONS, LLM_SIGNAL_EXPLANATION, SENT_NOTICE, combine_llm, should_review
+from app.llm_policy import LLM_LIMITATIONS, LLM_SIGNAL_EXPLANATION, SENT_NOTICE, combine_llm, should_review, stage_status
 from app.llm_review import (
     API_KEY_ENV, BASE_URL_ENV, DAILY_LIMIT_ENV, LIVE_MODE, MAX_MASKED_CHARS, MODE_ENV, MODEL_ENV, TIMEOUT_ENV,
-    ChatCompletionsReviewer, LlmReview, build_messages, create_llm_reviewer, mask_for_llm, parse_judgement,
+    ChatCompletionsReviewer, LlmReview, LlmSetup, build_messages, create_llm_reviewer, mask_for_llm, parse_judgement,
 )
 from app.main import create_app
 from app.model_adapter import ModelState
@@ -167,15 +167,71 @@ def test_reviewer_is_created_only_with_all_settings():
     assert setup.reason == "live" and run(setup.reviewer.review("문장")).status == "completed"
 
 
-def test_app_never_builds_a_reviewer_even_when_settings_exist(monkeypatch):
-    # 화면 고지와 단계 표시(계약 변경) 전에는 환경 변수가 있어도 앱이 외부 검토를 켜지 않는다.
+def test_app_keeps_review_off_by_default_and_reports_it():
+    from fastapi.testclient import TestClient
+
+    with TestClient(create_app()) as client:
+        assert client.get("/api/v1/health/ready").json()["llm_review"] == "off"
+        body = client.post("/api/v1/analyses", json={"input_type": "text", "content": WEAK}).json()
+    assert body["analysis_stages"][3] == {"name": "llm_review", "status": "not_connected"}
+    assert SENT_NOTICE not in body["limitations"]
+
+
+def test_app_turns_review_on_only_with_every_setting_and_never_exposes_them(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    # 키만 있거나 모드 값이 다르면 꺼진 상태다.
+    monkeypatch.setenv(API_KEY_ENV, FAKE_KEY)
+    with TestClient(create_app()) as client:
+        assert client.get("/api/v1/health/ready").json()["llm_review"] == "off"
     for name, value in FULL_ENV.items():
         monkeypatch.setenv(name, value)
-    app = create_app()
-    analyzers = [value for value in vars(app.state).get("_state", {}).values() if isinstance(value, CompositeAnalyzer)]
-    assert all(analyzer.llm is None for analyzer in analyzers)
-    import app.main as main_module
-    assert "llm" not in open(main_module.__file__, encoding="utf-8").read().lower()
+    with TestClient(create_app()) as client:
+        response = client.get("/api/v1/health/ready")
+    assert response.json() == {"status": "ready", "mode": "rules", "url_reputation": "off", "llm_review": "live"}
+    for secret in (FAKE_KEY, "llm.example.invalid", "fake-model"):
+        assert secret not in response.text
+
+
+def test_app_uses_the_reviewer_and_reports_the_stage():
+    from fastapi.testclient import TestClient
+
+    seen = []
+
+    def handler(request: httpx.Request):
+        seen.append(json.loads(request.content)["messages"][-1]["content"])
+        return reply('{"judgement": "scam_signs"}')
+
+    setup = lambda: create_llm_reviewer(FULL_ENV, transport=httpx.MockTransport(handler))
+    text = "[가상은행] 010-1234-5678 번호로 등록된 고객님의 계좌가 정지될 예정입니다."
+    with TestClient(create_app(llm_setup=setup)) as client:
+        body = client.post("/api/v1/analyses", json={"input_type": "text", "content": text}).json()
+        untouched = client.post("/api/v1/analyses", json={"input_type": "text", "content": "앱을 설치해주세요."}).json()
+    assert body["risk_level"] == "suspicious" and body["policy_reason"] == "LLM_SIGNAL_ONLY"
+    assert body["analysis_stages"][3] == {"name": "llm_review", "status": "completed"}
+    assert SENT_NOTICE in body["limitations"] and body["confidence"] is None
+    assert len(seen) == 1 and "010-1234-5678" not in seen[0]
+    # 이미 의심인 입력에는 호출하지 않는다.
+    assert untouched["analysis_stages"][3] == {"name": "llm_review", "status": "not_applicable"}
+
+
+def test_app_reports_a_failed_review_as_unavailable_and_keeps_the_rule_result():
+    from fastapi.testclient import TestClient
+
+    setup = lambda: create_llm_reviewer(FULL_ENV, transport=httpx.MockTransport(lambda request: httpx.Response(500)))
+    with TestClient(create_app(llm_setup=setup)) as client:
+        response = client.post("/api/v1/analyses", json={"input_type": "text", "content": WEAK})
+    body = response.json()
+    assert response.status_code == 200 and body["risk_level"] == "insufficient_information"
+    assert body["analysis_stages"][3] == {"name": "llm_review", "status": "unavailable"}
+    assert LLM_LIMITATIONS["failed"] in body["limitations"]
+
+
+def test_setup_off_states_never_build_a_reviewer():
+    assert create_app(llm_setup=lambda: LlmSetup(None, "key_missing")) is not None
+    assert stage_status(False, None) == "not_connected" and stage_status(True, None) == "not_applicable"
+    assert stage_status(True, LlmReview("completed", "no_clear_signs")) == "completed"
+    assert stage_status(True, LlmReview("timeout")) == "unavailable"
 
 
 # ---- 호출 조건과 종합 ----
@@ -219,6 +275,7 @@ class FakeReviewer:
 
 
 def composite(llm, **kwargs):
+    kwargs.setdefault("llm_scope", "weak_evidence")
     return CompositeAnalyzer(RuleBasedAnalyzer(), ModelState("not_configured"), llm=llm, **kwargs)
 
 
@@ -239,7 +296,9 @@ def test_scam_signs_raise_weak_evidence_input_to_suspicious_and_keep_evidence():
     assert result.risk_level == "suspicious" and result.policy_reason == "LLM_SIGNAL_ONLY"
     assert result.explanation.startswith(LLM_SIGNAL_EXPLANATION)
     assert result.evidence == before.evidence and result.confidence is None
-    assert result.analysis_stages == before.analysis_stages and result.analysis_version == before.analysis_version
+    assert result.analysis_stages[:3] == before.analysis_stages[:3] and result.analysis_version == before.analysis_version
+    assert (before.analysis_stages[3].name, before.analysis_stages[3].status) == ("llm_review", "not_connected")
+    assert result.analysis_stages[3].status == "completed"
     assert SENT_NOTICE in result.limitations and LLM_LIMITATIONS["scam_signs"] in result.limitations
     assert len(llm.seen) == 1 and "010-1234-5678" not in llm.seen[0] and "[전화번호]" in llm.seen[0]
 
@@ -279,3 +338,44 @@ def test_any_sentence_scope_calls_for_plain_sentences_too():
     llm = FakeReviewer(LlmReview("completed", "no_clear_signs"))
     analyze(composite(llm, llm_scope="any_sentence"), "이번 주 토요일 모임은 공원에서 열립니다.")
     assert len(llm.seen) == 1
+
+
+# ---- 기본 호출 범위: 모델 점수가 정상 구간과 신호 구간 사이일 때 ----
+
+@pytest.mark.parametrize("outcome,band,status,weak,expected", [
+    ("not_flagged", True, "sentence_present", False, True),
+    ("not_flagged", True, "fragment", False, True),       # 문장으로 끝나지 않아도 모델이 애매해한 입력은 대상이다
+    ("clear", True, "sentence_present", True, False),     # 모델이 사기와 거리가 멀다고 본 구간
+    ("flagged", True, "sentence_present", True, False),   # 이미 의심으로 올라감
+    ("not_flagged", True, "url_only", False, False),
+    ("not_flagged", False, "sentence_present", False, False),   # 정상 임계값 없는 모델: 약한 근거 조건으로 대신 판단
+    ("not_flagged", False, "sentence_present", True, True),
+    ("not_configured", False, "sentence_present", True, True),
+    ("timeout", False, "fragment", True, False),
+])
+def test_default_scope_reviews_what_the_model_found_uncertain(outcome, band, status, weak, expected):
+    insufficient = RiskLevel.INSUFFICIENT_INFORMATION
+    assert should_review(insufficient, outcome, status, weak, "model_uncertain", band) is expected
+    assert should_review(insufficient, outcome, status, weak, model_has_normal_band=band) is expected
+
+
+class BandModel:
+    version, threshold, normal_threshold = "fake-v1", 0.7, 0.3
+
+    def __init__(self, score):
+        self._score = score
+
+    def score(self, text):
+        return self._score
+
+
+@pytest.mark.parametrize("score,calls,level,stage", [
+    (0.5, 1, "suspicious", "completed"),             # 사이 구간: 추가 검토 → 의심
+    (0.1, 0, "normal", "not_applicable"),            # 정상 구간: 호출하지 않고 정상
+    (0.9, 0, "suspicious", "not_applicable"),        # 신호 구간: 모델 신호로 이미 의심
+])
+def test_default_scope_in_the_composite_analyzer(score, calls, level, stage):
+    llm = FakeReviewer(LlmReview("completed", "scam_signs"))
+    analyzer = CompositeAnalyzer(RuleBasedAnalyzer(), ModelState("loaded", BandModel(score)), llm=llm)
+    result = analyze(analyzer, "이번 주 토요일 모임은 공원에서 열립니다.")
+    assert (len(llm.seen), result.risk_level, result.analysis_stages[3].status) == (calls, level, stage)

@@ -9,7 +9,7 @@ from .rule_policy import decide
 from .rule_templates import render
 from .reputation_policy import combine_reputation
 from .urls import extract_urls
-from .llm_policy import SENT_NOTICE, LlmScope, combine_llm, limitation_for, should_review
+from .llm_policy import SENT_NOTICE, LlmScope, combine_llm, limitation_for, should_review, stage_status
 from .llm_review import LlmReview, LlmReviewer, mask_for_llm
 from .model_adapter import ModelState, prepare_model_text
 from .model_policy import (
@@ -83,7 +83,7 @@ class RuleBasedAnalyzer:
             risk_level=level, confidence=None,
             risk_factors=list(dict.fromkeys(item.label for item in evidence)),
             explanation=explanation, action_guidance=actions,
-            limitations=limitations, analysis_version="rules-reputation-dev-v5",
+            limitations=limitations, analysis_version="rules-reputation-dev-v6",
             evidence=evidence, input_assessment=scan.assessment,
             analysis_stages=[
                 AnalysisStage(name="rules", status="completed"),
@@ -100,14 +100,14 @@ class CompositeAnalyzer:
     모델 단계가 없거나 실패하면 규칙 결과와 근거를 그대로 두고 analysis_stages와 limitations에만 표시한다.
     """
 
-    VERSION = "rules-model-dev-v5"
+    VERSION = "rules-model-dev-v6"
 
     def __init__(self, rules: RuleBasedAnalyzer, model_state: ModelState, model_timeout: float = 1.0,
-                 llm: LlmReviewer | None = None, llm_scope: LlmScope = "weak_evidence", llm_timeout: float = 3.0):
+                 llm: LlmReviewer | None = None, llm_scope: LlmScope = "model_uncertain", llm_timeout: float = 3.0):
         self.rules = rules
         self.model_state = model_state
         self.model_timeout = model_timeout
-        # 조건부 추가 검토. 기본은 없음이고 create_app은 넣지 않는다 (docs/LLM_POLICY.md).
+        # 조건부 추가 검토. 기본은 없음이다. create_app은 켜는 조건을 모두 만족할 때만 넣는다 (docs/LLM_POLICY.md).
         self.llm = llm
         self.llm_scope = llm_scope
         self.llm_timeout = llm_timeout
@@ -158,10 +158,14 @@ class CompositeAnalyzer:
         stages = [stage if stage.name != "lightweight_model" else AnalysisStage(name="lightweight_model", status=STAGE_STATUS[outcome])
                   for stage in result.analysis_stages]
         # 조건부 추가 검토: 규칙과 모델을 모두 본 뒤, 판단하기 어려운 경우에만 호출한다. 실패해도 앞의 결과와 근거는 그대로다.
-        if self.llm is not None and should_review(level, outcome, result.input_assessment.status, bool(result.evidence), self.llm_scope):
+        review = None
+        has_normal_band = getattr(self.model_state.model, "normal_threshold", None) is not None
+        if self.llm is not None and should_review(level, outcome, result.input_assessment.status, bool(result.evidence),
+                                                  self.llm_scope, has_normal_band):
             review = await self._llm_review(data)
             level, reason, explanation = combine_llm(level, reason, explanation, review)
             limitations += [SENT_NOTICE, limitation_for(review)]
+        stages.append(AnalysisStage(name="llm_review", status=stage_status(self.llm is not None, review)))
         return result.model_copy(update={
             "action_guidance": actions,
             "risk_level": level, "policy_reason": reason, "explanation": explanation,

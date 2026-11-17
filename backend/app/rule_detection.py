@@ -121,6 +121,25 @@ CONTACT_REQUEST = re.compile(
     r"(?:문자|답장|답|톡|카톡|연락)\s*(?:을|를)?\s*(?:좀\s*)?(?:줘|주라|해\s*줘|남겨\s*줘|주세요|해\s*주세요)"
     r"|(?:(?:이\s*번호로|여기로)\s*)?(?:카톡|톡|친구)\s*(?:을|를)?\s*추가\s*(?:해\s*줘|해\s*주세요|부탁))"
     r"(?=$|[\s.!?。！？,;~ㅠㅜ])")
+# rules-dev-v6(임시): 전화·콜백 유도. 문의·상담·신고 안내 바로 뒤의 전화번호, 또는 번호로 전화·연락하라는 표현.
+# 정상 안내에도 흔하므로 단독으로는 약한 근거다. 결제·승인 통지나 "본인 아닐 시"와 함께일 때만 의심으로 본다(rule_policy).
+PHONE_NUMBER = r"(?:\[전화번호\]|0\d{1,2}[-.\s)]?\d{3,4}[-.\s]?\d{4}|1[5-9]\d{2}[-.\s]?\d{4})"
+CALLBACK = re.compile(
+    rf"(?:문의|상담|신고|연락처?|전화)(?:\s*(?:는|은|처|번호|전화))?\s*[:：]?\s*{PHONE_NUMBER}"
+    rf"|{PHONE_NUMBER}\s*(?:번)?\s*(?:로|으로)\s*(?:전화|연락|문의|신고)")
+PAYMENT_NOTICE = re.compile(
+    r"(?:승인|결제|출고|처리)\s*완료|해외\s*(?:승인|결제|인증)|\d[\d,.]*\s*원\s*(?:\([^)\n]{0,10}\)\s*)?(?:승인|결제)"
+    r"|(?:승인|결제)\s*\d[\d,.]*\s*원|USD\s*\d", re.IGNORECASE)
+NOT_YOU = re.compile(r"본인\s*(?:요청\s*|사용\s*|결제\s*)?(?:이\s*)?아닐\s*(?:시|경우|때)|본인이\s*아니(?:라면|면|시면)")
+# rules-dev-v6(임시): 과도한 혜택·당첨. 단독으로는 약한 근거다.
+BENEFIT = re.compile(r"당첨|무료\s*(?:쿠폰|증정|지급|제공|나눔)|환급금|지원금|보조금|장려금|경품|사은품|상금|수익\s*보장|고수익")
+BENEFIT_PRESSURE = re.compile(r"미수령|소멸|환수|임박|마감|선착순|기한")
+# rules-dev-v6(임시): 비밀 유지 요구. 인증번호·비밀번호를 남에게 알리지 말라는 보안 안내는 같은 구절의 대상어로 구분해 제외한다.
+SECRECY = re.compile(
+    r"(?:아무(?:에게|한테)도|누구(?:에게|한테)도|다른\s*사람(?:에게|한테)(?:는|도)?|(?:가족|엄마|아빠|부모님?|주변)(?:에게|한테|에)(?:는|도)?)"
+    r"\s*(?:절대\s*)?(?:말하지|알리지|얘기하지|이야기하지)\s*(?:마|말|않)"
+    r"|비밀로\s*(?:해|하|부탁)|비밀\s*(?:유지|엄수)")
+SECRECY_SAFE_TARGET = re.compile(r"인증\s*(?:번호|정보|코드)|비밀\s*번호|OTP|개인\s*정보|계좌\s*번호|카드\s*번호", re.IGNORECASE)
 # 임시: 청구어는 단독으로, 상태 변화어는 예고·조건 형태일 때만 불이익으로 본다. 과거형 완료 안내는 제외한다.
 PENALTY = re.compile(
     r"(?P<claim>미납|연체|체납|과태료|범칙금|벌금|가산금|가산세|압류|강제\s*집행|법적\s*(?:조치|절차|처벌))"
@@ -162,9 +181,12 @@ LABELS = {
     FactorCode.LINK_CLICK: "링크 클릭·접속 요구",
     FactorCode.APP_INSTALL: "앱 설치·실행 요구",
     FactorCode.URGENCY_THREAT: "긴급성·불이익 압박 표현",
+    FactorCode.CONTACT_REQUEST: "전화·답장 등 연락 유도",
+    FactorCode.BENEFIT_LURE: "혜택·당첨 안내",
+    FactorCode.SECRECY_REQUEST: "비밀 유지 요구",
 }
 ACTION_CODES = frozenset(ACTIONS)
-WEAK_IDENTITY = frozenset({"header", "family", "family_device", "contact"})
+WEAK_IDENTITY = frozenset({"header", "family", "family_device"})
 
 
 @dataclass(frozen=True)
@@ -376,7 +398,22 @@ def scan_rules(text: str, *, url_spans: list[tuple[int, int]] | None = None) -> 
                         if not overlaps(*m.span(), ignored) and not REPORT.search(prose[m.end():m.end() + 6])), None)
         if device and contact:
             add(FactorCode.IMPERSONATION, *device.span(), "family_device", "family-device")
-            add(FactorCode.IMPERSONATION, *contact.span(), "contact", "contact")
+            add(FactorCode.CONTACT_REQUEST, *contact.span(), "contact", "family")
+    # v6(임시): 전화·콜백 유도. 결제·승인 통지나 "본인 아닐 시"가 같은 메시지에 있으면 별도 rule_id로 낸다.
+    unexpected_payment = any(not overlaps(*m.span(), ignored) for pattern in (PAYMENT_NOTICE, NOT_YOU) for m in pattern.finditer(prose))
+    for match in CALLBACK.finditer(prose):
+        if unexpected_payment:
+            add(FactorCode.CONTACT_REQUEST, *match.span(), "payment_callback", "payment-callback")
+        else:
+            add(FactorCode.CONTACT_REQUEST, *match.span(), "callback", "callback")
+    # v6(임시): 혜택·당첨과 비밀 유지 요구. 둘 다 단독으로는 판정을 올리지 않는다.
+    benefit_pressure = bool(BENEFIT_PRESSURE.search(prose))
+    for match in BENEFIT.finditer(prose):
+        add(FactorCode.BENEFIT_LURE, *match.span(), "benefit_pressure" if benefit_pressure else "benefit", "")
+    for match in SECRECY.finditer(prose):
+        # 인증번호·비밀번호를 남에게 알리지 말라는 보안 안내는 대상어가 같은 문장이나 바로 앞 문장에 있다.
+        if not SECRECY_SAFE_TARGET.search(prose, max(0, match.start() - 60), match.end()):
+            add(FactorCode.SECRECY_REQUEST, *match.span(), "secrecy", "")
     for left, right in urls:
         prefix = prose[max(0, left - 40):left]
         match = CONFIRM_BEFORE_URL.search(prefix)
@@ -394,7 +431,7 @@ def scan_rules(text: str, *, url_spans: list[tuple[int, int]] | None = None) -> 
         [(f.evidence.factor_code, f.evidence.start, f.evidence.end) for f in findings],
         identity=IDENTITY, urgency=URGENCY, meta=META, quotes=QUOTES)
     findings = [replace(finding, context=context) for finding, context in zip(findings, contexts)]
-    if any(f.evidence.factor_code in ACTION_CODES or f.kind == "contact" for f in findings):
+    if any(f.evidence.factor_code in ACTION_CODES or f.kind in ("contact", "payment_callback") for f in findings):
         assessment = InputAssessment(status="action_identified", reasons=["대상과 긍정적 요구 표현을 규칙으로 확인했어요. 전체 문맥과 실제 신원은 확인하지 못했어요."])
     elif re.search(r"(?:요|니다|다|세요|시오|이야|줘)\s*[.!?。！？\"'”’]*\s*$", prose):
         assessment = InputAssessment(status="sentence_present", reasons=["문장 형태의 입력은 있지만 현재 규칙으로 위험 요구를 확인하지 못했어요. 문맥 분석 모델은 아직 없어요."])

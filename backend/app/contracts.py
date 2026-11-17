@@ -66,6 +66,10 @@ class FactorCode(StrEnum):
     APP_INSTALL = "APP_INSTALL"
     URGENCY_THREAT = "URGENCY_THREAT"
     URL_REPUTATION_MATCH = "URL_REPUTATION_MATCH"
+    # 2026-11-17 계약 추가(임시, 팀 확정 필요): 전화·답장 등 연락 유도, 과도한 혜택·당첨, 비밀 유지 요구.
+    CONTACT_REQUEST = "CONTACT_REQUEST"
+    BENEFIT_LURE = "BENEFIT_LURE"
+    SECRECY_REQUEST = "SECRECY_REQUEST"
 
 
 class Evidence(BaseModel):
@@ -85,7 +89,8 @@ class InputAssessment(BaseModel):
 
 
 class AnalysisStage(BaseModel):
-    name: Literal["rules", "lightweight_model", "url_reputation"]
+    # llm_review(2026-11-17 계약 추가): 조건부 추가 검토 단계. CompositeAnalyzer의 결과에만 있다.
+    name: Literal["rules", "lightweight_model", "url_reputation", "llm_review"]
     status: Literal["completed", "not_implemented", "not_connected", "not_applicable", "unavailable"]
 
 
@@ -160,11 +165,15 @@ class AnalysisResponse(AnalysisResult):
 
 
 class ReadyResponse(BaseModel):
-    """준비 상태. url_reputation은 실제 외부 평판 조회가 켜졌는지만 알린다 (키·시간 제한·공급자 세부 상태는 넣지 않는다)."""
+    """준비 상태. url_reputation은 실제 외부 평판 조회가, llm_review는 조건부 추가 검토(가린 문장의 외부 전송)가 켜졌는지만 알린다.
+
+    키·주소·모델 이름·시간 제한·공급자 세부 상태는 넣지 않는다.
+    """
 
     status: Literal["ready"] = "ready"
     mode: Literal["rules"] = "rules"
     url_reputation: Literal["live", "off"]
+    llm_review: Literal["live", "off"]
 
 
 class ErrorDetail(BaseModel):
