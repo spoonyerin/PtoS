@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AnalysisForm } from './components/AnalysisForm'
 import { AnalysisResult } from './components/AnalysisResult'
 import { FamilyShare } from './components/FamilyShare'
+import { FamilyDevelopmentPanel, FamilyProtectionCard, initialFamilyPreview, type FamilyPreviewState } from './components/FamilyPreview'
 import { Icon } from './components/Icons'
 import { useAnalysis } from './hooks/useAnalysis'
 import type { InputType } from './api/types'
@@ -18,10 +19,12 @@ const readPage = (): Page =>
 export default function App() {
   const [page, setPage] = useState<Page>(readPage)
   const [content, setContent] = useState('')
-  const [panel, setPanel] = useState<'guide' | 'settings' | 'notice' | null>(
+  const [panel, setPanel] = useState<'guide' | 'settings' | 'notice' | 'premium' | 'family' | null>(
     null,
   )
   const [large, setLarge] = useState(false)
+  const [familyPreview, setFamilyPreview] = useState<FamilyPreviewState>(initialFamilyPreview)
+  const premium = familyPreview !== 'free'
   const analysis = useAnalysis()
   const urlReputation = useUrlReputationStatus()
   const dialog = useRef<HTMLDialogElement>(null)
@@ -148,28 +151,19 @@ export default function App() {
               />
             </section>
             <nav className="home-menu" aria-label="확인 방법 선택">
-              <button
-                className="guide-button"
-                onClick={() => setPanel('guide')}
-              >
-                <span className="menu-symbol help-symbol">
-                  <img
-                    src="/assets/icon_questionmark.png"
-                    width="22"
-                    height="36"
-                    alt=""
-                  />
-                </span>
-                <span>
-                  <strong>이용하는 방법</strong>
-                  <small>
-                    처음 이용하시나요? 간단한 방법을
-                    <br />
-                    안내해 드립니다.
-                  </small>
-                </span>
-                <Icon name="chevron" />
-              </button>
+              <div className="home-feature-cards">
+                <FamilyProtectionCard state={familyPreview} onOpen={() => setPanel(premium ? 'family' : 'premium')} />
+                <button className="guide-button" aria-label="이용하는 방법" onClick={() => setPanel('guide')}>
+                  <span className="family-card-top" aria-hidden="true">
+                    <span className="menu-symbol help-symbol">
+                      <img src="/assets/icon_questionmark.png" width="22" height="36" alt="" />
+                    </span>
+                    <Icon name="chevron" />
+                  </span>
+                  <strong>이용 방법</strong>
+                  <small>방법을 상세하게 안내해 드립니다.</small>
+                </button>
+              </div>
               {(['text', 'ocr_text', 'url'] as InputType[]).map((mode) => (
                 <button
                   className="menu-button"
@@ -216,7 +210,12 @@ export default function App() {
               <>
                 <AnalysisResult result={analysis.result}>
                   <div className="result-buttons">
-                    <FamilyShare result={analysis.result} large={large} />
+                    {premium ? <FamilyShare result={analysis.result} large={large} /> : (
+                      <button type="button" className="primary-button locked-share" disabled
+                        aria-label="가족에게 공유" aria-describedby="share-lock-hint">
+                        <Icon name="lock" />가족에게 공유
+                      </button>
+                    )}
                     <button
                       className="primary-button"
                       onClick={() => navigate('home')}
@@ -225,6 +224,7 @@ export default function App() {
                       홈으로
                     </button>
                   </div>
+                  {!premium && <span id="share-lock-hint" className="sr-only">프리미엄 이용권 활성화 후 사용할 수 있습니다.</span>}
                 </AnalysisResult>
               </>
             )}
@@ -268,7 +268,8 @@ export default function App() {
                   ? '이용하는 방법'
                   : panel === 'settings'
                     ? '화면 설정'
-                    : '알림'}
+                    : panel === 'premium' ? '유료 버전 안내'
+                      : panel === 'family' ? '가족 보호' : '알림'}
               </h2>
               <button
                 className="icon-button"
@@ -299,6 +300,10 @@ export default function App() {
                 />
                 글씨 크게 보기
               </label>
+            ) : panel === 'premium' ? (
+              <p>가족 보호와 가족 공유는 프리미엄 이용권으로 사용할 수 있어요. 가입 안내 화면은 준비 중입니다.</p>
+            ) : panel === 'family' ? (
+              <p>가족 보호 상세 화면은 준비 중입니다.</p>
             ) : (
               <p>
                 규칙 기반 개발 버전입니다. {developmentNoteText(urlReputation)}
@@ -307,6 +312,10 @@ export default function App() {
           </>
         )}
       </dialog>
+      {import.meta.env.DEV && <FamilyDevelopmentPanel state={familyPreview} onChange={state => {
+        setFamilyPreview(state)
+        setPanel(null)
+      }} />}
     </div>
   )
 }
