@@ -1,10 +1,10 @@
-# 규칙 기반 개발 버전의 임시 판정 정책 · rules-dev-v5
+# 규칙 기반 개발 버전의 임시 판정 정책 · rules-dev-v6
 
 > **임시, 팀 확정 필요.** v3(T4, 2026-10-27)에서 추가한 신호와 규칙 A·B, v4 1차 보강(2026-11-09)의 관계 자기소개 위치 제한과 부정 범위 조정, v4 2차 보강(2026-11-10~11)의 요구 표현 활용형·앱 설치 필요형·정상 인증번호 안내 예외는 팀이 확정하지 않은 개발용 정책이다. 아래 "v3 신호 보강", "v4 1차 보강", "v4 2차 보강", "알려진 한계" 절을 본다.
 
 PRD v1.2 FR-04~09와 개발설계서 5~7장의 **입력 충분성 → 근거 → 설명·행동** 원칙을 적용한다. 아래 내용은 이번 개발 증분의 검수 가능한 기준선이다. PRD가 확정한 판정 경계·정확도·신뢰도·점수 임계값이 아니다. 점수를 합산하거나 안전 확률을 만들지 않는다.
 
-이 문서는 문자 규칙의 기준선이다. 후속 종합 정책은 [SAFE_BROWSING.md](SAFE_BROWSING.md)의 종합 판정(`RuleBasedAnalyzer`의 `analysis_version: rules-reputation-dev-v5`)과 [MODEL_POLICY.md](MODEL_POLICY.md)의 모델 종합(API 응답 `analysis_version: rules-model-dev-v5`)을 따른다. 2026-11-17: v4 3차 보강과 문장 중간 줄바꿈 처리를 묶어 문자 규칙을 `rules-dev-v5`로 부르고, `RuleBasedAnalyzer`의 값을 `rules-reputation-dev-v5`, API 응답을 `rules-model-dev-v4`로 올렸다. 평판·모델 종합 방식은 바뀌지 않았다. 두 값은 v4 1차(2026-11-09)에서 `rules-reputation-dev-v3`·`rules-model-dev-v2`로, v4 2차(2026-11-11)에서 `rules-reputation-dev-v4`·`rules-model-dev-v3`로 올렸다. 두 번 모두 문자 규칙이 바뀌었음을 구분하려는 것이며 평판·모델 종합 방식은 바뀌지 않았다. 검증된 전체 해시 위협 일치만 URL 근거로 추가하며, 기존 문자 근거는 유지한다. 실제 외부 조회는 계속 보류 상태다.
+이 문서는 문자 규칙의 기준선이다. 후속 종합 정책은 [SAFE_BROWSING.md](SAFE_BROWSING.md)의 종합 판정(`RuleBasedAnalyzer`의 `analysis_version: rules-reputation-dev-v6`)과 [MODEL_POLICY.md](MODEL_POLICY.md)의 모델 종합(API 응답 `analysis_version: rules-model-dev-v6`)을 따른다. 2026-11-17 계약 브랜치에서 연락 유도·혜택·비밀 유지 신호를 더해 `rules-dev-v6`으로 부르고 두 값을 v6으로 올렸다. 2026-11-17: v4 3차 보강과 문장 중간 줄바꿈 처리를 묶어 문자 규칙을 `rules-dev-v5`로 부르고, `RuleBasedAnalyzer`의 값을 `rules-reputation-dev-v5`, API 응답을 `rules-model-dev-v4`로 올렸다. 평판·모델 종합 방식은 바뀌지 않았다. 두 값은 v4 1차(2026-11-09)에서 `rules-reputation-dev-v3`·`rules-model-dev-v2`로, v4 2차(2026-11-11)에서 `rules-reputation-dev-v4`·`rules-model-dev-v3`로 올렸다. 두 번 모두 문자 규칙이 바뀌었음을 구분하려는 것이며 평판·모델 종합 방식은 바뀌지 않았다. 검증된 전체 해시 위협 일치만 URL 근거로 추가하며, 기존 문자 근거는 유지한다. 실제 외부 조회는 계속 보류 상태다.
 
 ## 현재 가능한 분석과 없는 분석
 
@@ -112,7 +112,7 @@ eval-v2.1 dev에서 놓친 사기 문자를 유형으로 나눠, 계약을 바�
 
 | 변경 | factor_code / rule_id | 내용 |
 | --- | --- | --- |
-| 가족 호칭 + 휴대폰 사정 + 연락 요청 | `IMPERSONATION` / `impersonation-family-device-v1`, `impersonation-contact-v1` | 한 메시지 안에 ① 줄 첫머리에서 가족·형제를 부르는 말(엄마, 아빠, 누나, 오빠, 언니 등. “엄마가”처럼 주어로 쓴 말은 제외), ② 휴대폰 고장·분실·수리 사정, ③ 답장·문자·메신저 추가 요청(“이 번호로 문자 줘”, “카톡 추가하고 톡 줘”)이 **모두** 있을 때만 사정 구절과 연락 요청 구절을 약한 명의 근거로 낸다. 하나라도 없으면 근거를 내지 않는다. 판정은 `suspicious`(`policy_reason: FAMILY_DEVICE_CONTACT`)이며 위험으로 올리지 않는다. 금전·링크 요구가 함께 있으면 기존 조합(규칙 B 등)과 `ACTIONABLE_SIGNAL`이 먼저다. 두 근거는 조합 1(명시적 명의 + 금전/민감정보/앱)의 명의로 치지 않는다. 빈 줄로 나뉜 문단에 흩어져 있어도 메시지 단위로 본다 |
+| 가족 호칭 + 휴대폰 사정 + 연락 요청 | `IMPERSONATION` / `impersonation-family-device-v1`, 연락 요청은 v6부터 `CONTACT_REQUEST` / `contact_request-family-v1`(이전 `impersonation-contact-v1`) | 한 메시지 안에 ① 줄 첫머리에서 가족·형제를 부르는 말(엄마, 아빠, 누나, 오빠, 언니 등. “엄마가”처럼 주어로 쓴 말은 제외), ② 휴대폰 고장·분실·수리 사정, ③ 답장·문자·메신저 추가 요청(“이 번호로 문자 줘”, “카톡 추가하고 톡 줘”)이 **모두** 있을 때만 사정 구절과 연락 요청 구절을 약한 명의 근거로 낸다. 하나라도 없으면 근거를 내지 않는다. 판정은 `suspicious`(`policy_reason: FAMILY_DEVICE_CONTACT`)이며 위험으로 올리지 않는다. 금전·링크 요구가 함께 있으면 기존 조합(규칙 B 등)과 `ACTIONABLE_SIGNAL`이 먼저다. 두 근거는 조합 1(명시적 명의 + 금전/민감정보/앱)의 명의로 치지 않는다. 빈 줄로 나뉜 문단에 흩어져 있어도 메시지 단위로 본다 |
 | “확인 부탁합니다” + 주소 | `LINK_CLICK` / `link_click-confirm-v1` | v3의 “확인 바랍니다/부탁드립니다 + 주소”에 “부탁합니다”, “부탁해요”를 더했다. 주소가 없으면 링크 요구가 아니다. 보류한 D(임의의 요구문 뒤 주소)와 다르게 “확인·조회” 계열만이다 |
 
 - **답장 유도를 `IMPERSONATION` 안의 `rule_id`로 넣은 것은 임시 방편이다.** 이전에는 새 `FactorCode`(계약 변경)가 필요하다고 보고 보류했다. 이번에는 계약을 바꾸지 않으려고 “가족을 자처하며 다른 연락 경로를 요구하는” 사칭 수법의 일부로 묶었다. 계약 변경 묶음을 진행할 때 전용 코드(예: 연락 유도)로 옮길지 정한다. 가족 호칭이 없는 일반 답장·전화 유도는 여전히 신호가 없다.
@@ -129,6 +129,33 @@ v4까지는 줄바꿈이 항상 구절 경계였다. 그래서 화면 폭이나 
 - 명의·긴급·불이익 표현의 부정 범위는 이어 붙인 다음 줄로 넘기지 않는다. 요구 표현의 부정(“인증번호를 절대⏎알려주지 마세요”)은 이어서 보므로 부정으로 인식한다.
 - 원문은 바꾸지 않는다. 근거의 `snippet`·좌표는 줄바꿈을 포함한 원문 코드포인트 그대로다.
 - 한계: 앞줄이 문장부호 없이 끝난 완결 문장이어도 다음 줄과 이어 본다. 띄어쓰기 없이 붙여 쓴 요구(“대신보내줄수있어”)나 대상어가 없는 요구는 여전히 찾지 못한다.
+
+## v6: 연락 유도·혜택·비밀 유지 신호 (임시, 팀 확정 필요, 2026-11-17, 계약 변경)
+
+PRD FR-04와 라벨링 지침의 위험 신호 가운데 규칙에 없던 세 가지를 넣었다. **API 계약이 바뀌었다:** `FactorCode`에 `CONTACT_REQUEST`, `BENEFIT_LURE`, `SECRECY_REQUEST`를 더했고 `docs/openapi.json`, `frontend/src/api/generated.ts`, 화면의 응답 검증(`client.ts`)과 신호 설명(`resultPresentation.ts`)을 함께 바꿨다. 회귀 테스트는 `backend/tests/test_rules_v6_signals.py`(직접 지은 문장)다. test는 열지도 실행하지도 않았다.
+
+| 신호 | factor_code / rule_id | 형태 | 단독일 때 |
+| --- | --- | --- | --- |
+| 전화·문의 유도 | `CONTACT_REQUEST` / `contact_request-callback-v1` | “문의: 전화번호”, “고객상담: 전화번호”, “전화번호로 전화·신고”처럼 문자 속 번호로 연락하게 하는 표현. 가린 번호(`[전화번호]`)도 번호로 본다 | 약한 근거. 판정을 올리지 않는다(정상 안내에도 흔하다) |
+| 결제 통지 + 전화 유도 | `CONTACT_REQUEST` / `contact_request-payment-callback-v1` | 같은 메시지에 결제·승인 통지(“승인 완료”, “해외결제”, “금액 + 승인”)나 “본인 아닐 시”가 있을 때의 전화·문의 유도 | `suspicious` (`UNEXPECTED_PAYMENT_CALLBACK`) |
+| 가족 연락 요청 | `CONTACT_REQUEST` / `contact_request-family-v1` | v4 3차의 연락 요청 근거를 이 코드로 옮겼다(이전 `impersonation-contact-v1`). 조건과 판정(`FAMILY_DEVICE_CONTACT`)은 그대로다 | 조건을 모두 만족할 때만 나온다 |
+| 혜택·당첨 | `BENEFIT_LURE` / `benefit_lure-v1` | 당첨, 무료 쿠폰·증정, 환급금, 지원금, 경품, 고수익 등 | 약한 근거 |
+| 비밀 유지 요구 | `SECRECY_REQUEST` / `secrecy_request-v1` | “아무에게도 말하지 마”, “엄마한테는 말하지 말고”, “비밀로 해 줘”. 인증번호·비밀번호를 남에게 알리지 말라는 보안 안내는 같은 문장이나 바로 앞 문장의 대상어로 구분해 제외한다 | 약한 근거 |
+
+추가한 조합:
+
+- 혜택·당첨 + 금전 요구 또는 민감정보 요구(같은 결합 범위) → `dangerous` (`COMBINED_BENEFIT_REQUEST`).
+- 비밀 유지 요구 + 금전 요구 또는 민감정보 요구(같은 결합 범위) → `dangerous` (`COMBINED_SECRECY_REQUEST`).
+- 혜택·당첨 + 기한·소멸 압박(미수령, 소멸, 환수, 임박, 마감, 선착순, 기한) + 메시지에 주소 → `suspicious` (`BENEFIT_PRESSURE_LINK`). 기존 요구 신호(`ACTIONABLE_SIGNAL`)가 먼저다.
+- 약한 근거(문의 번호, 혜택 언급, 비밀 유지 요구)는 단독으로 판정을 올리지 않지만 정상(`normal`) 판정은 막는다.
+
+한계:
+
+- 정상 결제·주문 안내도 “결제 완료 + 문의: 고객센터 번호” 형태가 많다. 문장만으로는 구분할 수 없어 `suspicious`가 된다. 안내 문장은 “문자 속 번호 대신 공식 앱이나 직접 확인한 연락처로 확인”이다.
+- 실제 공공 지원금·환급 안내도 기한과 주소가 있으면 `suspicious`가 된다.
+- 번호 형식은 국내 일반·대표번호와 가린 표시만 본다. 번호가 공식 번호인지는 확인하지 않는다(발신 번호 확인은 미구현, HANDOVER 9절).
+- 가족 호칭이 없는 일반 답장 유도(“이 번호로 답장 주세요”)는 여전히 신호가 없다.
+- dev 효과와 오탐은 HANDOVER 9절. 정상 문자가 적어 오탐 측정은 약하다.
 
 ### 알려진 한계 (v4·v5 기준)
 

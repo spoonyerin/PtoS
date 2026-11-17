@@ -389,12 +389,37 @@ T3과 같은 평가 CSV(SHA-256 `e65dd42f…49ea4`)로 비교했다. 보강 전 
 - 문자의 발신 번호는 위조(발신번호 변작)될 수 있다. 공식 번호와 같다는 것만으로 의심·위험을 정상으로 내리면 번호를 위조한 사기 문자를 정상이라고 안내하게 된다. 채택한다면 "판정을 내리는 근거"가 아니라 "번호가 공식 목록과 다를 때 올리는 근거"로만 쓰는 방향을 제안한다.
 - 필요한 것: 요청에 발신 번호 필드(계약 변경), 공식 번호 목록의 출처·이용 조건·갱신 기준(PRD FR-09도 목록의 출처와 갱신 기준을 먼저 정하라고 한다), 화면 입력 칸, 발신 번호가 든 평가 데이터(현재 평가셋에는 없고 라벨링 지침은 발신 번호를 쓰지 않는다고 적고 있다).
 
+**계약 브랜치 `feat/ai-contract`: 연락 유도·혜택·비밀 유지 신호 (2026-11-17, `rules-dev-v6`):** `FactorCode`에 `CONTACT_REQUEST`·`BENEFIT_LURE`·`SECRECY_REQUEST`를 더했다(계약 변경). `docs/openapi.json`과 `frontend/src/api/generated.ts`를 다시 만들었고 화면의 응답 검증과 신호 설명을 맞췄다. `analysis_version`은 `rules-reputation-dev-v6` / `rules-model-dev-v6`이다. 내용은 `docs/RULE_POLICY.md` "v6".
+
+**(dev, 부풀려진 수치, eval-v2.1-dev `2dc10e52…`, LGAI는 모델 학습·임계값에 쓰지 않음)** v6 기준. 공공기관 16건(입력 오류)을 넣은 분모와 뺀 분모를 함께 적는다.
+
+| 분석기 | 범위 | 사기 경고 | 정상 오탐 | 정상 → 위험 | 사기 → 정상 | 정상 → 정상 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `rules` | dev 515건 전체 | 203/258 = 0.787 (v5: 191) | 10/257 (16건 포함) · 10/241 (16건 제외) | 0 | 0 | 0 |
+| `rules` | 모델 학습 행 307 / LGAI 192 | 144/158 / 59/100 | 10/149 / 0/92 | 0 | 0 | 0 |
+| `rules` + e5 모델(`e5-small-lr-v3`) | 학습 행(OOF) / LGAI(학습 안 함) | 152/158 / 74/100 | 10/149 / 0/92 | 0 | 0/158 / 0/100 | 62/149 / 0/92 |
+
+- 사기 중 위험 판정은 dev 전체에서 21 → 24건이다. 정상 오탐 10건의 id는 v5와 같다.
+- e5 모델 파일은 `e5-small-lr-v1`·`v2`와 같은 분류기다(SHA-256 `849cda9e…5816`). 규칙이 바뀌어 종합 집계만 달라졌다. 폴더는 `C:/_Coding/ptos-eval/models/e5-small-lr-v3-dev21-noLGAI/`. 약한 근거가 늘어 정상 → 정상 판정이 64 → 62건으로 줄었다.
+- 리포트: `v2.1-ai/binary-rules-v6-dev.md`, 모델 폴더의 `train-report.md`.
+- 검증은 아래 최종 실행 기록을 본다. **화면 확인과 Playwright는 하지 않았다.**
+- 이 브랜치에서 아직 하지 않은 것: B안(`analysis_mode`, 단계 상태 `timeout`·`load_failed`), 발신 번호 확인.
+
+**계약 브랜치: 조건부 추가 검토(LLM) 앱 연결 (2026-11-17):** `ReadyResponse.llm_review`와 `AnalysisStage.name`의 `llm_review`를 더하고(계약 변경) `create_app`에 연결했다. **기본 꺼짐이며 실제 외부 LLM 호출은 한 번도 하지 않았다.** 내용과 호출 범위의 근거는 `docs/LLM_POLICY.md`.
+
+- 호출 범위를 `model_uncertain`(모델 점수가 정상 구간과 신호 구간 사이)으로 다시 정했다. **(dev, 부풀려진 수치, 외부 호출 없이 호출 횟수만 셈)** 아직 경고하지 못한 사기 29건이 모두 대상이 되고 정상 문자는 119건(학습 행 45/149, LGAI 행 74/92)이 대상이 된다. 이전 기본 조건(약한 근거가 남은 문장)은 많아야 사기 13건, 정상 58건이었다.
+- 화면: 분석 버튼 앞에 가린 문장의 외부 전송 고지(꺼짐이 확인되면 숨김).
+- 검증(Windows 11 / Git Bash, 커밋 `ec41d3d` + 미커밋 변경): 백엔드 전체 `pytest -q` 1059 passed, 3 skipped, 1 warning. `export_openapi.py --check` 종료 코드 0, `npm run api:check` 종료 코드 0. 프론트엔드 `npm test` 14 files 103 passed, `npm run build` 통과. Playwright 46 passed(실제 FastAPI, 평판·추가 검토 꺼짐, `TESSERACT_CMD` 지정). 중간 실패는 모두 의도한 계약 변경에 따른 기대값(단계 수 3 → 4, ready 응답 필드, 안내 개수)이었다.
+- 가짜 전송기로만 확인한 것: 켜짐 보고, 단계 `completed`·`unavailable`·`not_applicable`, 가린 문장만 전송, 실패 시 규칙 결과 유지. **실제 공급자 연결, 응답 품질, 지연(전체 5초 제한 안에서 추가 검토 3초), 비용은 확인하지 않았다.**
+- 사람이 정하고 켜야 하는 것: 공급자·모델과 이용 조건(입력 보관·학습 사용·국외 전송), 비용 상한과 횟수 제한, 고지 문구, 이름·주소처럼 가리지 못하는 정보의 전송 허용 여부.
+
+
 계약 변경이 필요해 이 브랜치에서 하지 않은 것(별도 브랜치):
 
 | 바꿀 곳 | 왜 |
 | --- | --- |
 | `FactorCode`에 전화·콜백 유도, 답장·연락 유도, 과도한 혜택·당첨, 비밀유지 요구 | PRD FR-04 신호. 지금 놓치는 결제 승인 통지 + 전화 문의 유형의 근거를 표현할 코드가 없다 |
-| `ReadyResponse.llm_review`, `AnalysisStage.name`의 `llm_review` | 가린 본문의 외부 전송 고지와 단계 표시 (`docs/LLM_POLICY.md`) |
+| (완료, 2026-11-17 `feat/ai-contract`) `ReadyResponse.llm_review`, `AnalysisStage.name`의 `llm_review` | 가린 본문의 외부 전송 고지와 단계 표시 (`docs/LLM_POLICY.md`) |
 | `analysis_mode: "rules+model"`, 단계 상태 `timeout`·`load_failed` | 기존 B안 |
 
 ## 10. 알려진 문서·코드 정합성 이슈
