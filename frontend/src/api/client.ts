@@ -27,7 +27,7 @@ const resultSchema: z.ZodType<AnalysisResponse> = z.object({
   is_demo: z.literal(false),
   analysis_mode: z.literal('rules'),
   evidence: z.array(z.object({
-    factor_code: z.enum(['IMPERSONATION', 'MONEY_REQUEST', 'CREDENTIAL_REQUEST', 'LINK_CLICK', 'APP_INSTALL', 'URGENCY_THREAT', 'URL_REPUTATION_MATCH', 'CONTACT_REQUEST', 'BENEFIT_LURE', 'SECRECY_REQUEST']),
+    factor_code: z.enum(['IMPERSONATION', 'MONEY_REQUEST', 'CREDENTIAL_REQUEST', 'LINK_CLICK', 'APP_INSTALL', 'URGENCY_THREAT', 'URL_REPUTATION_MATCH', 'CONTACT_REQUEST', 'BENEFIT_LURE', 'SECRECY_REQUEST', 'SENDER_MISMATCH']),
     label: z.string(), source: z.enum(['rule', 'url_reputation']), rule_id: z.string(), snippet: z.string(),
     start: z.number().int().min(0), end: z.number().int().positive(),
   })),
@@ -35,7 +35,7 @@ const resultSchema: z.ZodType<AnalysisResponse> = z.object({
     status: z.enum(['action_identified', 'sentence_present', 'fragment', 'url_only']), reasons: z.array(z.string()),
   }),
   analysis_stages: z.array(z.object({
-    name: z.enum(['rules', 'lightweight_model', 'url_reputation', 'llm_review']),
+    name: z.enum(['rules', 'lightweight_model', 'url_reputation', 'sender_check', 'llm_review']),
     status: z.enum(['completed', 'not_implemented', 'not_connected', 'not_applicable', 'unavailable']),
   })),
   policy_reason: z.string(),

@@ -297,6 +297,39 @@ textarea::placeholder {
 .text-field textarea {
   padding-right: 48px;
 }
+.sender-field {
+  margin-top: 18px;
+}
+.sender-toggle {
+  min-height: 48px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: var(--panel);
+  color: #111;
+  font-size: 1em;
+  font-weight: 700;
+  text-decoration: underline;
+}
+.sender-field input {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  background: var(--panel);
+  color: #111;
+  padding: 16px 20px;
+  font-size: 1em;
+  line-height: 1.55;
+}
+.sender-field input::placeholder {
+  color: #858585;
+  font-weight: 600;
+}
+.sender-help {
+  margin: 8px 0 0;
+  font-size: 0.9em;
+  line-height: 1.5;
+}
 .clear-text {
   position: absolute;
   right: 6px;

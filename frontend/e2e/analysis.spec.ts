@@ -191,3 +191,23 @@ test('이모지 뒤의 근거와 URL을 텍스트로 표시하고 직접 접속�
   await expect(page.locator('.result-card a')).toHaveCount(0)
   expect(external).toEqual([])
 })
+
+test('보낸 번호가 기관 이름과 맞지 않으면 실제 FastAPI가 의심으로 올린다', async ({ page }) => {
+  const text = '[가상은행] 이번 달 이용 내역을 안내드립니다.'
+  await page.goto('/#text')
+  await page.getByRole('textbox', { name: '문자 내용' }).fill(text)
+  await page.getByRole('button', { name: '보낸 번호도 함께 확인하기 (선택)' }).click()
+  await page.getByLabel('보낸 번호 (선택)').fill('010-0000-0000')
+  const response = page.waitForResponse(
+    (r) => r.url().endsWith('/api/v1/analyses') && r.request().method() === 'POST',
+  )
+  await page.getByRole('button', { name: '분석하기' }).click()
+  const api = await response
+  const body = await api.json()
+  expect(api.request().postDataJSON()).toEqual({ input_type: 'text', content: text, sender_number: '010-0000-0000' })
+  expect([body.risk_level, body.policy_reason]).toEqual(['suspicious', 'SENDER_MISMATCH'])
+  expect(body.analysis_stages).toContainEqual({ name: 'sender_check', status: 'completed' })
+  await expect(page.getByRole('heading', { name: '의심', exact: true })).toBeVisible()
+  // 번호는 결과 화면에 되돌려 쓰지 않는다.
+  await expect(page.locator('main')).not.toContainText('010-0000-0000')
+})

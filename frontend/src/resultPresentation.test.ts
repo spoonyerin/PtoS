@@ -3,7 +3,7 @@ import { factorDisplay } from './resultPresentation'
 // API 계약의 FactorCode 값. 계약에 값이 늘면 여기와 factorDisplay를 함께 늘린다.
 const factorCodes = [
   'IMPERSONATION', 'MONEY_REQUEST', 'CREDENTIAL_REQUEST', 'LINK_CLICK', 'APP_INSTALL', 'URGENCY_THREAT',
-  'URL_REPUTATION_MATCH', 'CONTACT_REQUEST', 'BENEFIT_LURE', 'SECRECY_REQUEST',
+  'URL_REPUTATION_MATCH', 'CONTACT_REQUEST', 'BENEFIT_LURE', 'SECRECY_REQUEST', 'SENDER_MISMATCH',
 ]
 const icons = ['risk-app', 'risk-credentials', 'risk-impersonation', 'risk-link', 'risk-money', 'risk-people', 'risk-urgency']
 

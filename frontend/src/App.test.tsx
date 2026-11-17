@@ -302,3 +302,51 @@ test('뒤로/앞으로 이동으로 다른 확인 화면에 가면 이전 원문
   })
   expect(screen.getByRole('textbox', { name: 'URL 주소' })).toHaveValue('')
 })
+
+test('보낸 번호 칸은 접혀 있고, 적은 번호만 요청에 넣는다. 번호를 고치면 이전 결과를 지운다', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockImplementation(() => Promise.resolve(new Response(JSON.stringify(ruleResponse()))))
+  vi.stubGlobal('fetch', fetchMock)
+  render(<App />)
+  expect(screen.queryByLabelText('보낸 번호 (선택)')).not.toBeInTheDocument()
+  fireEvent.change(screen.getByRole('textbox', { name: '문자 내용' }), { target: { value: '[가상은행] 안내드립니다.' } })
+  await userEvent.click(screen.getByRole('button', { name: '보낸 번호도 함께 확인하기 (선택)' }))
+  const sender = screen.getByLabelText('보낸 번호 (선택)')
+  expect(sender).toHaveAccessibleDescription(/번호가 맞아도\s+안전하다는 뜻은 아니에요/)
+  fireEvent.change(sender, { target: { value: ' 010-0000-0000 ' } })
+  await userEvent.click(screen.getByRole('button', { name: '분석하기' }))
+  await screen.findByRole('heading', { name: '위험' })
+  expect(JSON.parse(fetchMock.mock.calls.at(-1)![1].body)).toEqual({
+    input_type: 'text',
+    content: '[가상은행] 안내드립니다.',
+    sender_number: '010-0000-0000',
+  })
+  fireEvent.change(sender, { target: { value: '1500-0000' } })
+  expect(screen.queryByText('인증번호 요구를 확인했어요.')).not.toBeInTheDocument()
+})
+
+test('다른 확인 화면으로 가면 적어 둔 보낸 번호를 지우고, URL 요청에는 번호를 넣지 않는다', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockImplementation(() => Promise.resolve(new Response(JSON.stringify(ruleResponse()))))
+  vi.stubGlobal('fetch', fetchMock)
+  render(<App />)
+  await userEvent.click(screen.getByRole('button', { name: '보낸 번호도 함께 확인하기 (선택)' }))
+  fireEvent.change(screen.getByLabelText('보낸 번호 (선택)'), { target: { value: '010-0000-0000' } })
+  act(() => {
+    history.pushState(null, '', '/#url')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
+  expect(screen.queryByLabelText('보낸 번호 (선택)')).not.toBeInTheDocument()
+  fireEvent.change(screen.getByRole('textbox', { name: 'URL 주소' }), { target: { value: 'https://example.invalid/' } })
+  await userEvent.click(screen.getByRole('button', { name: '분석하기' }))
+  await waitFor(() => expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith('/analyses'))).toBe(true))
+  const call = fetchMock.mock.calls.find((c) => String(c[0]).endsWith('/analyses'))!
+  expect(JSON.parse(call[1].body)).toEqual({ input_type: 'url', content: 'https://example.invalid/' })
+  act(() => {
+    history.pushState(null, '', '/#text')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
+  expect(screen.getByLabelText('보낸 번호 (선택)')).toHaveValue('')
+})

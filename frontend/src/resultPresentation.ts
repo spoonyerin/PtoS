@@ -45,6 +45,11 @@ export const factorDisplay: Record<string, { icon: string; description: string }
     description:
       '다른 사람에게 알리지 말라는 표현이 있어요. 가족이나 믿을 수 있는 사람에게 먼저 이야기해 보세요.',
   },
+  SENDER_MISMATCH: {
+    icon: 'risk-impersonation',
+    description:
+      '문자가 내세운 기관 이름과 입력하신 보낸 번호가 맞지 않아요. 이 번호로 연락하지 말고 직접 확인한 공식 연락처로 확인하세요.',
+  },
   URL_REPUTATION_MATCH: {
     icon: 'risk-link',
     description:
