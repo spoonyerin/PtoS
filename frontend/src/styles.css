@@ -1356,3 +1356,5 @@ dialog::backdrop {
   mask: url('/assets/icon-check.svg') center / contain no-repeat;
   -webkit-mask: url('/assets/icon-check.svg') center / contain no-repeat;
 }
+
+.family-add-recipient { margin: 12px 0; min-height: 48px; font-size: 1em; }

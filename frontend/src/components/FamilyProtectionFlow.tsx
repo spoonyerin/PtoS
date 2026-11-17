@@ -73,6 +73,7 @@ export function FamilyProtectionFlow({ model, setModel, onHome }: {
           <div><h2>보내지 않는 내용</h2><ul>{['다른 문자와 사진', '내 위치', '내 연락처 목록'].map(text => <li key={text}><span className="family-disclosure-no" aria-hidden="true"><Icon name="close" /></span>{text}</li>)}</ul></div>
         </section>
         <div className="family-recipient"><span className="family-avatar" aria-hidden="true">{recipient ? Array.from(recipient.name)[0] : '?'}</span><div><strong>받는 가족</strong><p>{recipient ? `${recipient.name}(${recipient.relation})` : '받을 가족을 선택해 주세요.'}</p></div><button className="family-outline-small" onClick={() => openModal('recipient')}>바꾸기</button></div>
+        <button type="button" className="family-outline-button family-add-recipient" onClick={() => { setPhone(''); setContact(false); go('connect') }}>＋ 가족 추가하기</button>
         {!recipient && <p className="family-help">수락을 완료한 가족을 선택해야 알림을 켤 수 있어요.</p>}
         <button className={model.autoAlert ? 'family-outline-button' : 'primary-button family-primary'} disabled={!recipient} onClick={() => {
           if (!recipient) return
