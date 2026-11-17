@@ -3,6 +3,7 @@ import { characterCount, MAX_CONTENT_LENGTH } from '../input'
 import type { InputType } from '../api/types'
 import { ScreenshotInput } from './ScreenshotInput'
 import { Icon } from './Icons'
+import { LlmReviewNotice } from './LlmReviewNotice'
 import { UrlCheckNotice } from './UrlCheckNotice'
 import { DevelopmentNote } from './DevelopmentNote'
 type Props = {
@@ -139,6 +140,7 @@ export function AnalysisForm(props: Props) {
             </p>
           )}
           <UrlCheckNotice />
+          <LlmReviewNotice />
           <button
             className="primary-button analyze-button"
             type="submit"

@@ -30,6 +30,21 @@ export const factorDisplay: Record<string, { icon: string; description: string }
     description:
       '빠른 처리를 재촉하거나 불이익을 언급하는 표현이 있어요. 서두르지 말고 요청을 확인하세요.',
   },
+  CONTACT_REQUEST: {
+    icon: 'risk-people',
+    description:
+      '문자에 적힌 번호로 전화하거나 답장·연락하라는 표현이 있어요. 직접 확인한 공식 연락처나 알고 있던 번호로 확인하세요.',
+  },
+  BENEFIT_LURE: {
+    icon: 'risk-money',
+    description:
+      '당첨·환급금·지원금 같은 혜택을 내세우는 표현이 있어요. 돈이나 개인정보를 먼저 보내지 마세요.',
+  },
+  SECRECY_REQUEST: {
+    icon: 'risk-people',
+    description:
+      '다른 사람에게 알리지 말라는 표현이 있어요. 가족이나 믿을 수 있는 사람에게 먼저 이야기해 보세요.',
+  },
   URL_REPUTATION_MATCH: {
     icon: 'risk-link',
     description:

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Icon } from './Icons'
 import { useOcr, useOcrReview } from '../hooks/useOcr'
 import { characterCount } from '../input'
+import { LlmReviewNotice } from './LlmReviewNotice'
 import { UrlCheckNotice } from './UrlCheckNotice'
 
 type Props = {
@@ -285,6 +286,7 @@ export function ScreenshotInput(props: Props) {
             </p>
           )}
           <UrlCheckNotice />
+          <LlmReviewNotice />
           <button
             className="primary-button"
             type="submit"
