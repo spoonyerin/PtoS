@@ -9,7 +9,7 @@ test('유료 연결 완료 기본값과 미연결·무료 홈, 안내 진입', a
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
   const card = page.getByRole('button', { name: '가족 보호', exact: true })
-  await expect(card).toContainText('우리딸♥ 님 외 1명')
+  await expect(card).toContainText('우리딸♥ 님과 연결 완료')
   await page.screenshot({ path: 'test-results/family-home-paid-connected.png', fullPage: true })
   await selectState(page, 'paid-unlinked')
   await expect(card).toContainText('가족 및 보호자를 연결해')

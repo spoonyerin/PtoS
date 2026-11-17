@@ -3,7 +3,7 @@ import { Icon } from './Icons'
 export type FamilyPreviewState = 'free' | 'paid-connected' | 'paid-unlinked'
 export const initialFamilyPreview: FamilyPreviewState = import.meta.env.DEV ? 'paid-connected' : 'free'
 
-export function FamilyProtectionCard({ state, onOpen }: { state: FamilyPreviewState; onOpen: () => void }) {
+export function FamilyProtectionCard({ state, connectionSummary, onOpen }: { state: FamilyPreviewState; connectionSummary: string | null; onOpen: () => void }) {
   const locked = state === 'free'
   return <button type="button" className={`family-protection-card${locked ? ' is-locked' : ''}`}
     aria-label="가족 보호" aria-describedby="family-protection-state" onClick={onOpen}>
@@ -15,7 +15,7 @@ export function FamilyProtectionCard({ state, onOpen }: { state: FamilyPreviewSt
     </span>
     <strong>가족 보호</strong>
     {locked ? <small id="family-protection-state">프리미엄 이용권으로<br />사용할 수 있어요.</small>
-      : state === 'paid-connected' ? <small id="family-protection-state" className="family-connected"><img className="family-connected-check" src="/assets/icon-check.svg" alt="" />우리딸♥ 님 외 1명과 연결 완료</small>
+      : connectionSummary ? <small id="family-protection-state" className="family-connected"><img className="family-connected-check" src="/assets/icon-check.svg" alt="" />{connectionSummary}</small>
       : <small id="family-protection-state">가족 및 보호자를 연결해<br />주세요!</small>}
   </button>
 }

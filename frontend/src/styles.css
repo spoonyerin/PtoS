@@ -1244,3 +1244,88 @@ dialog::backdrop {
   vertical-align: -0.15em;
   object-fit: contain;
 }
+
+.family-flow-header { gap: 10px; padding-bottom: 18px; }
+.family-flow-header h1 { font-size: 1.4em; letter-spacing: -0.8px; }
+.family-flow-main { padding: 0 24px; word-break: keep-all; overflow-wrap: anywhere; }
+.family-flow-main h2 { font-size: 1.12em; line-height: 1.4; margin-bottom: 14px; }
+.family-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.family-section-heading h2 { margin: 0; }
+.family-edit { display: flex; align-items: center; gap: 4px; padding: 10px 0; min-height: 44px; background: transparent; color: #666; font-size: 0.88em; }
+.family-edit-icon { width: 18px; height: 18px; background: currentColor; mask: url('/assets/icon-edit.svg') center / contain no-repeat; -webkit-mask: url('/assets/icon-edit.svg') center / contain no-repeat; }
+.family-list-panel, .family-functions, .family-disclosure { border: 1px solid #dadada; border-radius: 12px; overflow: hidden; }
+.family-member { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 16px; }
+.family-member + .family-member { border-top: 1px solid #dadada; }
+.family-avatar { display: grid; place-items: center; flex: 0 0 48px; width: 48px; height: 48px; border-radius: 50%; background: #e2dcf3; color: #8156cf; font-size: 1.25em; }
+.family-avatar.gold { background: #fff2cc; color: #9e704b; }
+.family-avatar.blue { background: #d4dfef; color: #477fbd; }
+.family-member-name { flex: 1; min-width: 0; }
+.family-member-name strong { display: block; word-break: keep-all; overflow-wrap: anywhere; }
+.family-member-name small { display: block; color: #666; margin-top: 4px; font-size: 0.82em; }
+.family-connection-badge { padding: 5px 10px; border-radius: 20px; font-size: 0.72em; font-weight: 700; white-space: nowrap; }
+.family-connection-badge.connected { color: #237b49; background: #d3efde; }
+.family-connection-badge.pending { color: #7b81a0; background: #e5e7f2; }
+.family-add.primary-button { width: calc(100% - 32px); margin: 4px 16px 16px; min-height: 52px; padding: 12px; font-size: 1em; }
+.family-functions-title { margin: 28px 0 12px; }
+.family-functions > button { display: flex; align-items: center; width: 100%; min-height: 100px; gap: 8px; padding: 18px; background: white; color: #111; text-align: left; }
+.family-functions > button + button { border-top: 1px solid #dadada; }
+.family-functions > button > span { flex: 1; min-width: 0; }
+.family-functions strong { display: block; font-size: 1em; line-height: 1.4; }
+.family-functions small { display: block; color: #666; font-size: 0.84em; line-height: 1.4; margin-top: 4px; }
+.family-functions b { font-size: 0.84em; }
+.family-functions svg { width: 18px; height: 24px; }
+.family-alert-intro { background: var(--panel); border-radius: 12px; padding: 18px; margin-bottom: 18px; }
+.family-alert-intro h2 { margin-bottom: 10px; }
+.family-alert-intro p { margin: 0; color: #666; font-size: 0.9em; line-height: 1.4; }
+.auto-state { margin-left: auto; padding: 4px 12px; background: #e7e7e7; color: #666; border-radius: 20px; font-size: 0.85em; font-weight: 750; }
+.auto-state.is-on { background: var(--navy); color: white; }
+.family-disclosure > div { padding: 18px; }
+.family-disclosure > div + div { border-top: 1px solid #dadada; }
+.family-disclosure h2 { font-size: 1em; margin-bottom: 12px; }
+.family-disclosure ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+.family-disclosure li { display: flex; align-items: center; gap: 10px; font-size: 0.9em; }
+.family-disclosure-check, .family-disclosure-no { display: grid; place-items: center; width: 22px; height: 22px; flex-shrink: 0; border-radius: 50%; }
+.family-disclosure-check { background: #dcf1e3; }
+.family-disclosure-check img { width: 19px; height: 19px; }
+.family-disclosure-no { background: #dedede; color: #888; }
+.family-recipient { display: flex; align-items: center; gap: 12px; padding: 16px; margin: 18px 0 10px; border-radius: 12px; background: var(--panel); }
+.family-recipient > div { flex: 1; min-width: 0; }
+.family-recipient strong { font-size: 1em; }
+.family-recipient p { margin: 4px 0 0; color: #666; font-size: 0.85em; overflow-wrap: anywhere; }
+.family-outline-small { padding: 6px 10px; min-height: 40px; border: 1px solid #d6d6d6; background: white; border-radius: 8px; color: #555; font-size: 0.8em; white-space: nowrap; }
+.family-primary.primary-button, .family-outline-button { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 64px; padding: 16px 10px; font-size: 1.12em; font-weight: 750; border-radius: 10px; word-break: keep-all; }
+.family-outline-button { color: var(--navy); border: 1.5px solid var(--navy); background: white; }
+.family-outline-button svg { width: 25px; height: 25px; }
+.family-notification-off { display: block; width: 26px; height: 26px; background: currentColor; mask: url('/assets/icon-notification_off.svg') center / contain no-repeat; -webkit-mask: url('/assets/icon-notification_off.svg') center / contain no-repeat; }
+.family-invite-intro { border: 1px solid #dadada; padding: 18px; border-radius: 12px; line-height: 1.45; margin-bottom: 22px; }
+.family-relations { border: 0; padding: 0; margin: 0 0 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.family-relations legend { font-weight: 750; padding: 0 0 10px; }
+.family-relations label { position: relative; display: flex; align-items: center; justify-content: center; min-height: 46px; border: 1px solid #dadada; border-radius: 9px; font-size: 0.95em; cursor: pointer; }
+.family-relations .is-selected { background: var(--navy); border-color: var(--navy); color: white; }
+.family-relations input { position: absolute; opacity: 0; width: 100%; height: 100%; inset: 0; margin: 0; cursor: pointer; }
+.family-relations label:focus-within { outline: 3px solid #ee790d; outline-offset: 3px; }
+.family-contact-label { display: block; font-weight: 750; margin-bottom: 10px; }
+.family-phone { display: block; width: 100%; border: 0; border-radius: 10px; background: var(--panel); padding: 16px; min-height: 52px; margin-bottom: 12px; }
+.family-connect-form > .family-outline-button { min-height: 46px; font-size: 0.95em; }
+.family-connect-form { display: flex; flex-direction: column; min-height: max(560px, calc(100dvh - 170px)); }
+.family-connect-form .family-send { margin-top: auto; }
+.family-connect-form > .family-outline-button { margin-bottom: 28px; }
+.family-picked-contact { display: flex; align-items: center; gap: 14px; padding: 14px; background: var(--panel); border-radius: 10px; margin-bottom: 12px; }
+.family-picked-contact small { display: block; margin-top: 4px; color: #666; }
+.family-choice { display: block; text-align: left; width: 100%; min-height: 58px; margin-bottom: 12px; padding: 12px; border-radius: 10px; color: #111; background: var(--panel); }
+.family-choice small { display: block; margin-top: 4px; color: #666; }
+.family-choice:disabled { cursor: not-allowed; }
+.family-edit-actions { flex-basis: 100%; display: flex; justify-content: flex-end; gap: 10px; }
+.family-edit-actions button { min-height: 40px; padding: 8px 12px; color: var(--navy); background: #edf0f6; border-radius: 8px; }
+.family-flow-notice, .family-help { font-size: 0.85em; line-height: 1.5; margin: 14px 0; color: #48516a; }
+.family-empty { padding: 16px; font-size: 0.9em; }
+@media (max-width: 360px) {
+  .family-flow-main { padding-inline: 20px; }
+  .family-flow-header { gap: 6px; padding-inline: 14px; }
+  .family-flow-header h1 { font-size: 1.05em; letter-spacing: -0.5px; }
+  .family-flow-header .icon-button { flex: 0 0 36px; width: 36px; }
+  .family-recipient { flex-wrap: wrap; }
+  .family-member { gap: 8px; padding: 12px; }
+}
+
+.family-send-icon { display: block; width: 28px; height: 28px; flex-shrink: 0; object-fit: contain; }

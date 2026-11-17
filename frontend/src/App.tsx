@@ -4,6 +4,8 @@ import { AnalysisResult } from './components/AnalysisResult'
 import { FamilyShare } from './components/FamilyShare'
 import { FamilyDevelopmentPanel, FamilyProtectionCard, initialFamilyPreview, type FamilyPreviewState } from './components/FamilyPreview'
 import { Icon } from './components/Icons'
+import { FamilyProtectionFlow } from './components/FamilyProtectionFlow'
+import { createFamilyModel } from './familyModel'
 import { useAnalysis } from './hooks/useAnalysis'
 import type { InputType } from './api/types'
 import {
@@ -11,10 +13,10 @@ import {
   developmentNoteText,
 } from './components/DevelopmentNote'
 import { useUrlReputationStatus } from './hooks/useServiceStatus'
-type Page = 'home' | InputType
+type Page = 'home' | 'family' | InputType
 const readPage = (): Page =>
-  ['text', 'url', 'ocr_text'].includes(location.hash.slice(1))
-    ? (location.hash.slice(1) as InputType)
+  ['text', 'url', 'ocr_text', 'family'].includes(location.hash.slice(1))
+    ? (location.hash.slice(1) as Page)
     : 'home'
 export default function App() {
   const [page, setPage] = useState<Page>(readPage)
@@ -25,6 +27,9 @@ export default function App() {
   const [large, setLarge] = useState(false)
   const [familyPreview, setFamilyPreview] = useState<FamilyPreviewState>(initialFamilyPreview)
   const premium = familyPreview !== 'free'
+  const [familyModel, setFamilyModel] = useState(() => createFamilyModel(initialFamilyPreview === 'paid-connected'))
+  const connectedMembers = familyModel.members.filter(member => member.status === 'connected')
+  const connectionSummary = connectedMembers.length ? `${connectedMembers[0].name} 님${connectedMembers.length > 1 ? ` 외 ${connectedMembers.length - 1}명과` : '과'} 연결 완료` : null
   const analysis = useAnalysis()
   const urlReputation = useUrlReputationStatus()
   const dialog = useRef<HTMLDialogElement>(null)
@@ -79,7 +84,10 @@ export default function App() {
       >
         본문 바로가기
       </a>
-      {page === 'home' ? (
+      {page === 'family' ? (
+        premium ? <FamilyProtectionFlow model={familyModel} setModel={setFamilyModel} onHome={() => navigate('home')} />
+          : <main id="main" className="flow-main"><h1>가족 보호</h1><p>프리미엄 이용권으로 사용할 수 있어요.</p><button className="primary-button" onClick={() => navigate('home')}>홈으로</button></main>
+      ) : page === 'home' ? (
         <>
           <header className="home-header">
             <div className="brand" aria-label="PtoS">
@@ -152,7 +160,7 @@ export default function App() {
             </section>
             <nav className="home-menu" aria-label="확인 방법 선택">
               <div className="home-feature-cards">
-                <FamilyProtectionCard state={familyPreview} onOpen={() => setPanel(premium ? 'family' : 'premium')} />
+                <FamilyProtectionCard state={familyPreview} connectionSummary={connectionSummary} onOpen={() => premium ? navigate('family') : setPanel('premium')} />
                 <button className="guide-button" aria-label="이용하는 방법" onClick={() => setPanel('guide')}>
                   <span className="family-card-top" aria-hidden="true">
                     <span className="menu-symbol help-symbol">
@@ -314,6 +322,8 @@ export default function App() {
       </dialog>
       {import.meta.env.DEV && <FamilyDevelopmentPanel state={familyPreview} onChange={state => {
         setFamilyPreview(state)
+        setFamilyModel(createFamilyModel(state === 'paid-connected'))
+        if (page === 'family' && state === 'free') navigate('home')
         setPanel(null)
       }} />}
     </div>
