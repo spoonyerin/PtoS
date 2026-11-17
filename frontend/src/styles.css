@@ -1256,7 +1256,7 @@ dialog::backdrop {
 .family-list-panel, .family-functions, .family-disclosure { border: 1px solid #dadada; border-radius: 12px; overflow: hidden; }
 .family-member { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 16px; }
 .family-member + .family-member { border-top: 1px solid #dadada; }
-.family-avatar { display: grid; place-items: center; flex: 0 0 48px; width: 48px; height: 48px; border-radius: 50%; background: #e2dcf3; color: #8156cf; font-size: 1.25em; }
+.family-avatar { display: grid; place-items: center; flex: 0 0 48px; width: 48px; height: 48px; border-radius: 50%; background: #e2dcf3; color: #8156cf; font-size: 1.25em; font-weight: 600; }
 .family-avatar.gold { background: #fff2cc; color: #9e704b; }
 .family-avatar.blue { background: #d4dfef; color: #477fbd; }
 .family-member-name { flex: 1; min-width: 0; }
@@ -1294,7 +1294,7 @@ dialog::backdrop {
   filter: drop-shadow(0.18px 0 0 #149d39) drop-shadow(-0.18px 0 0 #149d39)
     drop-shadow(0 0.18px 0 #149d39) drop-shadow(0 -0.18px 0 #149d39);
 }
-.family-disclosure-no svg { display: block; width: 20px; height: 20px; stroke-width: 2.6; }
+.family-disclosure-no svg { display: block; width: 80%; height: 80%; stroke-width: 2.6; }
 .family-disclosure-no { background: #dedede; color: #888; }
 .family-recipient { display: flex; align-items: center; gap: 12px; padding: 16px; margin: 18px 0 10px; border-radius: 12px; background: var(--panel); }
 .family-recipient > div { flex: 1; min-width: 0; }
