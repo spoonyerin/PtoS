@@ -173,7 +173,7 @@ def test_app_keeps_review_off_by_default_and_reports_it():
     with TestClient(create_app()) as client:
         assert client.get("/api/v1/health/ready").json()["llm_review"] == "off"
         body = client.post("/api/v1/analyses", json={"input_type": "text", "content": WEAK}).json()
-    assert body["analysis_stages"][3] == {"name": "llm_review", "status": "not_connected"}
+    assert body["analysis_stages"][4] == {"name": "llm_review", "status": "not_connected"}
     assert SENT_NOTICE not in body["limitations"]
 
 
@@ -208,11 +208,11 @@ def test_app_uses_the_reviewer_and_reports_the_stage():
         body = client.post("/api/v1/analyses", json={"input_type": "text", "content": text}).json()
         untouched = client.post("/api/v1/analyses", json={"input_type": "text", "content": "앱을 설치해주세요."}).json()
     assert body["risk_level"] == "suspicious" and body["policy_reason"] == "LLM_SIGNAL_ONLY"
-    assert body["analysis_stages"][3] == {"name": "llm_review", "status": "completed"}
+    assert body["analysis_stages"][4] == {"name": "llm_review", "status": "completed"}
     assert SENT_NOTICE in body["limitations"] and body["confidence"] is None
     assert len(seen) == 1 and "010-1234-5678" not in seen[0]
     # 이미 의심인 입력에는 호출하지 않는다.
-    assert untouched["analysis_stages"][3] == {"name": "llm_review", "status": "not_applicable"}
+    assert untouched["analysis_stages"][4] == {"name": "llm_review", "status": "not_applicable"}
 
 
 def test_app_reports_a_failed_review_as_unavailable_and_keeps_the_rule_result():
@@ -223,7 +223,7 @@ def test_app_reports_a_failed_review_as_unavailable_and_keeps_the_rule_result():
         response = client.post("/api/v1/analyses", json={"input_type": "text", "content": WEAK})
     body = response.json()
     assert response.status_code == 200 and body["risk_level"] == "insufficient_information"
-    assert body["analysis_stages"][3] == {"name": "llm_review", "status": "unavailable"}
+    assert body["analysis_stages"][4] == {"name": "llm_review", "status": "unavailable"}
     assert LLM_LIMITATIONS["failed"] in body["limitations"]
 
 
@@ -296,9 +296,9 @@ def test_scam_signs_raise_weak_evidence_input_to_suspicious_and_keep_evidence():
     assert result.risk_level == "suspicious" and result.policy_reason == "LLM_SIGNAL_ONLY"
     assert result.explanation.startswith(LLM_SIGNAL_EXPLANATION)
     assert result.evidence == before.evidence and result.confidence is None
-    assert result.analysis_stages[:3] == before.analysis_stages[:3] and result.analysis_version == before.analysis_version
-    assert (before.analysis_stages[3].name, before.analysis_stages[3].status) == ("llm_review", "not_connected")
-    assert result.analysis_stages[3].status == "completed"
+    assert result.analysis_stages[:4] == before.analysis_stages[:4] and result.analysis_version == before.analysis_version
+    assert (before.analysis_stages[4].name, before.analysis_stages[4].status) == ("llm_review", "not_connected")
+    assert result.analysis_stages[4].status == "completed"
     assert SENT_NOTICE in result.limitations and LLM_LIMITATIONS["scam_signs"] in result.limitations
     assert len(llm.seen) == 1 and "010-1234-5678" not in llm.seen[0] and "[전화번호]" in llm.seen[0]
 
@@ -378,4 +378,4 @@ def test_default_scope_in_the_composite_analyzer(score, calls, level, stage):
     llm = FakeReviewer(LlmReview("completed", "scam_signs"))
     analyzer = CompositeAnalyzer(RuleBasedAnalyzer(), ModelState("loaded", BandModel(score)), llm=llm)
     result = analyze(analyzer, "이번 주 토요일 모임은 공원에서 열립니다.")
-    assert (len(llm.seen), result.risk_level, result.analysis_stages[3].status) == (calls, level, stage)
+    assert (len(llm.seen), result.risk_level, result.analysis_stages[4].status) == (calls, level, stage)

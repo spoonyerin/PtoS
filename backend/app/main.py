@@ -12,6 +12,7 @@ from starlette.exceptions import HTTPException
 
 from .analyzers import Analyzer, CompositeAnalyzer, RuleBasedAnalyzer
 from .llm_review import LlmSetup, create_llm_reviewer
+from .sender_check import load_official_numbers
 from .model_adapter import ModelState, load_configured_model
 from .contracts import (
     AnalysisInput,
@@ -78,7 +79,10 @@ def create_app(
         setup = (llm_setup or (lambda: create_llm_reviewer(dict(os.environ))))()
         llm_reviewer = setup.reviewer
         logger.info("LLM_REVIEW state=%s", setup.reason)
-        analyzer_factory = lambda: CompositeAnalyzer(RuleBasedAnalyzer(reputation_provider), model_state, model_timeout,
+        # 공식 번호 목록(선택). 없거나 잘못됐으면 번호 형태만 비교한다. 로그에는 고정 코드만 남긴다.
+        official_numbers, numbers_state = load_official_numbers(dict(os.environ))
+        logger.info("SENDER_NUMBERS state=%s", numbers_state)
+        analyzer_factory = lambda: CompositeAnalyzer(RuleBasedAnalyzer(reputation_provider, official_numbers), model_state, model_timeout,
                                                      llm=llm_reviewer)
     ocr_lock = asyncio.Lock()
 
@@ -107,6 +111,8 @@ def create_app(
         # 기본 422 응답은 검증 오류에 원문을 포함하므로 별도 응답을 사용한다.
         too_long = any(e["type"] == "string_too_long" for e in exc.errors())
         for error in exc.errors():
+            if error["type"] == "INVALID_SENDER_NUMBER":
+                return error_response(request, 422, error["type"], "보낸 번호는 숫자와 +, -만 입력해주세요.", False)
             if error["type"] == "OCR_CONFIRMATION_REQUIRED":
                 return error_response(request, 422, error["type"], "추출한 문자와 URL을 확인한 뒤 분석해주세요.", False)
             if error["type"] in PUBLIC_ERRORS:
@@ -193,7 +199,8 @@ def create_app(
         try:
             async with asyncio.timeout(analysis_timeout):
                 analyzer = analyzer_factory()
-                result = await analyzer.analyze(AnalysisInput(input_type=body.input_type, content=body.content, ocr_confirmed=body.ocr_confirmed))
+                result = await analyzer.analyze(AnalysisInput(input_type=body.input_type, content=body.content, ocr_confirmed=body.ocr_confirmed,
+                                                              sender_number=body.sender_number))
         except TimeoutError:
             return error_response(request, 504, "ANALYSIS_TIMEOUT", "분석 시간이 길어지고 있어요. 잠시 후 다시 시도해주세요.", True)
         return AnalysisResponse(**result.model_dump(), request_id=request.state.request_id)

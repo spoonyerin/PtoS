@@ -9,6 +9,7 @@ from .rule_policy import decide
 from .rule_templates import render
 from .reputation_policy import combine_reputation
 from .urls import extract_urls
+from .sender_check import OfficialNumbers, check_sender, combine_sender
 from .llm_policy import SENT_NOTICE, LlmScope, combine_llm, limitation_for, should_review, stage_status
 from .llm_review import LlmReview, LlmReviewer, mask_for_llm
 from .model_adapter import ModelState, prepare_model_text
@@ -26,7 +27,9 @@ class Analyzer(Protocol):
 
 
 class RuleBasedAnalyzer:
-    def __init__(self, reputation_provider: UrlReputationProvider | None = None):
+    def __init__(self, reputation_provider: UrlReputationProvider | None = None, official_numbers: OfficialNumbers | None = None):
+        # 공식 번호 목록은 create_app이 환경 변수로 지정된 파일에서 한 번 읽는다. 없으면 번호 형태만 비교한다.
+        self.official_numbers = official_numbers
         # 실제 평판 조회는 create_app에서 앱당 한 번만 만든다. 직접 생성한 분석기는 외부로 조회하지 않는다.
         self.reputation_provider = reputation_provider if reputation_provider is not None else DisconnectedReputationProvider("not_configured")
 
@@ -57,11 +60,15 @@ class RuleBasedAnalyzer:
         level, reason = decide(scan)
         explanation, actions = render(scan, level)
         evidence = [finding.evidence for finding in scan.findings]
+        # 보낸 번호 비교: 불일치만 판정을 올린다. 번호가 맞아도 낮추지 않는다 (sender_check.py).
+        sender = check_sender(None if data.input_type == "url" else data.sender_number, scan.findings, self.official_numbers)
+        level, reason, explanation, actions, evidence = combine_sender(level, reason, explanation, actions, evidence, sender)
         level, reason, explanation, actions, evidence = combine_reputation(level, reason, explanation, actions, evidence, urls)
         limitations = [
             RULES_ONLY_LIMITATION,
             "부정·인용·대화 주체를 처리하는 규칙은 제한적이며 우회 표현을 놓치거나 잘못 경고할 수 있어요.",
             *scan.assessment.reasons,
+            *sender.limitations,
         ]
         valid_urls = [url for url in urls if url.validation_status == "valid"]
         if not valid_urls:
@@ -89,6 +96,7 @@ class RuleBasedAnalyzer:
                 AnalysisStage(name="rules", status="completed"),
                 AnalysisStage(name="lightweight_model", status="not_implemented"),
                 AnalysisStage(name="url_reputation", status=reputation_stage),
+                AnalysisStage(name="sender_check", status=sender.stage),
             ],
             policy_reason=reason, urls=urls,
         )

@@ -107,6 +107,8 @@ export interface components {
             content: string;
             /** Ocr Confirmed */
             ocr_confirmed?: true | null;
+            /** Sender Number */
+            sender_number?: string | null;
         };
         /** AnalysisResponse */
         AnalysisResponse: {
@@ -156,7 +158,7 @@ export interface components {
              * Name
              * @enum {string}
              */
-            name: "rules" | "lightweight_model" | "url_reputation" | "llm_review";
+            name: "rules" | "lightweight_model" | "url_reputation" | "sender_check" | "llm_review";
             /**
              * Status
              * @enum {string}
@@ -205,7 +207,7 @@ export interface components {
          * FactorCode
          * @enum {string}
          */
-        FactorCode: "IMPERSONATION" | "MONEY_REQUEST" | "CREDENTIAL_REQUEST" | "LINK_CLICK" | "APP_INSTALL" | "URGENCY_THREAT" | "URL_REPUTATION_MATCH" | "CONTACT_REQUEST" | "BENEFIT_LURE" | "SECRECY_REQUEST";
+        FactorCode: "IMPERSONATION" | "MONEY_REQUEST" | "CREDENTIAL_REQUEST" | "LINK_CLICK" | "APP_INSTALL" | "URGENCY_THREAT" | "URL_REPUTATION_MATCH" | "CONTACT_REQUEST" | "BENEFIT_LURE" | "SECRECY_REQUEST" | "SENDER_MISMATCH";
         /** InputAssessment */
         InputAssessment: {
             /**

@@ -271,6 +271,18 @@
               }
             ],
             "title": "Ocr Confirmed"
+          },
+          "sender_number": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 24
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender Number"
           }
         },
         "additionalProperties": false,
@@ -392,6 +404,7 @@
               "rules",
               "lightweight_model",
               "url_reputation",
+              "sender_check",
               "llm_review"
             ],
             "title": "Name"
@@ -517,7 +530,8 @@
           "URL_REPUTATION_MATCH",
           "CONTACT_REQUEST",
           "BENEFIT_LURE",
-          "SECRECY_REQUEST"
+          "SECRECY_REQUEST",
+          "SENDER_MISMATCH"
         ],
         "title": "FactorCode"
       },

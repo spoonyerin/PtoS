@@ -117,9 +117,9 @@ def test_model_failure_keeps_rule_result(state, outcome, stage, text, caplog):
     assert (result.risk_level, result.policy_reason, result.evidence) == (base.risk_level, base.policy_reason, base.evidence)
     assert result.explanation == base.explanation and result.action_guidance == base.action_guidance
     assert result.analysis_stages[1].status == stage
-    # 종합 분석기는 규칙 분석기의 세 단계 뒤에 추가 검토 단계를 붙인다(꺼져 있으면 not_connected).
+    # 종합 분석기는 규칙 분석기의 네 단계(보낸 번호 비교 포함) 뒤에 추가 검토 단계를 붙인다(꺼져 있으면 not_connected).
     assert [s.name for s in result.analysis_stages] == [*(s.name for s in base.analysis_stages), "llm_review"]
-    assert result.analysis_stages[3].status == "not_connected"
+    assert result.analysis_stages[4].status == "not_connected"
     assert result.analysis_stages[2] == base.analysis_stages[2]
     assert result.limitations[:2] == [BASE_LIMITATION, MODEL_LIMITATIONS[outcome]]
     assert text not in caplog.text
