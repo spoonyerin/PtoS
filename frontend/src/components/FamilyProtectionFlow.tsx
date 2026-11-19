@@ -4,10 +4,10 @@ import type { FamilyModel, FamilyMember } from '../familyModel'
 
 type Screen = 'overview' | 'auto' | 'connect' | 'history' | 'emergency'
 type Dialog = 'contacts' | 'recipient' | null
-export function FamilyProtectionFlow({ model, setModel, onHome }: {
-  model: FamilyModel; setModel: Dispatch<SetStateAction<FamilyModel>>; onHome: () => void
+export function FamilyProtectionFlow({ model, setModel, onHome, initialScreen = 'overview' }: {
+  model: FamilyModel; setModel: Dispatch<SetStateAction<FamilyModel>>; onHome: () => void; initialScreen?: 'overview' | 'connect'
 }) {
-  const [screen, setScreen] = useState<Screen>('overview')
+  const [screen, setScreen] = useState<Screen>(initialScreen)
   const [editing, setEditing] = useState(false)
   const [relation, setRelation] = useState('자식')
   const [phone, setPhone] = useState('')

@@ -5,6 +5,7 @@ import { FamilyShare } from './components/FamilyShare'
 import { FamilyDevelopmentPanel, FamilyProtectionCard, initialFamilyPreview, type FamilyPreviewState } from './components/FamilyPreview'
 import { Icon } from './components/Icons'
 import { FamilyProtectionFlow } from './components/FamilyProtectionFlow'
+import { PremiumMembership } from './components/PremiumMembership'
 import { createFamilyModel } from './familyModel'
 import { useAnalysis } from './hooks/useAnalysis'
 import type { InputType } from './api/types'
@@ -13,20 +14,21 @@ import {
   developmentNoteText,
 } from './components/DevelopmentNote'
 import { useUrlReputationStatus } from './hooks/useServiceStatus'
-type Page = 'home' | 'family' | InputType
+type Page = 'home' | 'family' | 'premium' | InputType
 const readPage = (): Page =>
-  ['text', 'url', 'ocr_text', 'family'].includes(location.hash.slice(1))
+  ['text', 'url', 'ocr_text', 'family', 'premium'].includes(location.hash.slice(1))
     ? (location.hash.slice(1) as Page)
     : 'home'
 export default function App() {
   const [page, setPage] = useState<Page>(readPage)
   const [content, setContent] = useState('')
-  const [panel, setPanel] = useState<'guide' | 'settings' | 'notice' | 'premium' | 'family' | null>(
+  const [panel, setPanel] = useState<'guide' | 'settings' | 'notice' | null>(
     null,
   )
   const [large, setLarge] = useState(false)
   const [familyPreview, setFamilyPreview] = useState<FamilyPreviewState>(initialFamilyPreview)
   const premium = familyPreview !== 'free'
+  const [familyEntry, setFamilyEntry] = useState<'overview' | 'connect'>('overview')
   const [familyModel, setFamilyModel] = useState(() => createFamilyModel(initialFamilyPreview === 'paid-connected'))
   const connectedMembers = familyModel.members.filter(member => member.status === 'connected')
   const connectionSummary = connectedMembers.length ? `${connectedMembers[0].name} 님${connectedMembers.length > 1 ? ` 외 ${connectedMembers.length - 1}명과` : '과'} 연결 완료` : null
@@ -84,8 +86,14 @@ export default function App() {
       >
         본문 바로가기
       </a>
-      {page === 'family' ? (
-        premium ? <FamilyProtectionFlow model={familyModel} setModel={setFamilyModel} onHome={() => navigate('home')} />
+      {page === 'premium' ? (
+        <PremiumMembership active={premium} onBack={() => navigate('home')} onActivate={() => {
+          if (!import.meta.env.DEV) return
+          setFamilyPreview('paid-unlinked')
+          setFamilyModel(createFamilyModel(false))
+        }} onConnect={() => { setFamilyEntry('connect'); navigate('family') }} />
+      ) : page === 'family' ? (
+        premium ? <FamilyProtectionFlow initialScreen={familyEntry} model={familyModel} setModel={setFamilyModel} onHome={() => navigate('home')} />
           : <main id="main" className="flow-main"><h1>가족 보호</h1><p>프리미엄 이용권으로 사용할 수 있어요.</p><button className="primary-button" onClick={() => navigate('home')}>홈으로</button></main>
       ) : page === 'home' ? (
         <>
@@ -160,7 +168,7 @@ export default function App() {
             </section>
             <nav className="home-menu" aria-label="확인 방법 선택">
               <div className="home-feature-cards">
-                <FamilyProtectionCard state={familyPreview} connectionSummary={connectionSummary} onOpen={() => premium ? navigate('family') : setPanel('premium')} />
+                <FamilyProtectionCard state={familyPreview} connectionSummary={connectionSummary} onOpen={() => { setFamilyEntry('overview'); navigate(premium ? 'family' : 'premium') }} />
                 <button className="guide-button" aria-label="이용하는 방법" onClick={() => setPanel('guide')}>
                   <span className="family-card-top" aria-hidden="true">
                     <span className="menu-symbol help-symbol">
@@ -276,8 +284,7 @@ export default function App() {
                   ? '이용하는 방법'
                   : panel === 'settings'
                     ? '화면 설정'
-                    : panel === 'premium' ? '유료 버전 안내'
-                      : panel === 'family' ? '가족 보호' : '알림'}
+                    : '알림'}
               </h2>
               <button
                 className="icon-button"
@@ -300,7 +307,7 @@ export default function App() {
                 </li>
               </ol>
             ) : panel === 'settings' ? (
-              <label className="font-setting">
+              <><label className="font-setting">
                 <input
                   type="checkbox"
                   checked={large}
@@ -308,10 +315,7 @@ export default function App() {
                 />
                 글씨 크게 보기
               </label>
-            ) : panel === 'premium' ? (
-              <p>가족 보호와 가족 공유는 프리미엄 이용권으로 사용할 수 있어요. 가입 안내 화면은 준비 중입니다.</p>
-            ) : panel === 'family' ? (
-              <p>가족 보호 상세 화면은 준비 중입니다.</p>
+              <button type="button" className="premium-settings-link" onClick={() => { setPanel(null); navigate('premium') }}>가족 보호 프리미엄<Icon name="chevron" /></button></>
             ) : (
               <p>
                 규칙 기반 개발 버전입니다. {developmentNoteText(urlReputation)}
