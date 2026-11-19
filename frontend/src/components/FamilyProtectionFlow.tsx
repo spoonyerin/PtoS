@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 
 import { Icon } from './Icons'
 import type { FamilyModel, FamilyMember } from '../familyModel'
 
-type Screen = 'overview' | 'auto' | 'connect' | 'history' | 'emergency'
+type Screen = 'overview' | 'auto' | 'connect' | 'history' | 'official-guide'
 type Dialog = 'contacts' | 'recipient' | null
 export function FamilyProtectionFlow({ model, setModel, onHome, initialScreen = 'overview' }: {
   model: FamilyModel; setModel: Dispatch<SetStateAction<FamilyModel>>; onHome: () => void; initialScreen?: 'overview' | 'connect'
@@ -21,7 +21,7 @@ export function FamilyProtectionFlow({ model, setModel, onHome, initialScreen = 
   const opener = useRef<HTMLElement | null>(null)
   const approved = model.members.filter(member => member.status === 'connected')
   const recipient = approved.find(member => member.id === model.recipientId)
-  const titles = { overview: '가족 보호', auto: '위험 메시지 자동 알림', connect: '가족 연결하기', history: '가족 보호 기록', emergency: '긴급 연락' }
+  const titles = { overview: '가족 보호', auto: '위험 메시지 자동 알림', connect: '가족 연결하기', history: '가족 보호 기록', 'official-guide': '공식 확인 가이드' }
   useEffect(() => { heading.current?.focus(); window.scrollTo(0, 0) }, [screen])
   useEffect(() => {
     if (modal) dialog.current?.showModal()
@@ -63,7 +63,7 @@ export function FamilyProtectionFlow({ model, setModel, onHome, initialScreen = 
         <nav className="family-functions" aria-label="가족 보호 기능">
           <button onClick={() => go('auto')}><span><strong>위험 메시지 자동 알림</strong><small>‘위험’이 나오면 가족에게 자동으로 알립니다.</small></span><b>{model.autoAlert ? 'ON' : 'OFF'}</b><Icon name="chevron" /></button>
           <button onClick={() => go('history')}><span><strong>가족 보호 기록</strong><small>가족과 함께 확인한 내용을 모아 볼 수 있습니다.</small></span><Icon name="chevron" /></button>
-          <button onClick={() => go('emergency')}><span><strong>긴급 연락</strong><small>버튼 하나로 가족에게 바로 전화할 수 있습니다.</small></span><Icon name="chevron" /></button>
+          <button onClick={() => go('official-guide')}><span><strong>공식 확인 가이드</strong><small>기관 및 은행의 공식 대응 방법을 확인할 수 있습니다.</small></span><Icon name="chevron" /></button>
         </nav>
       </>}
       {screen === 'auto' && <>
@@ -97,7 +97,7 @@ export function FamilyProtectionFlow({ model, setModel, onHome, initialScreen = 
         <button className="primary-button family-primary family-send" type="submit"><img className="family-send-icon" src="/assets/icon-sent.svg" width="28" height="28" alt="" />초대 보내기</button>
       </form>}
       {screen === 'history' && <section className="family-alert-intro"><h2>아직 보호 기록이 없어요.</h2><p>기록 화면은 준비 중입니다. 분석 결과나 원문을 저장하지 않습니다.</p></section>}
-      {screen === 'emergency' && <section className="family-functions"><h2>연락할 가족</h2>{approved.map(member => <button key={member.id} onClick={() => setNotice(`${member.name}에게 연락하는 모의 동작입니다. 실제 전화는 걸리지 않습니다.`)}><span><strong>{member.name}</strong><small>모의 전화 연결</small></span><Icon name="chevron" /></button>)}{!approved.length && <p>연결이 완료된 가족이 없어요.</p>}</section>}
+      {screen === 'official-guide' && <section className="family-alert-intro"><h2>공식 확인 가이드를 준비하고 있어요.</h2><p>기관 및 은행의 공식 대응 방법과 확인 경로를 안내할 예정입니다.</p></section>}
       {notice && <p role="status" className="family-flow-notice">{notice}</p>}
     </main>
     <dialog ref={dialog} aria-labelledby="family-choice-title" onCancel={() => setModal(null)} onClose={() => setModal(null)}>

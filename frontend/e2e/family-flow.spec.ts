@@ -78,9 +78,9 @@ test('가족 연결: 번호 오류·예시 연락처·초대 대기, 실제 전�
   await page.getByRole('button', { name: /가족 보호 기록/ }).click()
   await expect(page.getByText('아직 보호 기록이 없어요.')).toBeVisible()
   await page.getByRole('button', { name: '가족 보호로 돌아가기' }).click()
-  await page.getByRole('button', { name: /긴급 연락/ }).click()
-  await page.getByRole('button', { name: /우리딸♥/ }).click()
-  await expect(page.getByRole('status')).toContainText('실제 전화는 걸리지 않습니다')
+  await page.getByRole('button', { name: /공식 확인 가이드/ }).click()
+  await expect(page.getByRole('heading', { name: '공식 확인 가이드', exact: true })).toBeVisible()
+  await expect(page.getByText('공식 확인 가이드를 준비하고 있어요.')).toBeVisible()
 })
 
 test('미연결·무료 제한과 320px 큰 글씨 레이아웃', async ({ page }) => {
