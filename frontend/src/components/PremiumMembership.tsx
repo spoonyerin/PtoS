@@ -25,7 +25,8 @@ export function PremiumMembership({ active, onBack, onActivate, onConnect }: {
     <main id="main" tabIndex={-1} className={`premium-main${active ? ' is-active' : ''}`}>
       <section className="premium-intro" aria-labelledby="premium-title">
         <span className={`premium-emblem${active ? ' is-active' : ''}`} aria-hidden="true">
-          <span className="premium-asset" style={{ maskImage: `url('/assets/${active ? 'icon-check.svg' : 'icon-user_shield.svg'}')`, WebkitMaskImage: `url('/assets/${active ? 'icon-check.svg' : 'icon-user_shield.svg'}')` }} />
+          {active ? <span className="premium-check-weight"><span className="premium-asset" style={{ maskImage: "url('/assets/icon-check.svg')", WebkitMaskImage: "url('/assets/icon-check.svg')" }} /></span>
+            : <span className="premium-asset" style={{ maskImage: "url('/assets/icon-user_shield.svg')", WebkitMaskImage: "url('/assets/icon-user_shield.svg')" }} />}
         </span>
         <h2 id="premium-title" ref={heading} tabIndex={-1}>{active ? '프리미엄이 시작됐어요!' : '가족과 함께 사기를 막아요!'}</h2>
         <p>{active ? <>바로 가족을 연결해보세요. 위험한 문자를<br className="premium-copy-break" /> 함께 확인하고 방지할 수 있어요.</> : <>위험한 문자가 오면 가족에게 바로 물어보고,<br className="premium-copy-break" /> 가족의 의견을 받아볼 수 있어요.</>}</p>
@@ -36,7 +37,7 @@ export function PremiumMembership({ active, onBack, onActivate, onConnect }: {
         <ul>
           {features.map(feature => <li key={feature.name}>
             <span className="premium-feature-icon" aria-hidden="true">
-              {feature.icon ? <span className="premium-asset" style={{ maskImage: `url('/assets/${feature.icon}')`, WebkitMaskImage: `url('/assets/${feature.icon}')` }} /> : <Icon name="bell" />}
+              {feature.icon ? <span className={`premium-asset${feature.icon === 'icon-sent.svg' ? ' premium-send-asset' : ''}`} style={{ maskImage: `url('/assets/${feature.icon}')`, WebkitMaskImage: `url('/assets/${feature.icon}')` }} /> : <Icon name="bell" />}
             </span>
             <div><h3>{feature.name}</h3>{!active && <p>{feature.description}</p>}</div>
           </li>)}
