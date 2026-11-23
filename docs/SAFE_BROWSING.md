@@ -106,7 +106,7 @@ URL 평판 조회는 Google Safe Browsing API(hashes.search)를 사용한다. �
 
 ## 종합 판정 · rules-reputation-dev-v2
 
-T4(2026-10-27)에서 문자 규칙이 `rules-dev-v3`(임시)로 바뀌어 `RuleBasedAnalyzer`의 `analysis_version`은 `rules-reputation-dev-v2`다. T5에서 API 응답은 모델 종합을 거쳐 `rules-model-dev-v1`이 됐다([MODEL_POLICY.md](MODEL_POLICY.md)). 평판 종합 방식은 아래와 같고 T6에서 바뀌지 않았다. v4 1차 보강(2026-11-09)에서 문자 규칙이 `rules-dev-v4`가 되어 `RuleBasedAnalyzer`의 값은 `rules-reputation-dev-v3`, API 응답은 `rules-model-dev-v2`로 올렸다. v4 2차 보강(2026-11-11)에서 다시 `RuleBasedAnalyzer`의 값을 `rules-reputation-dev-v4`, API 응답을 `rules-model-dev-v3`로 올렸다. 두 번 모두 평판·모델 종합 방식은 바뀌지 않았다. 2026-11-17에 문자 규칙이 `rules-dev-v5`가 되어 `RuleBasedAnalyzer`의 값을 `rules-reputation-dev-v5`, API 응답을 `rules-model-dev-v4`로 올렸다. 이번에도 평판 종합 방식은 그대로다. 같은 날 계약 브랜치에서 문자 규칙이 `rules-dev-v6`이 되어 `rules-reputation-dev-v6` / `rules-model-dev-v6`으로 올렸다.
+T4(2026-10-27)에서 문자 규칙이 `rules-dev-v3`(임시)로 바뀌어 `RuleBasedAnalyzer`의 `analysis_version`은 `rules-reputation-dev-v2`다. T5에서 API 응답은 모델 종합을 거쳐 `rules-model-dev-v1`이 됐다([MODEL_POLICY.md](MODEL_POLICY.md)). 평판 종합 방식은 아래와 같고 T6에서 바뀌지 않았다. v4 1차 보강(2026-11-09)에서 문자 규칙이 `rules-dev-v4`가 되어 `RuleBasedAnalyzer`의 값은 `rules-reputation-dev-v3`, API 응답은 `rules-model-dev-v2`로 올렸다. v4 2차 보강(2026-11-11)에서 다시 `RuleBasedAnalyzer`의 값을 `rules-reputation-dev-v4`, API 응답을 `rules-model-dev-v3`로 올렸다. 두 번 모두 평판·모델 종합 방식은 바뀌지 않았다. 2026-11-17에 문자 규칙이 `rules-dev-v5`가 되어 `RuleBasedAnalyzer`의 값을 `rules-reputation-dev-v5`, API 응답을 `rules-model-dev-v4`로 올렸다. 이번에도 평판 종합 방식은 그대로다. 같은 날 계약 브랜치에서 문자 규칙이 `rules-dev-v6`이 되어 `rules-reputation-dev-v6` / `rules-model-dev-v6`으로 올렸다. 이어서 문자 규칙이 `rules-dev-v7`이 되어 `rules-reputation-dev-v7` / `rules-model-dev-v7`로 올렸다. 평판 종합 방식은 그대로다.
 
 | 확인한 근거 | 개발용 결과 |
 | --- | --- |

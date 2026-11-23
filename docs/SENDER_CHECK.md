@@ -16,7 +16,7 @@
 | `FactorCode` | `SENDER_MISMATCH` | 불일치 근거를 표현할 코드가 없었다 |
 | `AnalysisStage.name` | `sender_check` | 비교를 했는지 알린다. `completed`(비교함), `not_applicable`(번호 없음, URL 직접 입력, 문자에 비교할 기관 이름 없음) |
 
-`analysis_version`은 올리지 않았다(`rules-reputation-dev-v6`, `rules-model-dev-v6`). 번호를 보내지 않은 요청의 판정·근거·설명은 이전과 같고 단계 목록에 `sender_check: not_applicable`만 더해진다.
+`analysis_version`은 올리지 않았다(당시 `rules-reputation-dev-v6`, `rules-model-dev-v6`. 이후 문자 규칙 v7로 두 값이 v7이 됐다). 번호를 보내지 않은 요청의 판정·근거·설명은 이전과 같고 단계 목록에 `sender_check: not_applicable`만 더해진다.
 
 ## 비교 방법 (`backend/app/sender_check.py`)
 
