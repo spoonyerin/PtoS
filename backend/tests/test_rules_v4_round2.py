@@ -66,7 +66,7 @@ def test_credential_forms_negative(text):
 # 1번은 2차 E(정상 인증번호 안내 예외)로 다시 정보 부족이 됐다. 2번은 공유 금지 경고가 없어 E가 적용되지 않는다.
 @pytest.mark.parametrize("text,level,rule_id", [
     ("[가상서비스] 인증번호 [인증번호]를 입력바랍니다. 타인에게 알려주지 마세요.", "insufficient_information", None),
-    ("[가상서비스] 본인 확인을 위해 인증번호 [인증번호]를 입력해 주세요.", "suspicious", "credential_request-v1"),
+    ("[가상서비스] 가입을 계속하시려면 화면에 인증번호 [인증번호]를 입력해 주세요.", "suspicious", "credential_request-v1"),
     ("비밀번호를 입력해야 로그인이 가능합니다.", "suspicious", "credential_request-required-v1"),
     ("[가상서비스] 인증번호는 [인증번호]입니다. 타인에게 알려주지 마세요.", "insufficient_information", None),
     ("로그인하려면 비밀번호를 입력하세요.", "suspicious", "credential_request-v1"),

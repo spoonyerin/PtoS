@@ -183,7 +183,9 @@ def test_api_treats_a_blank_number_as_absent(client, blank):
 def test_api_rejects_an_invalid_number_without_echoing_it(client, bad):
     response = client.post("/api/v1/analyses", json={"input_type": "text", "content": BANK, "sender_number": bad})
     assert response.status_code == 422 and response.json()["error"]["code"] == "INVALID_SENDER_NUMBER"
-    assert str(bad) not in response.text
+    # 요청 id는 무작위 값이라 짧은 숫자("12")가 우연히 들어갈 수 있다. 그 값을 뺀 나머지에서만 확인한다.
+    error = response.json()["error"]
+    assert str(bad) not in json.dumps({key: value for key, value in error.items() if key != "request_id"}, ensure_ascii=False)
 
 
 def test_official_list_is_optional_and_a_bad_file_keeps_the_server_running(tmp_path):

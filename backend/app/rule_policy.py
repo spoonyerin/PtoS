@@ -3,8 +3,13 @@
 규칙 A·B와 약한 명의 신호(대괄호 머리말, 가족 호칭)는 rules-dev-v3의 임시 정책이며 팀 확정이 필요하다.
 """
 
+import re
+
 from .contracts import FactorCode as F, RiskLevel
 from .rule_detection import ACTION_CODES, WEAK_IDENTITY, Finding, RuleScan
+
+# rules-dev-v7(임시): 민감정보를 상대에게 넘기라는 요구(회신·전달·알려 주기 등). 화면에 직접 입력하라는 안내("입력해 주세요")는 넣지 않는다.
+CREDENTIAL_HANDOVER = re.compile(r"알려|보내|넘겨|건네|회신|전달|전송|제공|공유")
 
 
 def decide(scan: RuleScan) -> tuple[RiskLevel, str]:
@@ -22,6 +27,11 @@ def decide(scan: RuleScan) -> tuple[RiskLevel, str]:
             return RiskLevel.DANGEROUS, "COMBINED_MONEY_REQUEST"
         if {F.URGENCY_THREAT, F.CREDENTIAL_REQUEST, F.LINK_CLICK} <= codes:
             return RiskLevel.DANGEROUS, "COMBINED_URGENT_CREDENTIAL_LINK"
+        # v7(임시): 명의(대괄호 머리말·가족 호칭 포함) + 정지·미납 같은 불이익 예고 + 민감정보를 넘기라는 요구.
+        # 약한 명의는 조합 1에 넣지 않지만, 불이익 압박과 넘기라는 요구가 함께 있으면 결합 근거로 본다. 입력 안내형은 의심에 둔다.
+        if (F.IMPERSONATION in codes and (F.URGENCY_THREAT, "penalty") in kinds
+                and any(f.evidence.factor_code == F.CREDENTIAL_REQUEST and CREDENTIAL_HANDOVER.search(f.evidence.snippet) for f in found)):
+            return RiskLevel.DANGEROUS, "COMBINED_IDENTITY_PENALTY_HANDOVER"
         # 규칙 A(임시): 명의(머리말 포함) + 불이익 + 링크 요구 + 임박 기한.
         if ({F.IMPERSONATION, F.LINK_CLICK} <= codes
                 and {(F.URGENCY_THREAT, "penalty"), (F.URGENCY_THREAT, "deadline")} <= kinds):
