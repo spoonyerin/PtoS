@@ -97,6 +97,21 @@ def family(source: str) -> str:
     return next((name for prefix, name in SOURCE_FAMILIES if source.startswith(prefix)), "기타")
 
 
+def choose_threshold_at_rate(scores: list[float], labels: list[int], rate: float) -> float | None:
+    """정상(legit) 행 중 모델 신호 비율을 rate 이하로 지키며 사기 재현율이 최대인 임계값(임시, 팀 확정 필요).
+
+    rate=0이면 model_training.choose_threshold와 같다(정상 최고 점수보다 큰 사기 점수 중 가장 낮은 값).
+    허용 건수는 floor(rate × 정상 행 수)다. 그런 값이 없으면 None.
+    """
+    if not 0 <= rate < 1:
+        raise ValueError("rate는 0 이상 1 미만이어야 해요.")
+    legit = sorted((s for s, y in zip(scores, labels) if y == 0), reverse=True)
+    allowed = int(rate * len(legit))
+    bound = legit[allowed] if allowed < len(legit) else float("-inf")
+    above = [s for s, y in zip(scores, labels) if y == 1 and s > bound]
+    return min(above) if above else None
+
+
 def crossfit_thresholds(scores: list[float], labels: list[int], groups: list[str], seed: int, n_splits: int):
     """행마다 (다른 fold에서 고른 임계값, 정상 임계값)과 fold 번호."""
     from sklearn.model_selection import StratifiedGroupKFold

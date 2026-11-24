@@ -14,9 +14,10 @@ from app.model_adapter import (
     MANIFEST_FORMAT, MODEL_PATH_ENV, NUMBER_PLACEHOLDER, PHONE_PLACEHOLDER, load_configured_model, mask_numbers,
 )
 from evaluation.external_training import (
-    Candidate, ExternalDataError, crossfit_thresholds, family, load_dev, load_external, rank, run_candidate,
+    Candidate, ExternalDataError, choose_threshold_at_rate, crossfit_thresholds, family, load_dev, load_external, rank,
+    run_candidate,
 )
-from evaluation.model_training import DEFAULT_CONFIG, TrainingError, build_pipeline
+from evaluation.model_training import DEFAULT_CONFIG, TrainingError, build_pipeline, choose_threshold
 from test_model_training import FRAUD, NORMAL, write_csv
 
 
@@ -68,6 +69,35 @@ def test_crossfit_thresholds_never_use_the_row_own_fold():
     assert sorted(set(folds)) == [0, 1, 2, 3, 4]
     assert all(t is not None and 0.2 < t <= 0.8 for t in thresholds)
     assert all(n == 0.8 for n in normals)
+
+
+def test_threshold_at_rate_zero_matches_strict_rule_and_allows_top_legit():
+    scores = [0.95, 0.9, 0.8, 0.7, 0.85, 0.6, 0.5, 0.4, 0.3, 0.2]
+    labels = [1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
+    assert choose_threshold_at_rate(scores, labels, 0.0) == choose_threshold(scores, labels) == 0.9
+    # 정상 6건의 20% → 1건 허용: 정상 최고점(0.85)은 신호가 나도 되고, 그다음 정상(0.6)보다 큰 사기 최솟값
+    assert choose_threshold_at_rate(scores, labels, 0.2) == 0.7
+    with pytest.raises(ValueError):
+        choose_threshold_at_rate(scores, labels, 1.0)
+
+
+def test_export_with_legit_signal_rate_rewrites_thresholds(tmp_path):
+    import export_external_model
+    from train_external import _joblib_export
+    train = load_external(write_external(tmp_path / "train.csv"))
+    dev = load_dev(write_csv(tmp_path / "eval.csv", binary_only=True))
+    candidate = Candidate("tfidf-lr", "테스트", lambda seed: build_pipeline(DEFAULT_CONFIG, seed), _joblib_export)
+    run_candidate(candidate, train, None, dev, tmp_path / "out", seed=3, n_splits=3)
+    result = tmp_path / "out" / "tfidf-lr"
+    code = export_external_model.main(["--result", str(result), "--out", str(tmp_path / "m"), "--version", "t-v1",
+                                       "--train-sha256", "a" * 64, "--dev-sha256", "b" * 64, "--legit-signal-rate", "0.5"])
+    assert code == 0
+    manifest = json.loads((tmp_path / "m" / "manifest.json").read_text(encoding="utf-8"))
+    rows = list(csv.DictReader((result / "dev-scores.csv").open(encoding="utf-8")))
+    expected = choose_threshold_at_rate([float(r["score"]) for r in rows], [int(r["label"]) for r in rows], 0.5)
+    assert manifest["legit_signal_rate"] == 0.5 and manifest["threshold"] == expected
+    assert "50%" in manifest["threshold_rule"] and "dev_crossfit_combined_at_rate_0" in manifest
+    assert load_configured_model({MODEL_PATH_ENV: str(tmp_path / "m")}).status == "loaded"
 
 
 def test_family_groups_sources():

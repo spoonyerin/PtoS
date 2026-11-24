@@ -4,6 +4,7 @@ train_external.py가 남긴 후보 결과(result.json + model.joblib 또는 mode
 임계값은 result.json의 dev 전체 임계값(final_threshold, final_normal_threshold)이다(임시, 팀 확정 필요).
 """
 import argparse
+import csv
 import json
 import shutil
 import sys
@@ -11,10 +12,12 @@ from datetime import datetime
 from pathlib import Path
 
 from app.model_adapter import MANIFEST_FORMAT, MANIFEST_NAME, TRANSFORMER_KIND, TRANSFORMER_WEIGHTS, file_sha256, is_inside_repo
+from evaluation.external_training import choose_threshold_at_rate
 from evaluation.harness import git_state
+from evaluation.model_training import choose_normal_threshold
 
 THRESHOLD_STATUS = "provisional-dev-crossfit"
-THRESHOLD_RULE = ("학습 전용 데이터로 학습, dev 전체 점수에서 정상(legit) 행 모델 신호 0건을 지키며 사기 재현율 최대 "
+THRESHOLD_RULE = ("학습 전용 데이터로 학습, dev 전체 점수에서 정상(legit) 행 모델 신호 비율 {rate}를 넘지 않으며 사기 재현율 최대 "
                   "(dev 비교는 cross-fitted 임계값, 임시, 팀 확정 필요)")
 NORMAL_RULE = "dev 사기 점수 최솟값. 그보다 낮은 점수만 정상 후보 (임시, 팀 확정 필요)"
 
@@ -28,18 +31,27 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dev-sha256", required=True, help="dev CSV SHA-256 (기록용)")
     parser.add_argument("--encoder-dir", type=Path, help="고정 임베딩 후보일 때 인코더 폴더")
     parser.add_argument("--tokenizer", default="auto", choices=["auto", "kobert-sentencepiece"])
+    parser.add_argument("--legit-signal-rate", type=float, default=0.0,
+                        help="dev 정상 행 중 모델 신호를 허용할 비율 (기본 0, 임시, 팀 확정 필요). 0이 아니면 dev-scores.csv로 다시 고른다")
     args = parser.parse_args(argv)
     if is_inside_repo(args.out) or (args.out / MANIFEST_NAME).exists():
         print("출력 폴더는 저장소 밖의 새 폴더여야 해요.", file=sys.stderr)
         return 1
     result = json.loads((args.result / "result.json").read_text(encoding="utf-8"))
     threshold, normal = result["final_threshold"], result["final_normal_threshold"]
+    if args.legit_signal_rate:
+        with (args.result / "dev-scores.csv").open(encoding="utf-8") as handle:
+            rows = list(csv.DictReader(handle))
+        scores, labels = [float(r["score"]) for r in rows], [int(r["label"]) for r in rows]
+        threshold = choose_threshold_at_rate(scores, labels, args.legit_signal_rate)
+        normal = choose_normal_threshold(scores, labels, threshold)
     args.out.mkdir(parents=True)
     commit, dirty = git_state(Path(__file__).resolve().parents[1])
     manifest = {
         "format": MANIFEST_FORMAT, "model_version": args.version,
         "threshold": threshold if threshold is not None else 1.0, "threshold_found": threshold is not None,
-        "threshold_status": THRESHOLD_STATUS, "threshold_rule": THRESHOLD_RULE,
+        "threshold_status": THRESHOLD_STATUS, "threshold_rule": THRESHOLD_RULE.format(rate=f"{args.legit_signal_rate:.0%}"),
+        "legit_signal_rate": args.legit_signal_rate,
         "normal_threshold": normal if normal is not None else 0.0, "normal_threshold_found": normal is not None,
         "normal_threshold_rule": NORMAL_RULE,
         "number_masking": True,
@@ -51,6 +63,10 @@ def main(argv: list[str] | None = None) -> int:
         "code_commit": commit, "worktree_dirty": dirty,
         "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
     }
+    if args.legit_signal_rate:
+        # result.json의 dev 비교 수치는 신호 0% 기준이라 이 임계값과 맞지 않는다.
+        for key in ("dev_crossfit_combined", "dev_model_alone"):
+            manifest[key + "_at_rate_0"] = manifest.pop(key)
     if (args.result / "model").is_dir():
         import torch
         import transformers
