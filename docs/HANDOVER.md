@@ -594,16 +594,20 @@ e5는 추가 데이터를 넣으면 신호 임계값이 올라가(0.631 → 0.81
 - test-1(합성 정상 중심, 정상 오탐 9/91)보다 정상 오탐이 크게 높다. 합성 정상 문장으로는 실제 정상 문자의 오탐을 과소평가했다는 뜻이다. 실제 정상 문자의 오탐 줄이기가 다음 과제다.
 - 이 시험지는 이제 본 시험지다. 이 결과로 규칙·모델·임계값을 고치지 않는다. 고친 뒤의 성능은 새 시험지로만 주장한다.
 
-### 코드 동결 전 현재 상태 (2026-11-17)
+### 현재 상태 (2026-11-24, 이번 단계 마무리)
 
 | 항목 | 값 |
 | --- | --- |
-| `analysis_version` | `rules-reputation-dev-v7`(`RuleBasedAnalyzer`) / `rules-model-dev-v7`(API 응답) |
-| 규칙 버전 | `rules-dev-v7` |
-| 서버 모델 폴더 | `e5-small-lr-v4-dev21-withLGAI`(LGAI 포함, 2026-11-17 학습). 이전 폴더 `e5-small-lr-v3-dev21-noLGAI`도 그대로 있다. `PTOS_MODEL_PATH`를 어느 폴더로 둘지는 사람이 정한다 |
-| 정상 임계값 | 0.3327(`e5-small-lr-v4`, 신호 임계값 0.7520). 참고: `e5-small-lr-v3` 0.3743, `tfidf-lr-v4` 0.4920 |
-| 마지막 커밋 해시 | `f07fd9c` + 이 표를 넣은 미커밋 변경(커밋 후 해시를 고쳐 적는다) |
-| test 평가 여부 | 1회 실행함(2026-11-17, `rules` 25/72, `rules+model` 27/72, 사기 → 정상 0, 정상 → 위험 0. 위 “eval-v2.1 test 1회 실행” 절). 커밋되지 않은 코드로 실행했다 |
+| 브랜치 | `feat/model-retrain`(main에 아직 병합 안 함) |
+| `analysis_version` | `rules-reputation-dev-v8`(`RuleBasedAnalyzer`) / `rules-model-dev-v8`(API 응답). API 스키마는 v7과 같다 |
+| 규칙 버전 | `rules-dev-v8`(`docs/RULE_POLICY.md`, 임시, 팀 확정 필요) |
+| 서버 모델 폴더 | `koelectra-small-ft-v1-r2`(학습 전용 세트 finetune-v2로 미세조정, 저장소 밖 `C:/_Coding/ptos-eval/ptos-eval/models/`). 쓰려면 `backend/requirements-embedding.txt` 설치 후 백엔드 환경 변수 `PTOS_MODEL_PATH`에 이 폴더를 준다. 모델 파일은 학습 데이터 조건(CC BY-NC 4.0 등) 때문에 커밋하지 않으며 팀 내부로만 공유한다. 모델이 없으면 규칙만으로 판정하고 정상은 반환하지 않는다 |
+| 임계값 | 신호 0.999505(dev 정상 행 모델 신호 2% 허용, 사용자 결정), 정상 0.000294(dev 사기 점수 최솟값). 임시, 팀 확정 필요 |
+| Safe Browsing / 추가 검토(LLM) | 기본 꺼짐 / 기본 꺼짐 |
+| 최종 시험 | test-2 1회 실행함(위 “test-2 고정” 절): `rules+model` 사기 경고 34/46, 사기 → 정상 0, 정상 오탐 13/33, 정상 → 위험 0. test-1(eval-v2.1 test)은 여러 번 봐서 참고용 |
+| 다음 단계 | 최종 발표까지 실제 받은 문자(특히 정상 문자) 추가 수집 → dev로 정상 오탐 줄이기 → 새 시험지(test-3)로 1회 확인. test-2로는 규칙·모델을 고치지 않는다 |
+
+이전 상태(2026-11-17): `rules-dev-v7`, 서버 모델 `e5-small-lr-v4-dev21-withLGAI`(정상 임계값 0.3327, 신호 0.7520), test-1 1회 실행(`rules` 25/72, `rules+model` 27/72).
 
 ## 10. 알려진 문서·코드 정합성 이슈
 
