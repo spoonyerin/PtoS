@@ -75,8 +75,12 @@ for (const [level, label] of [
       await expect.poll(() => icon.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true)
     }
     for (const icon of await page.locator('.factor-symbol img').all()) {
-      await expect(icon).toHaveCSS('filter', 'none')
+      const image = await icon.boundingBox()
+      const disc = await icon.locator('..').boundingBox()
+      expect(Math.abs(image!.x + image!.width / 2 - disc!.x - disc!.width / 2)).toBeLessThan(1)
+      expect(Math.abs(image!.y + image!.height / 2 - disc!.y - disc!.height / 2)).toBeLessThan(1)
     }
+    await page.locator('.result-findings').screenshot({ path: `test-results/findings-${level}.png` })
     await page.screenshot({ path: `test-results/result-${level}.png`, fullPage: true })
     const listen = page.getByRole('button', { name: '분석 결과와 대처 방법 듣기', exact: true })
     await expect(listen).toHaveAttribute('aria-pressed', 'false')
@@ -111,6 +115,9 @@ for (const [level, label] of [
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     const banner = page.locator('.result-banner')
     expect(await banner.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+    for (const card of await page.locator('.evidence-item, .empty-evidence').all()) {
+      expect(await card.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+    }
     await expect(page.locator('.result-status-copy')).toHaveCSS('text-align', 'left')
     await expect(page.locator('.result-banner p span')).toHaveCount(2)
     await page.screenshot({ path: `test-results/result-${level}-large.png`, fullPage: true })
