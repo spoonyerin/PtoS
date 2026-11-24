@@ -22,6 +22,7 @@ const readPage = (): Page =>
 export default function App() {
   const [page, setPage] = useState<Page>(readPage)
   const [content, setContent] = useState('')
+  const [shareOpen, setShareOpen] = useState(false)
   const [panel, setPanel] = useState<'guide' | 'settings' | 'notice' | null>(
     null,
   )
@@ -33,6 +34,7 @@ export default function App() {
   const connectedMembers = familyModel.members.filter(member => member.status === 'connected')
   const connectionSummary = connectedMembers.length ? `${connectedMembers[0].name} 님${connectedMembers.length > 1 ? ` 외 ${connectedMembers.length - 1}명과` : '과'} 연결 완료` : null
   const analysis = useAnalysis()
+  useEffect(() => { setShareOpen(false) }, [page, analysis.result])
   const urlReputation = useUrlReputationStatus()
   const dialog = useRef<HTMLDialogElement>(null)
   const title = useRef<HTMLHeadingElement>(null)
@@ -86,7 +88,9 @@ export default function App() {
       >
         본문 바로가기
       </a>
-      {page === 'premium' ? (
+      {shareOpen && analysis.result && premium ? (
+        <FamilyShare result={analysis.result} members={familyModel.members} onBack={() => setShareOpen(false)} onHome={() => navigate('home')} onConnect={() => { setFamilyEntry('connect'); navigate('family') }} />
+      ) : page === 'premium' ? (
         <PremiumMembership active={premium} onBack={() => navigate('home')} onActivate={() => {
           if (!import.meta.env.DEV) return
           setFamilyPreview('paid-unlinked')
@@ -226,7 +230,7 @@ export default function App() {
               <>
                 <AnalysisResult result={analysis.result}>
                   <div className="result-buttons">
-                    {premium ? <FamilyShare result={analysis.result} large={large} /> : (
+                    {premium ? <button className="primary-button" onClick={() => setShareOpen(true)}><Icon name="share" />가족에게 공유</button> : (
                       <button type="button" className="primary-button locked-share" disabled
                         aria-label="가족에게 공유" aria-describedby="share-lock-hint">
                         <Icon name="lock" />가족에게 공유

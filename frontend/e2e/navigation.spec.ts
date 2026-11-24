@@ -61,7 +61,7 @@ test('공유 미리보기를 닫고 다시 수정하면 원문을 유지한다',
     page.getByRole('heading', { name: '위험', exact: true }),
   ).toBeVisible()
   await page.getByRole('button', { name: '가족에게 공유' }).click()
-  await expect(page.getByRole('dialog', { name: '가족에게 공유하기' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '가족에게 공유하기' })).toBeVisible()
   await page.keyboard.press('Escape')
   await page.getByRole('button', { name: '다시 확인하기' }).click()
   await expect(page.getByRole('textbox')).toHaveValue(
@@ -82,11 +82,14 @@ test('공유 미리보기만 열면 네트워크 요청·새 창·클립보드 �
   await page.getByRole('button', { name: '분석하기', exact: true }).click()
   await expect(page.getByRole('heading', { name: '위험', exact: true })).toBeVisible()
   const requests: string[] = []
-  page.on('request', request => requests.push(request.url()))
+  page.on('request', request => {
+    const url = new URL(request.url())
+    if (request.method() !== 'GET' || url.pathname.startsWith('/api/') || url.origin !== 'http://127.0.0.1:5173') requests.push(request.url())
+  })
   const popups: unknown[] = []
   page.on('popup', popup => popups.push(popup))
   await page.getByRole('button', { name: '가족에게 공유', exact: true }).click()
-  await expect(page.getByRole('dialog', { name: '가족에게 공유하기' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '가족에게 공유하기' })).toBeVisible()
   expect(requests).toEqual([])
   expect(popups).toEqual([])
   expect(await page.evaluate(() => (window as unknown as { __shareCalls: string[] }).__shareCalls)).toEqual([])

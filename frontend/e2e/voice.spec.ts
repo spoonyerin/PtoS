@@ -44,3 +44,15 @@ for (const target of ['home', 'edit', 'back'] as const) {
     expect((await record()).spoken).toHaveLength(1)
   })
 }
+
+test('가족 공유로 이동하면 결과 음성을 취소하고 돌아와도 자동 재생하지 않는다', async ({ page }) => {
+  await page.goto('/#text')
+  await page.getByRole('textbox', { name: '문자 내용' }).fill('은행입니다. 인증번호를 알려주세요.')
+  await page.getByRole('button', { name: '분석하기', exact: true }).click()
+  await page.getByRole('button', { name: '분석 결과와 대처 방법 듣기', exact: true }).click()
+  await page.getByRole('button', { name: '가족에게 공유', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '가족에게 공유하기' })).toBeVisible()
+  expect(await page.evaluate(() => (window as unknown as { voiceTest: { cancelled: number } }).voiceTest.cancelled)).toBe(1)
+  await page.getByRole('button', { name: '분석 결과로 돌아가기' }).click()
+  await expect(page.getByRole('button', { name: '분석 결과와 대처 방법 듣기', exact: true })).toBeVisible()
+})

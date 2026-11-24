@@ -288,8 +288,8 @@ test('가족에게 공유는 미리보기를 먼저 열고 추가 요청을 보�
   await userEvent.click(screen.getByRole('button', { name: '분석하기' }))
   await screen.findByRole('heading', { name: '위험' })
   await userEvent.click(screen.getByRole('button', { name: '가족에게 공유' }))
-  expect(screen.getByRole('dialog', { name: '가족에게 공유하기' })).toBeVisible()
-  expect((screen.getByRole('textbox', { name: '공유할 내용' }) as HTMLTextAreaElement).value).toContain('[PtoS 분석 결과 공유]')
+  expect(screen.getByRole('heading', { name: '가족에게 공유하기' })).toBeVisible()
+  expect(screen.getByRole('region', { name: '보낼 분석 결과' })).toHaveTextContent('PtoS 분석 결과')
   expect(fetchMock).toHaveBeenCalledTimes(1)
 })
 

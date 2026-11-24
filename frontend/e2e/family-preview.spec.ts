@@ -40,7 +40,7 @@ test('무료 결과 공유 잠금과 유료 미리보기, 상태 유지·초기�
   await selectState(page, 'paid-connected')
   await expect(share).toBeEnabled()
   await share.click()
-  await expect(page.getByRole('dialog', { name: '가족에게 공유하기' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '가족에게 공유하기' })).toBeVisible()
   await page.keyboard.press('Escape')
   await selectState(page, 'free')
   await expect(share).toBeDisabled()
