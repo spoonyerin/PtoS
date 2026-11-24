@@ -1003,7 +1003,7 @@ dialog::backdrop {
 .result-card.insufficient_information .result-banner h2 {
   font-size: 1.65em;
 }
-.voice-controls { grid-column: 3; grid-row: 1; transform: translateX(-6px); align-self: start; display: flex; flex-direction: column; align-items: center; width: 60px; }
+.voice-controls { grid-column: 3; grid-row: 1; transform: translateX(-14px); align-self: start; display: flex; flex-direction: column; align-items: center; width: 60px; }
 .voice-control {
   width: 60px;
   display: flex;
