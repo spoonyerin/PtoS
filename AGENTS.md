@@ -66,7 +66,7 @@
 - 외부 연동은 어댑터(`UrlReputationProvider` 등)로 두고 성공, 조회 없음, 시간 초과, 장애를 구분해 반환한다.
 - 화면(frontend)에 분석 규칙이나 공급자 키를 넣지 않는다. 비밀키는 백엔드 환경 변수로만 쓰고 `VITE_` 변수에 넣지 않는다.
 - 근거 좌표는 유니코드 코드포인트(시작 포함, 끝 제외)다. JS의 UTF-16 인덱스와 다르므로 프론트는 `Array.from(content)` 기준으로 계산한다.
-- 목표 구조 (일부 구현): 규칙 검사, URL 평판 조회, 경량 모델 분석을 근거로 서버가 종합하고, 충돌 또는 불확실할 때만 조건부 LLM을 호출한다. 현재는 `CompositeAnalyzer`가 규칙(평판 포함)과 TF-IDF 기준선 모델을 둘 다 실행해 종합한다. 조건부 LLM(추가 검토)은 2026-11-17 계약 브랜치에서 앱에 연결했고 **기본 꺼짐**이다(`docs/LLM_POLICY.md`). 백엔드 환경 변수 `PTOS_LLM_API_KEY`, `PTOS_LLM_MODE=live-masked-text`(정확히 일치), `PTOS_LLM_BASE_URL`(https), `PTOS_LLM_MODEL`이 모두 있을 때만 `create_app`이 전송기를 만든다. 외부로 나가는 것은 주소·전화번호·이메일·긴 숫자를 가린 문장뿐이고, 규칙 결과가 정보 부족이며 모델 점수가 정상 구간과 신호 구간 사이일 때만 호출한다. 응답은 정해 둔 판단 값 하나만 읽고 정보 부족 → 의심으로만 반영한다. 에이전트는 이 변수를 켜지 않고 실제 외부 LLM을 호출하지 않는다. 자동 테스트는 가짜 전송기만 쓴다.
+- 목표 구조 (일부 구현): 규칙 검사, URL 평판 조회, 경량 모델 분석을 근거로 서버가 종합하고, 충돌 또는 불확실할 때만 조건부 LLM을 호출한다. 현재는 `CompositeAnalyzer`가 규칙(평판 포함)과 경량 모델(`PTOS_MODEL_PATH`로 준 모델: TF-IDF 기준선, 고정 임베딩 + 로지스틱 회귀, 미세조정 분류기 중 하나)을 둘 다 실행해 종합한다. 조건부 LLM(추가 검토)은 2026-11-17 계약 브랜치에서 앱에 연결했고 **기본 꺼짐**이다(`docs/LLM_POLICY.md`). 백엔드 환경 변수 `PTOS_LLM_API_KEY`, `PTOS_LLM_MODE=live-masked-text`(정확히 일치), `PTOS_LLM_BASE_URL`(https), `PTOS_LLM_MODEL`이 모두 있을 때만 `create_app`이 전송기를 만든다. 외부로 나가는 것은 주소·전화번호·이메일·긴 숫자를 가린 문장뿐이고, 규칙 결과가 정보 부족이며 모델 점수가 정상 구간과 신호 구간 사이일 때만 호출한다. 응답은 정해 둔 판단 값 하나만 읽고 정보 부족 → 의심으로만 반영한다. 에이전트는 이 변수를 켜지 않고 실제 외부 LLM을 호출하지 않는다. 자동 테스트는 가짜 전송기만 쓴다.
   "규칙에 걸리면 경량 모델을 생략한다"는 정책은 확정되지 않았으므로 순차 단락(short-circuit) 구조로 구현하지 않는다.
 
 ## 현재 구현 규칙
@@ -88,8 +88,8 @@
 - 원문 근거는 코드포인트 시작 포함·끝 제외 좌표와 snippet을 함께 반환한다. 화면에서는 일반 텍스트로 표시하며 UTF-16 인덱스로 강조하지 않는다.
 - 부정·교육 인용 처리의 한계를 표시하고 관련 회귀 사례를 유지한다. 확인한 신호의 템플릿만 선택하며 근거 없는 요구·외부 사실을 생성하지 않는다.
 - `confidence: null`, `analysis_mode: rules`, `is_demo: false`. 모델/평판의 실제 수행 상태를 `analysis_stages`에 표시한다. 없는 단계를 성공으로 간주하지 않는다.
-- 경량 모델은 `docs/MODEL_POLICY.md`를 따른다. 교체 가능한 `TextRiskModel`, 서버 시작 시 한 번 로드, 백엔드 환경 변수 `PTOS_MODEL_PATH`(저장소 밖 manifest.json + model.joblib). 저장소 안 경로·SHA-256 불일치·scikit-learn 버전 불일치는 로드를 거부한다. manifest에 `embedding`이 있는 모델(선택, 2026-11-17)은 저장소 밖 로컬 인코더의 가중치 SHA-256과 `torch`·`transformers` 설치를 추가로 확인하고, 어긋나면 로드 실패로 규칙 결과만 낸다. 인코더를 네트워크로 내려받지 않는다. 모델 단계는 `completed` / 미설정 `not_connected` / 로드 실패·시간 초과(1초, 개발 제안)·오류 `unavailable` / URL 직접 입력 `not_applicable`이고, 실패해도 규칙 결과와 근거를 그대로 낸다. 화면 문장에 "경량 모델"·"학습 자료" 같은 내부 용어를 쓰지 않는다.
-- 모델 학습은 split=dev 행만 쓰고 test는 학습·임계값에 쓰지 않는다. 모델 파일·manifest·학습 리포트는 저장소에 커밋하지 않는다(학습 데이터 CC BY-NC 4.0).
+- 경량 모델은 `docs/MODEL_POLICY.md`를 따른다. 교체 가능한 `TextRiskModel`, 서버 시작 시 한 번 로드, 백엔드 환경 변수 `PTOS_MODEL_PATH`(저장소 밖 manifest.json + model.joblib). 저장소 안 경로·SHA-256 불일치·scikit-learn 버전 불일치는 로드를 거부한다. manifest에 `embedding`이 있는 모델(선택, 2026-11-17)은 저장소 밖 로컬 인코더의 가중치 SHA-256과 `torch`·`transformers` 설치를 추가로 확인하고, 어긋나면 로드 실패로 규칙 결과만 낸다. manifest에 `transformer`가 있는 미세조정 모델(선택, 2026-11-24)은 같은 폴더의 `model.safetensors`·`config.json` SHA-256을 확인하고 `torch`·`transformers`(KoBERT는 `sentencepiece`도)가 없으면 로드 실패다. manifest의 `number_masking: true`는 학습 자료와 같게 전화번호·긴 숫자를 가린 뒤 점수를 낸다(`mask_numbers`). 인코더를 네트워크로 내려받지 않는다. 모델 단계는 `completed` / 미설정 `not_connected` / 로드 실패·시간 초과(1초, 개발 제안)·오류 `unavailable` / URL 직접 입력 `not_applicable`이고, 실패해도 규칙 결과와 근거를 그대로 낸다. 화면 문장에 "경량 모델"·"학습 자료" 같은 내부 용어를 쓰지 않는다.
+- 모델 학습(2026-11-24부터, **임시, 팀 확정 필요**): 저장소 밖 학습 전용 세트(`finetune-v2`, test 겹침 제거 봉인을 사용자가 실행)로 학습하고, eval dev는 학습에 쓰지 않고 후보 비교와 임계값(campaign 그룹 cross-fitted)에만 쓴다(`backend/train_external.py`). 기존 `train_model.py`(dev 학습)는 그대로 남아 있다. test는 학습·임계값에 쓰지 않는다. 모델 파일·manifest·학습 리포트는 저장소에 커밋하지 않는다(학습 데이터 CC BY-NC 4.0).
 - **알려진 한계 (중간점검 이후 B안 검토):** 모델이 함께 돌아도 `analysis_mode`는 계약상 `"rules"`로 남고, 모델 단계의 로드 실패·시간 초과·오류는 모두 `unavailable`이다(limitations 문장으로만 구분). B안은 `analysis_mode: "rules+model"`과 단계 상태 `timeout`·`load_failed`를 추가하는 계약 변경이다.
 - 빈 입력·길이·중복 제출·오류/시간 초과·재시도 처리를 유지한다. 서비스 오류를 정보 부족으로 숨기지 않는다.
 
@@ -134,6 +134,8 @@
 | `backend/evaluate.py` | 평가 하네스 명령줄 진입점 (`rules`, `rules+model`) |
 | `backend/evaluation/model_training.py`, `backend/train_model.py` | dev 전용 TF-IDF 기준선 학습, 그룹 교차검증, 임시 임계값, manifest. 라벨 기준 `--labels levels`(기본) / `binary`(선택, 팀 확정 필요) |
 | `backend/evaluation/model_comparison.py`, `backend/compare_models.py` | dev 전용 경량 모델 후보 교차검증 비교 (집계만, 모델 파일 없음, 채택 아님) |
+| `backend/evaluation/external_training.py`, `backend/train_external.py`, `backend/evaluation/finetune_models.py`, `backend/export_external_model.py` | 학습 전용 세트로 후보(TF-IDF·고정 임베딩·미세조정) 학습, dev cross-fitted 비교 리포트, 고른 후보를 서버 모델 폴더로 내보내기 (`docs/MODEL_POLICY.md`) |
+| `backend/app/transformer_model.py` | 미세조정 분류기 로드(로컬 폴더만), KoBERT sentencepiece 토크나이저 |
 | `backend/measure_model.py` | 모델 로드·추론 지연과 메모리 측정 |
 | `scripts/convert_kr_mob_smishing.py` | KR-MOB-SMISHING v1 zip → 라벨링 전용 CSV와 별도 case_type 매핑 (데이터는 저장소 밖) |
 | `docs/EVALUATION.md` | 평가셋 스키마, 저장 위치와 개인정보 가리기, 실행·학습·측정 방법 |

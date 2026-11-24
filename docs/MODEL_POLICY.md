@@ -157,6 +157,48 @@ eval-v2.1 dev에는 4단계 라벨이 없고 이진 라벨만 있어 다음과 �
 - 미세조정(e5 전체 가중치 학습)을 같은 방식으로 한 구성만 실험했다. 소량 추가 구성에서는 TF-IDF보다 낮았지만 LGAI class 2 사기 600행을 더한 구성에서는 세 모델 중 가장 높았다(105/258, 같은 검증). 한 번 실행한 결과라 아직 채택하지 않았다. 서버 로더는 그대로 쓸 수 있다: 미세조정한 인코더를 저장소 밖 새 폴더에 두고 `train_model.py --embedding 이름=폴더`로 분류기를 학습하면 manifest가 그 폴더와 가중치 SHA-256을 가리킨다.
 - 모델 후보는 앞으로 출처를 뺀 검증으로 비교한다. 이 검증 도구는 아직 저장소에 없다(임시 스크립트).
 
+## 학습 전용 세트로 모델 다시 고르기 (2026-11-24, 임시, 팀 확정 필요)
+
+사용자가 승인한 추천안대로 학습 방식을 바꿨다. **모델 선택은 팀 결정이다(AGENTS.md 결정 필요 3).** 아래 선택은 한 사람이 dev만 보고 정한 임시 선택이다.
+
+- **학습 방식:** 저장소 밖 학습 전용 세트 `finetune-v2-train.csv`(14,641행, 사기 6,589, SHA-256 `b1349ed7…`)로 학습하고, 미세조정의 조기 종료는 `finetune-v2-val.csv`(1,633행)로 본다. 두 파일은 train-v5에서 만들었고 test 겹침 제거 봉인은 사용자가 실행했다(HANDOVER 9절). **eval dev는 학습에 쓰지 않고** 후보 비교와 임계값에만 쓴다. 기존 `train_model.py`(dev 학습)는 남겨 두었다.
+- **임계값:** dev 문자 499행에서 `campaign_id` 그룹 5 fold(`StratifiedGroupKFold`, 시드 20261124)로 나눠, 각 fold 행에는 다른 fold에서 고른 임계값을 적용한다(cross-fitted). 기준은 전과 같다(신호: 정상 라벨 행 신호 0건을 지키며 사기 재현율 최대, 정상: 사기 점수 최솟값). 서버 모델 폴더의 임계값은 dev 전체 점수로 고른 값이다(`threshold_status: "provisional-dev-crossfit"`).
+- **모델 입력:** 학습 자료가 전화번호·긴 숫자를 `[전화번호]`·`[숫자]`로 가려 두었으므로 추론도 같은 함수(`mask_numbers`)로 가린다. manifest의 `number_masking: true`일 때만 적용하고 기존 모델은 그대로다.
+- **선택 기준(임시):** `rules+후보`의 정상 오탐이 `rules`만보다 늘지 않고 사기 → 정상 0건인 후보 중 사기 경고 최다. 같으면 직접 작성 출처 사기 경고, 그다음 학습 시간.
+
+**(dev 문자 499건, cross-fitted, 탐지 성능 주장 아님)** 규칙은 dev를 보고 다듬어 `rules` 수치는 부풀려져 있다. LGAI·KR-MOB는 학습 세트에 같은 출처가 있다.
+
+| 후보 | 사기 경고 | 정상 오탐 | 사기 → 정상 | 정상 → 정상 | 모델 단독 신호 사기/정상 | 학습 시간(CPU) |
+| --- | --- | --- | --- | --- | --- | --- |
+| `rules`만 | 203/258 | 10/241 | 0 | 0 | - | - |
+| KoELECTRA-small 고정 임베딩 + LR (기준 통과) | 214/258 | 10/241 | 0 | 8 | 23 / 1 | 6분 |
+| KoBERT-base 미세조정 | 223/258 | 11/241 | 0 | 30 | 81 / 1 | 189분 |
+| **KoELECTRA-small 미세조정 (선택)** | **219/258** | **11/241** | 0 | 63 | 71 / 1 | 50분 |
+| e5-small 미세조정 | 213/258 | 12/241 | 0 | 14 | 40 / 2 | 89분 |
+| e5-small 고정 임베딩 + LR | 204/258 | 16/241 | 0 | 20 | 1 / 6 | 17분 |
+| TF-IDF 기준선 | 203/258 | 12/241 | 0 | 52 | 3 / 2 | 8초 |
+
+- 위 기준을 통과한 후보는 KoELECTRA 고정 임베딩 하나였다. 미세조정 3개는 사기 경고가 더 많지만 실제 받은 정상 문자 11건 중 1~2건을 더 올렸다(더 올린 행은 모델마다 다르다). **사용자가 사기 경고 증가가 오탐 1건 증가보다 크다고 보고, 지연·메모리를 잰 뒤 KoELECTRA-small 미세조정을 골랐다(2026-11-24, 임시, 팀 확정 필요).** 사기 경고는 고정 임베딩보다 5건 많고 셋 중 가장 빠르며 메모리는 비슷하다. KoBERT는 사기 경고가 4건 더 많지만 메모리가 약 2배이고 느린 요청이 길다.
+- **위험: 정상 판정이 많다.** 정상 임계값(dev 사기 점수 최솟값)이 0.00029로 낮게 잡혀 dev 정상 문자 63건이 정상으로 나왔다(고정 임베딩 8건, KoBERT 30건). dev에서 사기 → 정상은 0건이지만 처음 보는 사기 문자가 이보다 낮은 점수를 받으면 정상으로 나온다. test에서 사기 → 정상 건수를 먼저 본다.
+- 미세조정: 최대 128토큰, 배치 16, 2 epoch, AdamW(학습률 KoELECTRA 1e-4, e5 5e-5, KoBERT 3e-5), 300스텝마다 검증 AUC, 3회 개선 없으면 멈춤. 검증 AUC는 모두 0.999 이상이라 학습 세트와 같은 분포에서는 변별이 쉽다는 뜻일 뿐이다. 미세조정 모델의 임계값이 0.9995 이상으로 높게 잡혔다.
+- 한 번 실행한 결과이고 시드·학습률에 대한 안정성은 보지 않았다.
+- 리포트(저장소 밖): `C:/_Coding/ptos-eval/ptos-eval/reports/v2.1-ai/retrain/compare-frozen-v1.md`, `compare-ft-koelectra.md`, `compare-ft-e5.md`, `compare-ft-kobert.md`. 후보 결과는 `models/retrain-v1/<후보>/`(dev 점수는 id와 점수만).
+
+**선택한 서버 모델:** 버전 `koelectra-small-ft-v1`, 폴더 `C:/_Coding/ptos-eval/ptos-eval/models/koelectra-small-ft-v1/`(`export_external_model.py`로 만듦, 미세조정 가중치 `model.safetensors` SHA-256 `d6419791…a722`, `config.json` SHA-256 `e9e1a373…9860`, 토크나이저 파일 포함, 최대 128토큰, `number_masking: true`). 신호 임계값 0.99956, 정상 임계값 0.00029(dev 전체 점수로 고름). 서버가 쓰려면 사용자가 `PTOS_MODEL_PATH`를 이 폴더로 바꾸고 `requirements-embedding.txt`를 설치한다. 하네스 `rules+model` dev 이진 평가(임계값을 같은 dev에서 골라 in-sample): 사기 경고 220/258, 정상 오탐 10/241(입력 오류 16건 제외), 사기 → 정상 0, 정상 → 정상 63. 모델 단계는 499건 모두 `completed`(1초 제한 안).
+
+- 지연·메모리(`measure_model.py`, Windows 11 개발 PC·CPU 12개, 2026-11-24에 한 번 잰 값, 성능 보장 아님, p50 / p95 / 최대):
+
+| 모델 | 로드(import 포함) | 상주 메모리 증가 | 규칙+모델, dev 문자 499건 | 규칙+모델, 최대 길이 입력 |
+| --- | --- | --- | --- | --- |
+| **KoELECTRA-small 미세조정 (선택)** | 19초 | +380 MiB | 60 / 177 / 782 ms | 173 / 180 / 182 ms |
+| KoELECTRA-small 고정 임베딩 | 29초 | +357 MiB | 97 / 247 / 705 ms | 256 / 299 / 313 ms |
+| KoBERT-base 미세조정 | 12초 | +666 MiB | 154 / 574 / 2,168 ms | 257 / 337 / 348 ms |
+
+  반복 측정 중 모델 점수 단독 최댓값이 1초 제한(개발 제안)을 넘은 경우가 있었다(KoELECTRA 미세조정 1,039 ms, 고정 1,340 ms, KoBERT 2,098 ms). 넘으면 그 요청은 모델 단계 `unavailable`, 규칙 결과로 응답한다. 하네스 실행에서는 세 모델 모두 넘지 않았다. 제한 시간은 그대로 두었다. 리포트 `C:/_Coding/ptos-eval/ptos-eval/reports/v2.1-ai/retrain/measure-*.md`.
+
+- 미세조정 모델도 서버가 읽을 수 있다: manifest의 `transformer`(종류 `local-finetuned-sequence-classifier`, 토크나이저 `auto` 또는 `kobert-sentencepiece`, 입력 앞 글자, 최대 토큰 수, `config.json` SHA-256)와 같은 폴더의 `model.safetensors`(SHA-256). 로드 실패 코드는 `TRANSFORMER_UNAVAILABLE`, `MODEL_SHA256_MISMATCH`, `MANIFEST_INVALID`다. 가중치는 로컬 폴더에서만 읽는다(`local_files_only`, safetensors만).
+- 남은 것: 새 test 1회 비교(사용자가 실행), 배포 서버 사양의 지연·메모리, 이 모델을 켠 서버의 화면 확인, 미세조정 후보 채택 여부(팀).
+
 ## 의존성
 
 `scikit-learn==1.9.1`과 모델 파일 호환을 위해 `numpy==2.5.4`, `scipy==1.18.1`, `joblib==1.6.0`을 고정했다(`backend/requirements.txt`). 버전을 올리면 기존 모델 파일은 로드를 거부하므로 다시 학습한다.

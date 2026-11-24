@@ -519,8 +519,30 @@ e5는 추가 데이터를 넣으면 신호 임계값이 올라가(0.631 → 0.81
 - **train-v2 (같은 날):** train-v1 + 외교부 국가별 안전정보 SMS 문구(data.go.kr 15104356, 이용허락범위 제한 없음, 775행 중 고유 문장 78개). `train-v2-devchecked.csv` 50,959행, 정상 문자 1,415(틀 39 → 114종, 주소가 있는 정상 문자 319). 스크립트 `tools/build_train_v2.py`, 기록 `train-v2-변경기록.txt`. 데이터 폴더는 사용자가 압축 후 다시 풀어 `C:/_Coding/ptos-eval/ptos-eval/`에 있다. LGAI와 KOR_phishing_data_raw는 사용자가 "비상업이면 사용 가능"을 확인했다(2026-11-23). 프로젝트는 비상업·비공개(발표·배포 안 함)이고, 데이터·모델 파일은 밖으로 공유하지 않는다. test와의 겹침은 여전히 확인하지 않았다.
 - **train-v3 (같은 날):** train-v2 + 합성 정상 안내 문자 1,985행(`tools/gen_synthetic_legit.py`, 12개 범주: 입출금·인증번호·보안·대출·카드·광고·택배·공과금·병원·관공서·보험·쇼핑). `train-v3-devchecked.csv` 52,944행, 정상 문자 3,400. dev와 PDF 예시 48건(test-2 후보)과 비슷한 행은 뺐다(`--holdout`). 합성 문장은 평가에 쓰지 않는다. 현재 규칙으로 돌리면 합성 정상 중 31건(“인증번호 [숫자]를 입력해 주세요. 타인 노출에 주의” 형식)이 의심으로 나온다. 흔한 정상 인증번호 안내에 대한 규칙 오탐이며 규칙은 고치지 않았다. 광고(`(광고)`) 문자는 그대로 두기로 했다(사용자, 2026-11-23). 사기 쪽 475건은 대부분 대출 권유·상담 유도인 광고형 대출 사기이고 합성 정상 광고 167건에는 그런 내용이 없어, 표시가 아니라 내용으로 구별하게 둔다. 실제 은행의 정상 대출 광고가 사기로 보일 위험은 남는다. 기록은 `train-v3-변경기록.txt`.
 - **train-v4와 파인튜닝 세트 finetune-v1 (2026-11-24):** train-v3의 사기 문자 7,390건 중 약 83%가 불법 도박·성인 스팸이고 고령자 대상 사칭형은 수백 건뿐이었다(키워드 집계). 그래서 합성 사칭형 사기 문자 2,996행(`tools/gen_synthetic_scam.py`, 가족·개인정보 유출·금융기관·결제·공공기관·택배·부고 링크·투자·대출·알바 10유형, 유형 비율은 카카오뱅크 스미싱 분석 보도 참고, 주소는 가짜)과 AI Hub '주제별 텍스트 일상 대화'(020) 카카오톡 대화 중 40대 이상 화자 메시지 4,000행(`tools/convert_aihub020_chat.py`, 사용자 이용 신청 완료)을 더했다. `train-v4-devchecked.csv` 59,940행. `tools/make_finetune_set.py`로 도박 스팸을 틀당 1행·최대 1,500행으로 줄이고 같은 틀을 제한해 `finetune-v1-devchecked-train.csv` 14,834행(사기 6,619 / 정상 8,215)과 `-val.csv` 1,660행(틀 단위 분할)을 만들었다. 현재 규칙으로 돌리면 합성 사기 3,000건 중 1,895건이 정보 부족이다(규칙이 놓치는 형태). 합성 문장은 평가에 쓰지 않고 검증 세트 점수는 성능 주장에 쓰지 않는다. test와의 겹침은 사용자가 `--seal-eval`로 직접 확인한다. 기록은 `train-v4-변경기록.txt`. 모델은 아직 학습하지 않았다.
-- **train-v5와 finetune-v2 (2026-11-24):** train-v4 + KR-MOB-SMISHING v2(HF DimensionV, rev ff6f74a7, CC BY-NC 4.0, 사용자 허락 후 내려받음, 변환 `tools/convert_krmob_v2.py`). 110문장 중 malicious 37문장만 사기로 쓰고 dev와 비슷한 3행이 빠져 34행이 들어갔다. benign·benign_lookalike 73문장은 문장이 사기와 같고 정상 여부가 이벤트 기록으로 정해져 있어 문장 라벨로 쓰지 않았다. `train-v5-devchecked.csv` 59,974행, `finetune-v2-devchecked-train/val.csv` 14,873 / 1,655행. finetune-v2가 v1을 대신한다. test 겹침 제거(`--seal-eval`)는 사용자가 직접 실행한다(명령은 `train-v5-변경기록.txt`).
+- **train-v5와 finetune-v2 (2026-11-24):** train-v4 + KR-MOB-SMISHING v2(HF DimensionV, rev ff6f74a7, CC BY-NC 4.0, 사용자 허락 후 내려받음, 변환 `tools/convert_krmob_v2.py`). 110문장 중 malicious 37문장만 사기로 쓰고 dev와 비슷한 3행이 빠져 34행이 들어갔다. benign·benign_lookalike 73문장은 문장이 사기와 같고 정상 여부가 이벤트 기록으로 정해져 있어 문장 라벨로 쓰지 않았다. `train-v5-devchecked.csv` 59,974행, `finetune-v2-devchecked-train/val.csv` 14,873 / 1,655행. finetune-v2가 v1을 대신한다. test 겹침 제거(`--seal-eval`)는 사용자가 직접 실행한다(명령은 `train-v5-변경기록.txt`). **사용자가 봉인을 실행했다(2026-11-24):** `train-v5.csv` 59,055행(SHA-256 `249f9dd9…`), `finetune-v2-train.csv` 14,641행(사기 6,589, `b1349ed7…`), `finetune-v2-val.csv` 1,633행(`3bdce7d6…`).
 - 쓰지 못한 자료: ku-autoai 메신저 피싱 데이터(라이선스 없음, 허락 전 가져오지 않기로 함), KorCCVi(로그인·비상업 조건, 통화 전사), HCLT 2026(데이터 비공개), URLhaus(AI 학습에 서면 동의 필요), KR-MOB-SMISHING(104건 모두 평가셋에 있음), 공공 스팸 URL·스팸메일 차단 목록(문장 없음).
+
+### 학습 전용 세트로 모델 다시 고르기 (dev, 2026-11-24)
+
+**(dev 문자 499건, cross-fitted 임계값, 탐지 성능 주장 아님. Windows 11 / Git Bash, CPU 12개, GPU 없음, 커밋 `391359e` + 미커밋 변경)** 학습은 `finetune-v2-train`, dev는 비교와 임계값에만 썼다. 선택 기준·후보 설정·전체 표는 [MODEL_POLICY.md](MODEL_POLICY.md) “학습 전용 세트로 모델 다시 고르기”.
+
+| 구성 | 사기 경고 | 정상 오탐 | 사기 → 정상 |
+| --- | --- | --- | --- |
+| `rules` | 203/258 | 10/241 | 0 |
+| `rules` + KoELECTRA-small 고정 임베딩 + LR (처음 기준을 통과한 유일한 후보) | 214/258 | 10/241 | 0 |
+| `rules` + KoBERT-base 미세조정 | 223/258 | 11/241 | 0 |
+| `rules` + KoELECTRA-small 미세조정 (**사용자 선택, 임시**) | 219/258 | 11/241 | 0 |
+| `rules` + e5-small 미세조정 | 213/258 | 12/241 | 0 |
+| `rules` + e5-small 고정 임베딩 + LR | 204/258 | 16/241 | 0 |
+| `rules` + TF-IDF 기준선 | 203/258 | 12/241 | 0 |
+
+- 예전 모델은 dev로 학습해 dev 수치(예: TF-IDF 234/258)가 부풀려져 있었으므로 위 표와 직접 비교하지 않는다. 학습에 없는 출처에서의 모델 단독 신호는 미세조정 후보가 예전 출처 제외 검증(정상 오탐 0건 기준 최대 13건)보다 많았다(KoBERT 81, KoELECTRA 71, e5 40, 정상 신호 1~2).
+- 미세조정 후보는 실제 받은 정상 문자 11건 중 1~2건을 더 올려 처음 기준에서 빠졌다. 사용자가 사기 경고 증가를 더 크게 보고 지연·메모리를 잰 뒤 **KoELECTRA-small 미세조정(`koelectra-small-ft-v1`)을 골랐다**(팀 확정 필요). 정상 판정이 많다(dev 정상 63건, 정상 임계값 0.00029). test에서 사기 → 정상을 먼저 본다.
+- 서버 모델 폴더 `koelectra-small-ft-v1`을 만들고 서버 로더로 dev 하네스(`rules+model`, 이진, 임계값을 같은 dev에서 골라 in-sample)를 실행했다: 사기 경고 220/258, 정상 오탐 10, 사기 → 정상 0, 정상 → 정상 63, 모델 단계 499건 모두 완료. 비교용으로 `koelectra-small-lr-v1-ft2`(고정 임베딩)와 `kobert-base-ft-v1`도 만들어 두었다.
+- 새 코드: `backend/train_external.py`, `evaluation/external_training.py`, `evaluation/finetune_models.py`, `export_external_model.py`, `app/transformer_model.py`, `app/model_adapter.py`(숫자 가리기, 미세조정 모델 로더). API 계약은 바꾸지 않았다.
+- **test는 실행하지 않았다.** 사용자가 이 모델로 test 1회를 실행한다. test는 2026-11-17에 한 번 본 상태라 그 수치는 한 번만 본 수치가 아니다.
+
+- 지연·메모리(한 번 잰 값, 성능 보장 아님): 선택한 모델은 상주 메모리 +380 MiB, 규칙+모델 요청당 p50 60 ms / p95 177 ms(dev 문자 499건, 최대 782 ms). 세 후보 비교 표는 MODEL_POLICY.md.
 
 ### 코드 동결 전 현재 상태 (2026-11-17)
 
