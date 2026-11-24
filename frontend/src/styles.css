@@ -1418,7 +1418,6 @@ dialog::backdrop {
 .family-share-factors li { display: flex; align-items: center; gap: 10px; line-height: 1.4; }
 .family-share-factors .factor-symbol { width: 28px; height: 28px; }
 .family-share-factors .factor-symbol img { width: 21px; height: 21px; }
-.family-share-actions-preview { margin-top: 16px; font-size: .85em; }
 .family-share-options { margin: 18px 0; font-size: .85em; color: #48566c; }
 .family-share-options summary { cursor: pointer; padding: 8px 0; }
 .family-share-options label { display: flex; align-items: center; gap: 10px; min-height: 44px; }
@@ -1426,8 +1425,9 @@ dialog::backdrop {
 .family-share-options button { padding: 12px; margin: 4px; border-radius: 8px; }
 .family-share-recipients { margin: 24px 0 20px; padding: 0; border: 0; min-width: 0; }
 .family-share-recipients legend { font-size: 1.3em; font-weight: 800; margin-bottom: 14px; }
-.family-share-recipient { position: relative; display: flex; align-items: center; gap: 12px; border: 1px solid #d9d9d9; border-radius: 12px; padding: 16px; margin-bottom: 10px; cursor: pointer; }
-.family-share-recipient.is-selected { border: 2px solid var(--navy); padding: 15px; }
+.family-share-recipient-list { display: grid; grid-auto-rows: 1fr; gap: 10px; }
+.family-share-recipient { min-height: 80px; position: relative; display: flex; align-items: center; gap: 12px; border: 1px solid #d9d9d9; border-radius: 12px; padding: 12px; cursor: pointer; }
+.family-share-recipient.is-selected { border: 2px solid var(--navy); padding: 11px; }
 .family-share-recipient.is-disabled { background: #f7f7f7; cursor: not-allowed; }
 .family-share-recipient input { position: absolute; opacity: 0; width: 100%; height: 100%; inset: 0; margin: 0; cursor: inherit; }
 .family-share-recipient:focus-within { outline: 3px solid #ee790d; outline-offset: 3px; }

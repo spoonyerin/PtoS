@@ -10,7 +10,6 @@ export function FamilyShare({ result, members, onBack, onHome, onConnect, shareU
   result: AnalysisResponse; members: FamilyMember[]; onBack: () => void; onHome: () => void; onConnect: () => void; shareUrl?: string
 }) {
   const [selected, setSelected] = useState<string[]>(() => members.filter(m => m.status === 'connected').slice(0, 1).map(m => m.id))
-  const [include, setInclude] = useState({ factors: true, summary: true, actions: true })
   const [sheet, setSheet] = useState(false)
   const [receipt, setReceipt] = useState<Receipt | null>(null)
   const [mockStage, setMockStage] = useState(1)
@@ -74,18 +73,16 @@ export function FamilyShare({ result, members, onBack, onHome, onConnect, shareU
         <h2>가족에게 이렇게 보내요.</h2><p className="family-share-subtitle">보낼 내용을 먼저 확인해 주세요.</p>
         <section className="family-share-preview" aria-label="보낼 분석 결과">
           <div className="family-share-preview-title"><h2>PtoS 분석 결과</h2><span className="family-share-level">{riskLevels[result.risk_level].label}{result.risk_level !== 'insufficient_information' && ' 단계'}</span></div>
-          {include.factors && <><h3>발견된 위험 요소</h3>{result.risk_factors.length ? <ul className="family-share-factors">{result.risk_factors.map(label => {
+          <><h3>발견된 위험 요소</h3>{result.risk_factors.length ? <ul className="family-share-factors">{result.risk_factors.map(label => {
             const evidence = result.evidence.find(e => e.label === label)
             return <li key={label}><span className="factor-symbol"><img src={`/assets/${factorDisplay[evidence?.factor_code ?? '']?.icon ?? 'risk-people'}.svg`} alt="" /></span><strong>{label}</strong></li>
-          })}</ul> : <p>{result.risk_level === 'normal' ? '뚜렷한 위험 신호가 없어요.' : '확인된 위험 신호가 없어요. 정상이라는 뜻은 아니에요.'}</p>}</>}
-          {include.summary && <><h3>내용 요약</h3><p>{summary}</p></>}
-          {include.actions && <details className="family-share-actions-preview"><summary>대응 방법 보기</summary><ol>{result.action_guidance.map((action, i) => <li key={i}>{action}</li>)}</ol></details>}
+          })}</ul> : <p>{result.risk_level === 'normal' ? '뚜렷한 위험 신호가 없어요.' : '확인된 위험 신호가 없어요. 정상이라는 뜻은 아니에요.'}</p>}</>
+          <h3>내용 요약</h3><p>{summary}</p>
         </section>
-        <details className="family-share-options"><summary>공유할 내용 선택</summary>{([['factors', '위험 요소'], ['summary', '내용 요약'], ['actions', '대응 방법']] as const).map(([key, label]) => <label key={key}><input type="checkbox" disabled={pending} checked={include[key]} onChange={e => setInclude({ ...include, [key]: e.target.checked })} />{label}</label>)}<p>분석 결과는 항상 포함됩니다. 입력 원문과 URL은 보내지 않아요.</p></details>
-        <fieldset className="family-share-recipients"><legend>누구에게 보낼까요?</legend>{members.map(member => <label key={member.id} className={`family-share-recipient${selected.includes(member.id) && member.status === 'connected' ? ' is-selected' : ''}${member.status !== 'connected' ? ' is-disabled' : ''}`}>
+        <fieldset className="family-share-recipients"><legend>누구에게 보낼까요?</legend><div className="family-share-recipient-list">{members.map(member => <label key={member.id} className={`family-share-recipient${selected.includes(member.id) && member.status === 'connected' ? ' is-selected' : ''}${member.status !== 'connected' ? ' is-disabled' : ''}`}>
           <input type="checkbox" aria-label={`${member.name}에게 공유`} disabled={pending || member.status !== 'connected'} checked={member.status === 'connected' && selected.includes(member.id)} onChange={e => setSelected(e.target.checked ? [...selected, member.id] : selected.filter(id => id !== member.id))} />
           <span className="family-share-tick" aria-hidden="true" /><span className={`family-avatar${member.relation === '형제' ? ' gold' : ''}`}>{member.name[0]}</span><span><strong>{member.name}</strong> <small>({member.relation})</small>{member.status !== 'connected' && <small className="family-share-pending">초대 수락 전이라 공유할 수 없어요.</small>}</span>
-        </label>)}{!members.some(m => m.status === 'connected') && <p>먼저 가족 연결을 완료해 주세요.</p>}</fieldset>
+        </label>)}</div>{!members.some(m => m.status === 'connected') && <p>먼저 가족 연결을 완료해 주세요.</p>}</fieldset>
         {!members.some(m => m.status === 'connected') && <button className="family-outline-button" onClick={onConnect}>＋ 가족 연결하기</button>}
         <button ref={trigger} className="primary-button family-share-submit" disabled={pending || !recipients.length} onClick={() => { setNotice(''); setSheet(true) }}><Icon name="share" />공유하기</button>
       </> : <>
