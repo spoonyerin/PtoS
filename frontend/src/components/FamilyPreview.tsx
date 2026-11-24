@@ -22,7 +22,7 @@ export function FamilyProtectionCard({ state, connectionSummary, onOpen }: { sta
 
 // Mock subscription state is confined to a development-only panel. No persistence,
 // entitlement API, payment, contact access or invitation dispatch is performed.
-export function FamilyDevelopmentPanel({ state, onChange }: { state: FamilyPreviewState; onChange: (state: FamilyPreviewState) => void }) {
+export function FamilyDevelopmentPanel({ state, onChange, onOpenGuardian }: { onOpenGuardian?: () => void; state: FamilyPreviewState; onChange: (state: FamilyPreviewState) => void }) {
   if (!import.meta.env.DEV) return null
   return <details className="family-dev-panel">
     <summary>개발용 미리보기</summary>
@@ -33,6 +33,7 @@ export function FamilyDevelopmentPanel({ state, onChange }: { state: FamilyPrevi
       <option value="paid-unlinked">유료 · 가족 미연결</option>
     </select>
     <button type="button" onClick={() => onChange(initialFamilyPreview)}>기본 상태로 초기화</button>
+    {onOpenGuardian && <button type="button" onClick={onOpenGuardian}>보호자 공유 화면 보기</button>}
     <p>화면 확인용 상태입니다. 가족 이름은 예시이며 실제 결제·초대·알림은 실행되지 않습니다. 새로고침하면 기본 상태로 돌아갑니다.</p>
   </details>
 }

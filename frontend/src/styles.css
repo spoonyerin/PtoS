@@ -1475,3 +1475,54 @@ dialog::backdrop {
 .family-share-clock::after { content: ''; width: 48px; height: 48px; background: var(--navy); mask: url('/assets/icon-clock.svg') center / contain no-repeat; -webkit-mask: url('/assets/icon-clock.svg') center / contain no-repeat; }
 .family-share-timeline .is-done { color: #111; }
 .family-share-timeline li.is-done:not(:last-child)::after { border-color: var(--navy); }
+
+.guardian-header { gap: 10px; }
+.guardian-header h1 { font-size: 1.4em; }
+.guardian-main { padding: 0 24px 24px; --risk: #48566c; --tint: #e0e5ec; word-break: keep-all; overflow-wrap: anywhere; }
+.guardian-main.dangerous { --risk: #ad2a25; --tint: #f5d9d9; }
+.guardian-main.suspicious { --risk: #966200; --tint: #ffefbf; }
+.guardian-main.normal { --risk: #19733f; --tint: #dcf0e2; }
+.guardian-requester { display: flex; align-items: center; gap: 12px; padding: 16px; border-radius: 10px; background: var(--panel); box-shadow: 1px 2px 3px #0002; margin-bottom: 16px; }
+.guardian-requester > div { flex: 1; min-width: 0; }
+.guardian-requester p { margin: 0; line-height: 1.4; font-size: .95em; }
+.guardian-requester small { display: block; color: #48566c; font-size: .8em; }
+.guardian-requester .guardian-avatar { flex-basis: 40px; width: 40px; height: 40px; font-size: 1.05em; background: #ccebd7; color: #149d39; }
+.guardian-history { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 44px; min-height: 44px; padding: 2px; color: #48566c; background: transparent; font-size: .65em; }
+.guardian-history span { width: 26px; height: 26px; background: currentColor; mask: url('/assets/icon-timer.svg') center / contain no-repeat; -webkit-mask: url('/assets/icon-timer.svg') center / contain no-repeat; }
+.guardian-analysis { border: 1px solid #d7d7d7; border-radius: 10px; padding: 18px; }
+.guardian-analysis h2 { font-size: 1.05em; margin: 0 0 8px; line-height: 1.4; font-weight: 800; }
+.guardian-summary { margin: 0 0 10px; font-size: .95em; line-height: 1.4; }
+.guardian-metadata { font-size: .8em; color: #48566c; margin: 0 0 20px; }
+.guardian-risk { display: flex; align-items: center; gap: 10px; margin: 0 -5px 22px; padding: 12px; border-radius: 8px; background: var(--tint); }
+.guardian-risk-icon { display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; background: var(--risk); border-radius: 50%; }
+.guardian-risk-icon img { width: 27px; height: 27px; }
+.guardian-risk h2 { color: var(--risk); font-size: 1.25em; margin: 0; }
+.guardian-risk h2 small { font-size: .65em; color: #111; }
+.guardian-risk p { margin: 2px 0 0; font-size: .75em; color: #48566c; line-height: 1.4; }
+.guardian-factors { padding: 0; margin: 12px 0 0; list-style: none; display: grid; gap: 16px; }
+.guardian-factors li { display: flex; align-items: start; gap: 10px; }
+.guardian-factors li > div { min-width: 0; }
+.guardian-factors .factor-symbol { width: 26px; height: 26px; }
+.guardian-factors .factor-symbol img { width: 20px; height: 20px; }
+.guardian-factors h3 { font-size: .95em; margin: 0 0 3px; line-height: 1.4; }
+.guardian-factors p { margin: 0; font-size: .8em; line-height: 1.4; color: #48566c; }
+.guardian-opinion { margin-top: 22px; }
+.guardian-opinion fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.guardian-opinion legend { font-size: 1.12em; font-weight: 800; margin-bottom: 8px; }
+.guardian-opinion label:not(.sr-only) { display: flex; align-items: center; gap: 10px; min-height: 38px; font-size: .95em; cursor: pointer; }
+.guardian-opinion input[type='radio'] { width: 18px; height: 18px; accent-color: var(--navy); margin: 0; flex-shrink: 0; }
+.guardian-editor { margin: 8px 0 4px 28px; }
+.guardian-editor textarea { width: 100%; min-height: 64px; height: auto; display: block; border: 0; border-radius: 8px; padding: 12px; background: var(--panel); font-size: .9em; line-height: 1.4; resize: vertical; }
+.guardian-editor small { display: block; text-align: right; margin-top: 4px; font-size: .75em; color: #48566c; }
+.guardian-opinion-help { margin: 12px 0; font-size: .75em; color: #48566c; }
+.guardian-submit.primary-button { width: 100%; border-radius: 10px; min-height: 64px; font-size: 1.25em; padding: 16px; gap: 10px; }
+.guardian-submit img { width: 28px; height: 28px; }
+.guardian-submit:disabled { cursor: not-allowed; }
+.guardian-reply-status { background: #dcf0e2; border-radius: 8px; padding: 16px; color: #17633a; font-size: .9em; }
+.guardian-preview-note { margin-top: 22px; color: #48566c; font-size: .8em; line-height: 1.5; }
+.guardian-preview-note summary { padding: 8px 0; cursor: pointer; }
+.guardian-unavailable { margin-top: 24px; }
+.guardian-unavailable h2 { font-size: 1.3em; line-height: 1.4; }
+.guardian-unavailable p { color: #48566c; }
+.guardian-unavailable .primary-button { width: 100%; }
+@media(max-width: 360px) { .guardian-main { padding-inline: 20px; } .guardian-header { padding-inline: 14px; gap: 6px; } .guardian-header h1 { font-size: 1.2em; } .guardian-requester { padding: 12px; gap: 8px; } .guardian-analysis { padding: 16px; } }

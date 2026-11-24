@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { AnalysisForm } from './components/AnalysisForm'
 import { AnalysisResult } from './components/AnalysisResult'
 import { FamilyShare } from './components/FamilyShare'
+import { GuardianShare } from './components/GuardianShare'
+import { guardianPreview } from './guardianPreview'
 import { FamilyDevelopmentPanel, FamilyProtectionCard, initialFamilyPreview, type FamilyPreviewState } from './components/FamilyPreview'
 import { Icon } from './components/Icons'
 import { FamilyProtectionFlow } from './components/FamilyProtectionFlow'
@@ -14,13 +16,15 @@ import {
   developmentNoteText,
 } from './components/DevelopmentNote'
 import { useUrlReputationStatus } from './hooks/useServiceStatus'
-type Page = 'home' | 'family' | 'premium' | InputType
+type Page = 'home' | 'family' | 'premium' | 'guardian' | InputType
 const readPage = (): Page =>
+  location.hash.startsWith('#family/share/') ? 'guardian' :
   ['text', 'url', 'ocr_text', 'family', 'premium'].includes(location.hash.slice(1))
     ? (location.hash.slice(1) as Page)
     : 'home'
 export default function App() {
   const [page, setPage] = useState<Page>(readPage)
+  const [routeHash, setRouteHash] = useState(location.hash)
   const [content, setContent] = useState('')
   const [shareOpen, setShareOpen] = useState(false)
   const [panel, setPanel] = useState<'guide' | 'settings' | 'notice' | null>(
@@ -29,7 +33,7 @@ export default function App() {
   const [large, setLarge] = useState(false)
   const [familyPreview, setFamilyPreview] = useState<FamilyPreviewState>(initialFamilyPreview)
   const premium = familyPreview !== 'free'
-  const [familyEntry, setFamilyEntry] = useState<'overview' | 'connect'>('overview')
+  const [familyEntry, setFamilyEntry] = useState<'overview' | 'connect' | 'history'>('overview')
   const [familyModel, setFamilyModel] = useState(() => createFamilyModel(initialFamilyPreview === 'paid-connected'))
   const connectedMembers = familyModel.members.filter(member => member.status === 'connected')
   const connectionSummary = connectedMembers.length ? `${connectedMembers[0].name} 님${connectedMembers.length > 1 ? ` 외 ${connectedMembers.length - 1}명과` : '과'} 연결 완료` : null
@@ -41,6 +45,7 @@ export default function App() {
   useEffect(() => {
     const change = () => {
       setPage(readPage())
+      setRouteHash(location.hash)
       analysis.reset()
       // 뒤로/앞으로 이동으로 다른 확인 화면에 원문이 넘어가지 않게 지운다.
       setContent('')
@@ -66,9 +71,10 @@ export default function App() {
     history.pushState(
       null,
       '',
-      next === 'home' ? location.pathname + location.search : '#' + next,
+      next === 'home' ? location.pathname + location.search : next === 'guardian' ? '#family/share/preview' : '#' + next,
     )
     setPage(next)
+    setRouteHash(location.hash)
   }
   const titles = {
     text: '문자 확인하기',
@@ -88,7 +94,9 @@ export default function App() {
       >
         본문 바로가기
       </a>
-      {shareOpen && analysis.result && premium ? (
+      {page === 'guardian' ? (
+        <GuardianShare request={import.meta.env.DEV && routeHash === '#family/share/preview' ? guardianPreview : null} onBack={() => navigate('home')} onHistory={() => { setFamilyEntry('history'); navigate('family') }} />
+      ) : shareOpen && analysis.result && premium ? (
         <FamilyShare result={analysis.result} members={familyModel.members} onBack={() => setShareOpen(false)} onHome={() => navigate('home')} onConnect={() => { setFamilyEntry('connect'); navigate('family') }} />
       ) : page === 'premium' ? (
         <PremiumMembership active={premium} onBack={() => navigate('home')} onActivate={() => {
@@ -328,7 +336,7 @@ export default function App() {
           </>
         )}
       </dialog>
-      {import.meta.env.DEV && <FamilyDevelopmentPanel state={familyPreview} onChange={state => {
+      {import.meta.env.DEV && <FamilyDevelopmentPanel onOpenGuardian={() => navigate('guardian')} state={familyPreview} onChange={state => {
         setFamilyPreview(state)
         setFamilyModel(createFamilyModel(state === 'paid-connected'))
         if (page === 'family' && state === 'free') navigate('home')

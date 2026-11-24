@@ -5,7 +5,7 @@ import type { FamilyModel, FamilyMember } from '../familyModel'
 type Screen = 'overview' | 'auto' | 'connect' | 'history' | 'official-guide'
 type Dialog = 'contacts' | 'recipient' | null
 export function FamilyProtectionFlow({ model, setModel, onHome, initialScreen = 'overview' }: {
-  model: FamilyModel; setModel: Dispatch<SetStateAction<FamilyModel>>; onHome: () => void; initialScreen?: 'overview' | 'connect'
+  model: FamilyModel; setModel: Dispatch<SetStateAction<FamilyModel>>; onHome: () => void; initialScreen?: 'overview' | 'connect' | 'history'
 }) {
   const [screen, setScreen] = useState<Screen>(initialScreen)
   const [editing, setEditing] = useState(false)
