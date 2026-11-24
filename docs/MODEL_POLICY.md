@@ -184,7 +184,25 @@ eval-v2.1 dev에는 4단계 라벨이 없고 이진 라벨만 있어 다음과 �
 - 한 번 실행한 결과이고 시드·학습률에 대한 안정성은 보지 않았다.
 - 리포트(저장소 밖): `C:/_Coding/ptos-eval/ptos-eval/reports/v2.1-ai/retrain/compare-frozen-v1.md`, `compare-ft-koelectra.md`, `compare-ft-e5.md`, `compare-ft-kobert.md`. 후보 결과는 `models/retrain-v1/<후보>/`(dev 점수는 id와 점수만).
 
-**선택한 서버 모델:** 버전 `koelectra-small-ft-v1`, 폴더 `C:/_Coding/ptos-eval/ptos-eval/models/koelectra-small-ft-v1/`(`export_external_model.py`로 만듦, 미세조정 가중치 `model.safetensors` SHA-256 `d6419791…a722`, `config.json` SHA-256 `e9e1a373…9860`, 토크나이저 파일 포함, 최대 128토큰, `number_masking: true`). 신호 임계값 0.99956, 정상 임계값 0.00029(dev 전체 점수로 고름). 서버가 쓰려면 사용자가 `PTOS_MODEL_PATH`를 이 폴더로 바꾸고 `requirements-embedding.txt`를 설치한다. 하네스 `rules+model` dev 이진 평가(임계값을 같은 dev에서 골라 in-sample): 사기 경고 220/258, 정상 오탐 10/241(입력 오류 16건 제외), 사기 → 정상 0, 정상 → 정상 63. 모델 단계는 499건 모두 `completed`(1초 제한 안).
+### 신호 임계값 완화: 정상 행 신호 2% 허용 (2026-11-24, 사용자 결정, 임시, 팀 확정 필요)
+
+dev에서 규칙+선택 모델이 놓친 사기 38건은 **모두 주소가 있고 규칙 결과가 `ANALYSIS_INCOMPLETE`(주소 평판 미확인)인 정보 부족**이었다(규칙 근거 일부 24건, 근거 0개 14건). 34건은 모델 점수가 0.99 이상인데 신호 임계값 0.99956을 넘지 못했다. 정상 행 신호 허용 비율별 cross-fitted 결과(같은 dev 점수, 같은 fold):
+
+| 정상 행 신호 허용 | 사기 경고 | 정상 오탐 | 그중 실제 받은 정상 | 모델 단독 신호 사기/정상 |
+| --- | --- | --- | --- | --- |
+| 0% (처음 기준) | 220/258 | 11/241 | 2/11 | 72 / 1 |
+| 1% | 225 | 12 | 3 | 91 / 3 |
+| **2% (선택)** | **234** | **14** | **3** | 126 / 5 |
+| 3% | 238 | 16 | 4 | 162 / 8 |
+| 5% | 245 | 19 | 6 | 191 / 11 |
+
+- 다른 후보도 2%에서 비슷했다(KoBERT 235/12, e5 미세조정 240/13, KoELECTRA 고정 220/13). 모델 종류보다 임계값 기준의 영향이 크다.
+- 허용 건수는 floor(비율 × dev 정상 행 수)다(`choose_threshold_at_rate`, 0%이면 기존 기준과 같다). `export_external_model.py --legit-signal-rate 0.02`로 dev 점수 파일(`dev-scores.csv`, 점수 소수 6자리)에서 다시 고른다. 정상 임계값은 그대로 dev 사기 점수 최솟값이다.
+- 모델 신호는 정보 부족을 의심으로만 올리므로 늘어난 오탐은 모두 의심이다(위험 아님). 원문 근거가 없는 경고라는 점은 같다.
+- 서버 모델 폴더: 버전 `koelectra-small-ft-v1-r2`, `C:/_Coding/ptos-eval/ptos-eval/models/koelectra-small-ft-v1-r2/`(가중치는 `koelectra-small-ft-v1`과 같음). 신호 임계값 0.999505, 정상 임계값 0.000294. 하네스 dev 이진(in-sample): 사기 경고 231/258, 정상 오탐 13/241, 사기 → 정상 0, 정상 → 정상 63, 모델 단계 499건 모두 완료.
+- 리포트: `reports/v2.1-ai/retrain/dev-analysis-threshold-misses.md`(집계·id만).
+
+**선택한 모델(신호 0% 기준 폴더, 서버에는 위 `-r2` 폴더를 쓴다):** 버전 `koelectra-small-ft-v1`, 폴더 `C:/_Coding/ptos-eval/ptos-eval/models/koelectra-small-ft-v1/`(`export_external_model.py`로 만듦, 미세조정 가중치 `model.safetensors` SHA-256 `d6419791…a722`, `config.json` SHA-256 `e9e1a373…9860`, 토크나이저 파일 포함, 최대 128토큰, `number_masking: true`). 신호 임계값 0.99956, 정상 임계값 0.00029(dev 전체 점수로 고름). 서버가 쓰려면 사용자가 `PTOS_MODEL_PATH`를 이 폴더로 바꾸고 `requirements-embedding.txt`를 설치한다. 하네스 `rules+model` dev 이진 평가(임계값을 같은 dev에서 골라 in-sample): 사기 경고 220/258, 정상 오탐 10/241(입력 오류 16건 제외), 사기 → 정상 0, 정상 → 정상 63. 모델 단계는 499건 모두 `completed`(1초 제한 안).
 
 - 지연·메모리(`measure_model.py`, Windows 11 개발 PC·CPU 12개, 2026-11-24에 한 번 잰 값, 성능 보장 아님, p50 / p95 / 최대):
 
