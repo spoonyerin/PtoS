@@ -207,6 +207,12 @@ class RuleScan:
 # rules-dev-v4 2차 E(임시): 정상 인증번호 안내 예외. 번호를 직접 보여 주고 공유 금지를 경고하며, 주소·다른 요구·제3자 확인
 # 언급이 없을 때만 "입력" 요구 근거를 뺀다. 발신처가 공식인지는 확인하지 않는다.
 CODE_SHOWN = re.compile(r"(?:인증\s*번호|OTP|인증\s*코드)\s*(?:는|은|:|：)?\s*(?:\[[^\]\r\n]{1,10}\]|(?<!\d)\d{4,8}(?!\d))", re.IGNORECASE)
+# rules-dev-v8(임시): 번호가 대상어 앞에 오는 형식("[123456] 본인확인 인증번호"). 대괄호 머리말([가상은행])과 헷갈리지 않게
+# 앞쪽 번호는 숫자 4~8자리(대괄호 있어도 됨)나 가린 표시([인증번호])만 인정하고, 사이에는 짧은 낱말 두 개까지만 둔다.
+CODE_SHOWN_BEFORE = re.compile(r"(?:\[\s*(?:\d{4,8}|인증\s*번호)\s*\]|(?<![\d\w])\d{4,8}(?!\d))\s*(?:[가-힣]{1,6}\s*){0,2}?"
+                               r"(?:인증\s*번호|OTP|인증\s*코드)", re.IGNORECASE)
+# rules-dev-v8(임시): 공유 금지 경고가 없어도 되는 짧은 입력 안내의 최대 길이(코드포인트, 앞뒤 공백 제외). 개발 제안값.
+INPUT_ONLY_MAX_LENGTH = 80
 SHARE_WARNING = re.compile(r"(?:알려\s*주지|알리지|공유하지|전달하지|보내지|노출하지|가르쳐\s*주지)\s*(?:마|말|않)|노출\s*금지|공유\s*금지")
 # 번호를 보내라는 요구(대상어와 같은 구절이 아니어도 문자 어디든). "알려주지 마세요"는 걸리지 않는다.
 CODE_SEND_REQUEST = re.compile(r"(?:회신|전달|전송|공유|제공)\s*(?:해\s*주|하세요|하십시오|바랍니다|요망)"
@@ -219,29 +225,36 @@ INPUT_ONLY = re.compile(r"입력|인증(?!\s*(?:번호|정보|코드))")
 BLANK_PARAGRAPH = re.compile(r"\r?\n[ \t]*\r?\n")
 
 
-def code_notice_exception(prose: str, findings: list[Finding], has_url: bool, ignored: list[tuple[int, int]]) -> bool:
+def code_notice_exception(prose: str, findings: list[Finding], has_url: bool, ignored: list[tuple[int, int]]) -> str | None:
+    """정상 인증번호 안내 예외. 적용하면 종류("warned": 공유 금지 경고 있음, "input_only": v8 짧은 입력 안내), 아니면 None."""
     def outside(match):
         return not any(match.start() < right and match.end() > left for left, right in ignored)
 
     credential = [f for f in findings if f.evidence.factor_code == FactorCode.CREDENTIAL_REQUEST]
     if not credential or has_url or BLANK_PARAGRAPH.search(prose):
-        return False
+        return None
     if any(f.evidence.factor_code in ACTION_CODES - {FactorCode.CREDENTIAL_REQUEST} or f.evidence.factor_code == FactorCode.URGENCY_THREAT
            for f in findings):
-        return False
-    if not any(outside(m) for m in CODE_SHOWN.finditer(prose)):
-        return False
+        return None
+    if not any(outside(m) for m in (*CODE_SHOWN.finditer(prose), *CODE_SHOWN_BEFORE.finditer(prose))):
+        return None
+    if CODE_SEND_REQUEST.search(prose) or OTHER_CREDENTIAL.search(prose):
+        return None
+    if any(not INPUT_ONLY.search(f.evidence.snippet) or CODE_SEND_REQUEST.search(f.evidence.snippet) for f in credential):
+        return None
     warnings = [m for m in SHARE_WARNING.finditer(prose) if outside(m)]
     if not warnings:
-        return False
-    if CODE_SEND_REQUEST.search(prose) or OTHER_CREDENTIAL.search(prose):
-        return False
-    if any(not INPUT_ONLY.search(f.evidence.snippet) or CODE_SEND_REQUEST.search(f.evidence.snippet) for f in credential):
-        return False
+        # rules-dev-v8(임시): 공유 금지 경고가 없어도, 교육·인용 구절이 없고 짧으며 요구가 "입력"뿐이고 제3자 언급이 없으면 적용한다.
+        # 번호를 이미 보여 주고 링크 없이 화면에 입력하라는 안내는 번호를 빼낼 경로가 없다. 발신처가 공식인지는 확인하지 않는다.
+        if ignored or len(prose.strip()) > INPUT_ONLY_MAX_LENGTH or THIRD_PARTY.search(prose):
+            return None
+        if any("입력" not in f.evidence.snippet for f in credential):
+            return None
+        return "input_only"
     warning_sentences = [m.span() for m in re.finditer(r"[^.!?\n]+", prose) if any(m.start() <= w.start() < m.end() for w in warnings)]
     if any(not any(left <= t.start() < right for left, right in warning_sentences) for t in THIRD_PARTY.finditer(prose)):
-        return False
-    return True
+        return None
+    return "warned"
 
 
 # rules-dev-v5(임시): 문장 중간의 줄바꿈. 화면 폭이나 OCR 때문에 "인증번호를⏎알려주세요"처럼 끊긴 줄을 구절 검사에서만 잇는다.
@@ -439,8 +452,10 @@ def scan_rules(text: str, *, url_spans: list[tuple[int, int]] | None = None) -> 
         assessment = InputAssessment(status="fragment", reasons=["누가 무엇을 요구하는지 확인하기 어려워요. 보낸 사람과 앞뒤 내용을 포함해 입력해주세요."])
     if ignored:
         assessment.reasons.append("교육·주의 대상으로 명시된 인용 구절은 실제 요구로 채택하지 않았어요.")
-    if code_notice:
+    if code_notice == "warned":
         assessment.reasons.append("인증번호를 직접 보여 주고 타인 공유를 경고하는 안내라 입력 요구로 채택하지 않았어요. 발신처가 공식인지는 확인하지 못했어요.")
+    elif code_notice == "input_only":
+        assessment.reasons.append("인증번호를 직접 보여 주고 링크 없이 화면에 입력하라는 짧은 안내라 입력 요구로 채택하지 않았어요. 발신처가 공식인지는 확인하지 못했어요.")
     if bridged:
         assessment.reasons.append("명의 주장만 있는 도입 문단과 바로 다음의 직접 요구를 제한된 연속 문맥 규칙으로 연결했어요. 표시 없는 화자 전환까지 확인한 것은 아니에요.")
     return RuleScan(findings=findings, has_url=bool(urls), assessment=assessment)

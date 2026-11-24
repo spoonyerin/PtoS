@@ -76,7 +76,7 @@ def test_model_only_raises_insufficient_to_suspicious(text, score, level, reason
     assert result.evidence == base.evidence and result.risk_factors == base.risk_factors
     assert result.action_guidance == base.action_guidance
     assert result.analysis_stages[1].status == "completed"
-    assert result.analysis_version == "rules-model-dev-v7"
+    assert result.analysis_version == "rules-model-dev-v8"
     flagged = score >= model.threshold
     assert (MODEL_SIGNAL_EXPLANATION in result.explanation) is flagged
     assert result.limitations[:2] == [BASE_LIMITATION, MODEL_LIMITATIONS["flagged" if flagged else "not_flagged"]]
