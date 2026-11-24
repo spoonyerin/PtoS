@@ -999,14 +999,13 @@ dialog::backdrop {
   cursor: not-allowed;
 }
 
-/* TTS controls are currently an explicit UI prototype. */
+/* 귀 버튼 하나로 듣기·일시정지·계속 듣기를 전환합니다. */
 .result-card.insufficient_information .result-banner h2 {
   font-size: 1.65em;
 }
+.voice-controls { grid-column: 3; grid-row: 1; transform: translateX(-6px); align-self: start; display: flex; flex-direction: column; align-items: center; width: 60px; }
 .voice-control {
-  grid-column: 3;
-  grid-row: 1;
-  transform: translateX(-6px);
+  width: 60px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1039,6 +1038,7 @@ dialog::backdrop {
   mask: var(--voice-icon) center / contain no-repeat;
   -webkit-mask: var(--voice-icon) center / contain no-repeat;
 }
+.voice-pause { width: 18px; height: 20px; mask: none; -webkit-mask: none; background: linear-gradient(to right, currentColor 0 33%, transparent 33% 67%, currentColor 67% 100%); }
 .voice-ear {
   --voice-icon: url('/assets/result-ear.svg');
 }
