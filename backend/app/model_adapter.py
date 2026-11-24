@@ -10,6 +10,7 @@ import json
 import logging
 import math
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Protocol
@@ -56,6 +57,18 @@ def prepare_model_text(content: str, url_spans: list[tuple[int, int]]) -> str:
     return "".join(chars)
 
 
+# 학습 전용 데이터(train-v5 이후)는 전화번호·긴 숫자를 이 자리표시자로 가려 두었다. 그 데이터로 학습한 모델은
+# 추론 때도 같은 방식으로 가린 문장을 받아야 한다(manifest의 number_masking).
+PHONE_PLACEHOLDER, NUMBER_PLACEHOLDER = "[전화번호]", "[숫자]"
+_PHONE_RE = re.compile(r"(?<!\d)(?:\+?82[- ]?)?0\d{1,2}[- .)]?\d{3,4}[- .]?\d{4}(?!\d)|(?<!\d)1[5-9]\d{2}[- ]?\d{4}(?!\d)")
+_LONG_NUMBER_RE = re.compile(r"\d[\d-]{9,}\d")
+
+
+def mask_numbers(text: str) -> str:
+    """전화번호와 10자리 이상 숫자를 자리표시자로 바꾼다. 학습 데이터를 만들 때와 같은 규칙이다."""
+    return _LONG_NUMBER_RE.sub(NUMBER_PLACEHOLDER, _PHONE_RE.sub(PHONE_PLACEHOLDER, text))
+
+
 def is_inside_repo(path: Path, repo: Path = REPO_ROOT) -> bool:
     # Windows는 대소문자를 구분하지 않으므로 normcase로 비교한다.
     target = os.path.normcase(str(path.resolve()))
@@ -75,7 +88,7 @@ class JoblibTextModel:
     """predict_proba와 classes_를 가진 학습 파이프라인(예: TF-IDF + 로지스틱 회귀)을 감싼다."""
 
     def __init__(self, pipeline, version: str, threshold: float, info: dict | None = None,
-                 normal_threshold: float | None = None):
+                 normal_threshold: float | None = None, number_masking: bool = False):
         classes = list(getattr(pipeline, "classes_", []))
         if not hasattr(pipeline, "predict_proba") or 1 not in classes:
             raise ModelLoadError("MODEL_INTERFACE_INVALID")
@@ -84,10 +97,14 @@ class JoblibTextModel:
         self.version = version
         self.threshold = threshold
         self.normal_threshold = normal_threshold
+        # 학습 데이터처럼 전화번호·긴 숫자를 가린 문장으로 채점한다(manifest의 number_masking).
+        self.number_masking = number_masking
         # 재현 기록용 manifest 일부 (모델·학습 CSV SHA-256, 임계값 상태). 원문은 없다.
         self.info = dict(info or {})
 
     def score(self, text: str) -> float:
+        if self.number_masking:
+            text = mask_numbers(text)
         return float(self._pipeline.predict_proba([text])[0][self._positive])
 
 
@@ -142,6 +159,29 @@ def _with_encoder(classifier, embedding: object):
     return EncodedClassifier(classifier, encode)
 
 
+TRANSFORMER_KIND = "local-finetuned-sequence-classifier"
+TRANSFORMER_WEIGHTS = "model.safetensors"
+
+
+def _transformer(directory: Path, manifest: dict):
+    """미세조정 모델(선택): 모델 폴더의 safetensors 가중치와 설정·토크나이저를 읽는다. 가중치 SHA-256은 이미 확인했다."""
+    from .transformer_model import TOKENIZER_KINDS, SequenceClassifier, TransformerUnavailable
+
+    spec = manifest["transformer"]
+    if (not isinstance(spec, dict) or spec.get("kind") != TRANSFORMER_KIND or manifest["model_file"] != TRANSFORMER_WEIGHTS
+            or spec.get("tokenizer") not in TOKENIZER_KINDS or not isinstance(spec.get("prefix", ""), str)
+            or isinstance(spec.get("max_length"), bool) or not isinstance(spec.get("max_length"), int)
+            or not 1 <= spec["max_length"] <= 512 or not isinstance(spec.get("config_sha256"), str)):
+        raise ModelLoadError("MANIFEST_INVALID")
+    config = directory / "config.json"
+    if not config.is_file() or file_sha256(config) != spec["config_sha256"].lower():
+        raise ModelLoadError("MODEL_SHA256_MISMATCH")
+    try:
+        return SequenceClassifier(directory, spec["tokenizer"], spec.get("prefix", ""), spec["max_length"])
+    except TransformerUnavailable:
+        raise ModelLoadError("TRANSFORMER_UNAVAILABLE") from None
+
+
 def _normal_threshold(manifest: dict) -> float | None:
     """정상 임계값(선택). 없거나 찾지 못한 모델은 None이며 그 모델로는 정상을 반환하지 않는다."""
     if manifest.get("normal_threshold_found") is not True:
@@ -164,6 +204,12 @@ def load_model(directory: Path) -> TextRiskModel:
         raise ModelLoadError("MODEL_FILE_MISSING")
     if file_sha256(model_path) != manifest["model_sha256"].lower():
         raise ModelLoadError("MODEL_SHA256_MISMATCH")
+    number_masking = manifest.get("number_masking", False)
+    if not isinstance(number_masking, bool):
+        raise ModelLoadError("MANIFEST_INVALID")
+    if "transformer" in manifest:
+        pipeline = _transformer(directory, manifest)
+        return JoblibTextModel(pipeline, manifest["model_version"], *_thresholds(manifest), number_masking)
     try:
         import joblib
         import sklearn
@@ -178,11 +224,15 @@ def load_model(directory: Path) -> TextRiskModel:
         raise ModelLoadError("MODEL_LOAD_ERROR") from None
     if "embedding" in manifest:
         pipeline = _with_encoder(pipeline, manifest["embedding"])
-    # dev 교차검증에서 임계값을 찾지 못한 모델은 신호를 내지 않는다.
+    return JoblibTextModel(pipeline, manifest["model_version"], *_thresholds(manifest), number_masking)
+
+
+def _thresholds(manifest: dict) -> tuple[float, dict, float | None]:
+    # dev에서 임계값을 찾지 못한 모델은 신호를 내지 않는다.
     threshold = float(manifest["threshold"]) if manifest.get("threshold_found", True) is not False else math.inf
     info = {"model_sha256": manifest["model_sha256"].lower(), "data_sha256": manifest.get("data_sha256"),
             "threshold_status": manifest.get("threshold_status"), "threshold_found": manifest.get("threshold_found", True)}
-    return JoblibTextModel(pipeline, manifest["model_version"], threshold, info, _normal_threshold(manifest))
+    return threshold, info, _normal_threshold(manifest)
 
 
 def load_configured_model(env: dict[str, str] | None = None) -> ModelState:
