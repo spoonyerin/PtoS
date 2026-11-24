@@ -1495,15 +1495,18 @@ dialog::backdrop {
 .guardian-metadata { font-size: .8em; color: #48566c; margin: 0 0 20px; }
 .guardian-risk { display: flex; align-items: center; gap: 10px; margin: 0 -5px 22px; padding: 12px; border-radius: 8px; background: var(--tint); }
 .guardian-risk-icon { display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; background: var(--risk); border-radius: 50%; }
-.guardian-risk-icon img { width: 27px; height: 27px; }
+.guardian-risk-icon img { display: block; width: 60%; height: 60%; object-fit: contain; margin: 0; }
 .guardian-risk h2 { color: var(--risk); font-size: 1.25em; margin: 0; }
 .guardian-risk h2 small { font-size: .65em; color: #111; }
 .guardian-risk p { margin: 2px 0 0; font-size: .75em; color: #48566c; line-height: 1.4; }
 .guardian-factors { padding: 0; margin: 12px 0 0; list-style: none; display: grid; gap: 16px; }
 .guardian-factors li { display: flex; align-items: start; gap: 10px; }
 .guardian-factors li > div { min-width: 0; }
-.guardian-factors .factor-symbol { width: 26px; height: 26px; }
-.guardian-factors .factor-symbol img { width: 20px; height: 20px; }
+.guardian-factors .factor-symbol { width: 26px; height: 26px; flex: 0 0 26px; line-height: 0; }
+/* SVG 내부 여백을 고려해 흰 그림의 실제 크기를 맞춥니다.
+   건물 아이콘의 공통 0.8배 축소는 이 화면에서는 해제합니다. */
+.guardian-factors .factor-symbol img { display: block; width: 18px; height: 18px; object-fit: contain; transform: none; margin: 0; }
+.guardian-factors .factor-symbol img[src="/assets/risk-link.svg"] { width: 20px; height: 20px; }
 .guardian-factors h3 { font-size: .95em; margin: 0 0 3px; line-height: 1.4; }
 .guardian-factors p { margin: 0; font-size: .8em; line-height: 1.4; color: #48566c; }
 .guardian-opinion { margin-top: 22px; }

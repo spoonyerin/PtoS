@@ -7,6 +7,13 @@ test('공유 링크로 보호자 요청 화면 → 선택/직접 의견 → 중�
   await page.goto('/#family/share/preview')
   await expect(page.getByRole('heading', { name: '가족 보호 요청', exact: true })).toBeFocused()
   await expect(page.getByRole('radio', { name: '위험해 보여요.', exact: true })).toBeChecked()
+  for (const image of await page.locator('.guardian-risk-icon img, .guardian-factors .factor-symbol img').all()) {
+    await expect.poll(() => image.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true)
+    const glyph = await image.boundingBox()
+    const disc = await image.locator('..').boundingBox()
+    expect(Math.abs(glyph!.x + glyph!.width / 2 - disc!.x - disc!.width / 2)).toBeLessThan(1)
+    expect(Math.abs(glyph!.y + glyph!.height / 2 - disc!.y - disc!.height / 2)).toBeLessThan(1)
+  }
   await page.screenshot({ path: 'test-results/guardian-request.png', fullPage: true, style: '.family-dev-panel { display:none !important; }' })
   await page.getByRole('radio', { name: '문제 없어 보여요.', exact: true }).check()
   await expect(page.getByRole('heading', { name: '위험 단계', exact: true })).toBeVisible()
