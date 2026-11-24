@@ -1,8 +1,9 @@
-import { useLayoutEffect, useRef, type FormEvent } from 'react'
+import { useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { characterCount, MAX_CONTENT_LENGTH } from '../input'
 import type { InputType } from '../api/types'
 import { ScreenshotInput } from './ScreenshotInput'
 import { Icon } from './Icons'
+import { LlmReviewNotice } from './LlmReviewNotice'
 import { UrlCheckNotice } from './UrlCheckNotice'
 import { DevelopmentNote } from './DevelopmentNote'
 type Props = {
@@ -11,6 +12,8 @@ type Props = {
   loading: boolean
   error: string | null
   onContentChange: (value: string) => void
+  senderNumber: string
+  onSenderNumberChange: (value: string) => void
   onSubmit: () => void
   onOcrSubmit: (text: string) => void
   onReset: () => void
@@ -23,6 +26,9 @@ function fitUrlField(field: HTMLTextAreaElement) {
 
 export function AnalysisForm(props: Props) {
   const textArea = useRef<HTMLTextAreaElement>(null)
+  // 보낸 번호 칸은 선택이라 처음에는 접어 둔다. 적어 둔 번호가 있으면 펼친 채로 둔다.
+  const [senderOpen, setSenderOpen] = useState(false)
+  const showSender = senderOpen || props.senderNumber !== ''
   const count = characterCount(props.content)
   const url = props.inputType === 'url'
   useLayoutEffect(() => {
@@ -123,6 +129,46 @@ export function AnalysisForm(props: Props) {
               {count.toLocaleString()} / 10,000자
             </p>
           </div>
+          {!url && (
+            <div className="sender-field">
+              {!showSender && (
+                <button
+                  className="sender-toggle"
+                  type="button"
+                  disabled={props.loading}
+                  onClick={() => setSenderOpen(true)}
+                >
+                  보낸 번호도 함께 확인하기 (선택)
+                </button>
+              )}
+              {showSender && (
+                <>
+                  <label className="field-label" htmlFor="sender-number">
+                    보낸 번호 (선택)
+                  </label>
+                  <input
+                    id="sender-number"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="off"
+                    maxLength={24}
+                    value={props.senderNumber}
+                    disabled={props.loading}
+                    placeholder="예: 1500-0000"
+                    onChange={(event) =>
+                      props.onSenderNumberChange(event.target.value)
+                    }
+                    aria-describedby="sender-help"
+                  />
+                  <p className="sender-help" id="sender-help">
+                    문자를 보낸 전화번호를 적으면 문자에 적힌 기관 이름과 맞는지
+                    함께 확인해요. 번호는 바꿔서 표시될 수 있어, 번호가 맞아도
+                    안전하다는 뜻은 아니에요.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
           {url && (
             <section className="link-tips">
               <h2>TIP 이런 링크는 조심하세요!</h2>
@@ -139,6 +185,7 @@ export function AnalysisForm(props: Props) {
             </p>
           )}
           <UrlCheckNotice />
+          <LlmReviewNotice />
           <button
             className="primary-button analyze-button"
             type="submit"

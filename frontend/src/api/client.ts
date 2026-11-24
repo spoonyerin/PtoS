@@ -5,9 +5,10 @@ const readySchema: z.ZodType<ReadyResponse> = z.object({
   status: z.literal('ready'),
   mode: z.literal('rules'),
   url_reputation: z.enum(['live', 'off']),
+  llm_review: z.enum(['live', 'off']),
 })
 
-// URL 평판 조회가 켜져 있는지만 확인한다. 실패하면 호출한 쪽이 '확인 못 함'으로 처리한다.
+// URL 평판 조회와 조건부 추가 검토가 켜져 있는지만 확인한다. 실패하면 호출한 쪽이 '확인 못 함'으로 처리한다.
 export async function requestServiceStatus(signal: AbortSignal): Promise<ReadyResponse> {
   const response = await fetch('/api/v1/health/ready', { signal, cache: 'no-store' })
   if (!response.ok) throw new Error('status unavailable')
@@ -26,7 +27,7 @@ const resultSchema: z.ZodType<AnalysisResponse> = z.object({
   is_demo: z.literal(false),
   analysis_mode: z.literal('rules'),
   evidence: z.array(z.object({
-    factor_code: z.enum(['IMPERSONATION', 'MONEY_REQUEST', 'CREDENTIAL_REQUEST', 'LINK_CLICK', 'APP_INSTALL', 'URGENCY_THREAT', 'URL_REPUTATION_MATCH']),
+    factor_code: z.enum(['IMPERSONATION', 'MONEY_REQUEST', 'CREDENTIAL_REQUEST', 'LINK_CLICK', 'APP_INSTALL', 'URGENCY_THREAT', 'URL_REPUTATION_MATCH', 'CONTACT_REQUEST', 'BENEFIT_LURE', 'SECRECY_REQUEST', 'SENDER_MISMATCH']),
     label: z.string(), source: z.enum(['rule', 'url_reputation']), rule_id: z.string(), snippet: z.string(),
     start: z.number().int().min(0), end: z.number().int().positive(),
   })),
@@ -34,7 +35,7 @@ const resultSchema: z.ZodType<AnalysisResponse> = z.object({
     status: z.enum(['action_identified', 'sentence_present', 'fragment', 'url_only']), reasons: z.array(z.string()),
   }),
   analysis_stages: z.array(z.object({
-    name: z.enum(['rules', 'lightweight_model', 'url_reputation']),
+    name: z.enum(['rules', 'lightweight_model', 'url_reputation', 'sender_check', 'llm_review']),
     status: z.enum(['completed', 'not_implemented', 'not_connected', 'not_applicable', 'unavailable']),
   })),
   policy_reason: z.string(),

@@ -1,5 +1,6 @@
 """API 계약의 원본. OpenAPI → TypeScript로 프론트엔드에 전달한다."""
 
+import re
 from datetime import datetime
 from enum import StrEnum
 from typing import Literal
@@ -9,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from pydantic_core import PydanticCustomError
 
 MAX_CONTENT_LENGTH = 10_000
+SENDER_NUMBER = re.compile(r"\+?[0-9][0-9 \-]{2,19}")
 
 
 class RiskLevel(StrEnum):
@@ -25,6 +27,18 @@ class AnalysisInput(BaseModel):
     input_type: Literal["text", "url", "ocr_text"]
     content: str = Field(min_length=1, max_length=MAX_CONTENT_LENGTH)
     ocr_confirmed: Literal[True] | None = None
+    # 2026-11-17 계약 추가(임시, 팀 확정 필요): 사용자가 직접 적은 보낸 번호. 선택이며 불일치일 때만 판정을 올린다.
+    sender_number: str | None = Field(default=None, max_length=24)
+
+    @field_validator("sender_number", mode="before")
+    @classmethod
+    def clean_sender_number(cls, value):
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        # 오류 응답에 입력값을 되돌려 주지 않는다.
+        if not isinstance(value, str) or not SENDER_NUMBER.fullmatch(value.strip()):
+            raise PydanticCustomError("INVALID_SENDER_NUMBER", "보낸 번호는 숫자와 +, -만 입력해주세요.")
+        return value.strip()
 
     @field_validator("ocr_confirmed", mode="before")
     @classmethod
@@ -66,6 +80,12 @@ class FactorCode(StrEnum):
     APP_INSTALL = "APP_INSTALL"
     URGENCY_THREAT = "URGENCY_THREAT"
     URL_REPUTATION_MATCH = "URL_REPUTATION_MATCH"
+    # 2026-11-17 계약 추가(임시, 팀 확정 필요): 전화·답장 등 연락 유도, 과도한 혜택·당첨, 비밀 유지 요구.
+    CONTACT_REQUEST = "CONTACT_REQUEST"
+    BENEFIT_LURE = "BENEFIT_LURE"
+    SECRECY_REQUEST = "SECRECY_REQUEST"
+    # 2026-11-17 계약 추가(임시, 팀 확정 필요): 문자가 내세운 기관 이름과 사용자가 적은 보낸 번호의 불일치.
+    SENDER_MISMATCH = "SENDER_MISMATCH"
 
 
 class Evidence(BaseModel):
@@ -85,7 +105,9 @@ class InputAssessment(BaseModel):
 
 
 class AnalysisStage(BaseModel):
-    name: Literal["rules", "lightweight_model", "url_reputation"]
+    # llm_review(2026-11-17 계약 추가): 조건부 추가 검토 단계. CompositeAnalyzer의 결과에만 있다.
+    # sender_check(2026-11-17 계약 추가): 보낸 번호 비교. 번호가 없거나 비교할 기관 이름이 없으면 not_applicable.
+    name: Literal["rules", "lightweight_model", "url_reputation", "sender_check", "llm_review"]
     status: Literal["completed", "not_implemented", "not_connected", "not_applicable", "unavailable"]
 
 
@@ -160,11 +182,15 @@ class AnalysisResponse(AnalysisResult):
 
 
 class ReadyResponse(BaseModel):
-    """준비 상태. url_reputation은 실제 외부 평판 조회가 켜졌는지만 알린다 (키·시간 제한·공급자 세부 상태는 넣지 않는다)."""
+    """준비 상태. url_reputation은 실제 외부 평판 조회가, llm_review는 조건부 추가 검토(가린 문장의 외부 전송)가 켜졌는지만 알린다.
+
+    키·주소·모델 이름·시간 제한·공급자 세부 상태는 넣지 않는다.
+    """
 
     status: Literal["ready"] = "ready"
     mode: Literal["rules"] = "rules"
     url_reputation: Literal["live", "off"]
+    llm_review: Literal["live", "off"]
 
 
 class ErrorDetail(BaseModel):

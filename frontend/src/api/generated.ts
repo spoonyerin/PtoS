@@ -107,6 +107,8 @@ export interface components {
             content: string;
             /** Ocr Confirmed */
             ocr_confirmed?: true | null;
+            /** Sender Number */
+            sender_number?: string | null;
         };
         /** AnalysisResponse */
         AnalysisResponse: {
@@ -156,7 +158,7 @@ export interface components {
              * Name
              * @enum {string}
              */
-            name: "rules" | "lightweight_model" | "url_reputation";
+            name: "rules" | "lightweight_model" | "url_reputation" | "sender_check" | "llm_review";
             /**
              * Status
              * @enum {string}
@@ -205,7 +207,7 @@ export interface components {
          * FactorCode
          * @enum {string}
          */
-        FactorCode: "IMPERSONATION" | "MONEY_REQUEST" | "CREDENTIAL_REQUEST" | "LINK_CLICK" | "APP_INSTALL" | "URGENCY_THREAT" | "URL_REPUTATION_MATCH";
+        FactorCode: "IMPERSONATION" | "MONEY_REQUEST" | "CREDENTIAL_REQUEST" | "LINK_CLICK" | "APP_INSTALL" | "URGENCY_THREAT" | "URL_REPUTATION_MATCH" | "CONTACT_REQUEST" | "BENEFIT_LURE" | "SECRECY_REQUEST" | "SENDER_MISMATCH";
         /** InputAssessment */
         InputAssessment: {
             /**
@@ -255,7 +257,9 @@ export interface components {
         };
         /**
          * ReadyResponse
-         * @description 준비 상태. url_reputation은 실제 외부 평판 조회가 켜졌는지만 알린다 (키·시간 제한·공급자 세부 상태는 넣지 않는다).
+         * @description 준비 상태. url_reputation은 실제 외부 평판 조회가, llm_review는 조건부 추가 검토(가린 문장의 외부 전송)가 켜졌는지만 알린다.
+         *
+         *     키·주소·모델 이름·시간 제한·공급자 세부 상태는 넣지 않는다.
          */
         ReadyResponse: {
             /**
@@ -275,6 +279,11 @@ export interface components {
              * @enum {string}
              */
             url_reputation: "live" | "off";
+            /**
+             * Llm Review
+             * @enum {string}
+             */
+            llm_review: "live" | "off";
         };
         /**
          * RiskLevel

@@ -116,8 +116,8 @@ async function openOcrPage() {
 
 test('OCR 확인 단계의 분석 버튼 앞에 전송 안내를 보인다 (상태 미확인)', async () => {
   await openOcrPage()
-  const note = screen.getByRole('note')
-  expect(note).toHaveTextContent('주소에서 만든 일부 정보(해시)만 Google로 전송돼요.')
+  const note = screen.getByText('주소에서 만든 일부 정보(해시)만 Google로 전송돼요.', { exact: false })
+  expect(note).toHaveAttribute('role', 'note')
   expect(note.closest('form')).toContainElement(
     screen.getByRole('button', { name: '확인한 내용으로 분석하기' }),
   )

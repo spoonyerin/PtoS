@@ -11,7 +11,7 @@ test('e2e 백엔드는 URL 평판 외부 조회를 하지 않는다', async ({ r
   expect(body.urls[0].reputation.provider).toBeNull()
   expect(body.analysis_stages[2]).toEqual({ name: 'url_reputation', status: 'not_connected' })
   const ready = await request.get('/api/v1/health/ready')
-  expect(await ready.json()).toEqual({ status: 'ready', mode: 'rules', url_reputation: 'off' })
+  expect(await ready.json()).toEqual({ status: 'ready', mode: 'rules', url_reputation: 'off', llm_review: 'off' })
 })
 
 const NOTICE = '주소에서 만든 일부 정보(해시)만 Google로 전송돼요.'
@@ -24,19 +24,19 @@ test('실제 백엔드(꺼짐)에서는 전송 안내를 숨긴다', async ({ pa
 })
 
 for (const [name, handler] of [
-  ['켜짐', (route: import('@playwright/test').Route) => route.fulfill({ json: { status: 'ready', mode: 'rules', url_reputation: 'live' } })],
+  ['켜짐', (route: import('@playwright/test').Route) => route.fulfill({ json: { status: 'ready', mode: 'rules', url_reputation: 'live', llm_review: 'off' } })],
   ['상태 확인 실패', (route: import('@playwright/test').Route) => route.abort()],
 ] as const) {
   test(`가짜 준비 상태 ${name}이면 문자·URL 입력에 전송 안내를 보이고 스크린샷 업로드에는 없다`, async ({ page }) => {
     await page.route('**/api/v1/health/ready', handler)
     await page.goto('/#text')
-    const notice = page.getByRole('note')
+    const notice = page.getByRole('note').filter({ hasText: NOTICE })
     await expect(notice).toContainText(NOTICE)
     await expect(notice).toContainText('주소를 그대로 보내지 않고')
     // 새 화면에는 입력 방식 라디오가 없다. 홈 메뉴로 링크·사진 확인 화면에 들어간다.
     await page.getByRole('button', { name: '홈으로 돌아가기' }).click()
     await page.getByRole('button', { name: '링크 확인하기' }).click()
-    await expect(page.getByRole('note')).toContainText(NOTICE)
+    await expect(page.getByRole('note').filter({ hasText: NOTICE })).toContainText(NOTICE)
     await page.getByRole('button', { name: '홈으로 돌아가기' }).click()
     await page.getByRole('button', { name: '사진으로 확인하기' }).click()
     await expect(page.getByRole('heading', { name: '사진으로 확인하기' })).toBeVisible()

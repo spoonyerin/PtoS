@@ -3,14 +3,19 @@
 import asyncio
 from typing import Protocol
 
-from .contracts import AnalysisInput, AnalysisResult, AnalysisStage, InputAssessment, UrlFinding, UrlOccurrence, UrlReputation
+from .contracts import AnalysisInput, AnalysisResult, AnalysisStage, InputAssessment, RiskLevel, UrlFinding, UrlOccurrence, UrlReputation
 from .rule_detection import RuleScan, scan_rules
 from .rule_policy import decide
 from .rule_templates import render
 from .reputation_policy import combine_reputation
 from .urls import extract_urls
+from .sender_check import OfficialNumbers, check_sender, combine_sender
+from .llm_policy import SENT_NOTICE, LlmScope, combine_llm, limitation_for, should_review, stage_status
+from .llm_review import LlmReview, LlmReviewer, mask_for_llm
 from .model_adapter import ModelState, prepare_model_text
-from .model_policy import BASE_LIMITATION, MODEL_LIMITATIONS, STAGE_STATUS, ModelOutcome, combine_model
+from .model_policy import (
+    BASE_LIMITATION, MODEL_LIMITATIONS, NORMAL_ACTIONS, STAGE_STATUS, ModelOutcome, combine_model, normal_eligible,
+)
 from .url_reputation import DisconnectedReputationProvider, UrlReputationProvider
 
 
@@ -22,7 +27,9 @@ class Analyzer(Protocol):
 
 
 class RuleBasedAnalyzer:
-    def __init__(self, reputation_provider: UrlReputationProvider | None = None):
+    def __init__(self, reputation_provider: UrlReputationProvider | None = None, official_numbers: OfficialNumbers | None = None):
+        # 공식 번호 목록은 create_app이 환경 변수로 지정된 파일에서 한 번 읽는다. 없으면 번호 형태만 비교한다.
+        self.official_numbers = official_numbers
         # 실제 평판 조회는 create_app에서 앱당 한 번만 만든다. 직접 생성한 분석기는 외부로 조회하지 않는다.
         self.reputation_provider = reputation_provider if reputation_provider is not None else DisconnectedReputationProvider("not_configured")
 
@@ -53,11 +60,15 @@ class RuleBasedAnalyzer:
         level, reason = decide(scan)
         explanation, actions = render(scan, level)
         evidence = [finding.evidence for finding in scan.findings]
+        # 보낸 번호 비교: 불일치만 판정을 올린다. 번호가 맞아도 낮추지 않는다 (sender_check.py).
+        sender = check_sender(None if data.input_type == "url" else data.sender_number, scan.findings, self.official_numbers)
+        level, reason, explanation, actions, evidence = combine_sender(level, reason, explanation, actions, evidence, sender)
         level, reason, explanation, actions, evidence = combine_reputation(level, reason, explanation, actions, evidence, urls)
         limitations = [
             RULES_ONLY_LIMITATION,
             "부정·인용·대화 주체를 처리하는 규칙은 제한적이며 우회 표현을 놓치거나 잘못 경고할 수 있어요.",
             *scan.assessment.reasons,
+            *sender.limitations,
         ]
         valid_urls = [url for url in urls if url.validation_status == "valid"]
         if not valid_urls:
@@ -79,12 +90,13 @@ class RuleBasedAnalyzer:
             risk_level=level, confidence=None,
             risk_factors=list(dict.fromkeys(item.label for item in evidence)),
             explanation=explanation, action_guidance=actions,
-            limitations=limitations, analysis_version="rules-reputation-dev-v4",
+            limitations=limitations, analysis_version="rules-reputation-dev-v8",
             evidence=evidence, input_assessment=scan.assessment,
             analysis_stages=[
                 AnalysisStage(name="rules", status="completed"),
                 AnalysisStage(name="lightweight_model", status="not_implemented"),
                 AnalysisStage(name="url_reputation", status=reputation_stage),
+                AnalysisStage(name="sender_check", status=sender.stage),
             ],
             policy_reason=reason, urls=urls,
         )
@@ -96,12 +108,28 @@ class CompositeAnalyzer:
     모델 단계가 없거나 실패하면 규칙 결과와 근거를 그대로 두고 analysis_stages와 limitations에만 표시한다.
     """
 
-    VERSION = "rules-model-dev-v3"
+    VERSION = "rules-model-dev-v8"
 
-    def __init__(self, rules: RuleBasedAnalyzer, model_state: ModelState, model_timeout: float = 1.0):
+    def __init__(self, rules: RuleBasedAnalyzer, model_state: ModelState, model_timeout: float = 1.0,
+                 llm: LlmReviewer | None = None, llm_scope: LlmScope = "model_uncertain", llm_timeout: float = 3.0):
         self.rules = rules
         self.model_state = model_state
         self.model_timeout = model_timeout
+        # 조건부 추가 검토. 기본은 없음이다. create_app은 켜는 조건을 모두 만족할 때만 넣는다 (docs/LLM_POLICY.md).
+        self.llm = llm
+        self.llm_scope = llm_scope
+        self.llm_timeout = llm_timeout
+
+    async def _llm_review(self, data: AnalysisInput) -> LlmReview:
+        masked = mask_for_llm(data.content, extract_urls(data.content).spans)
+        try:
+            async with asyncio.timeout(self.llm_timeout):
+                return await self.llm.review(masked)
+        except TimeoutError:
+            return LlmReview("timeout")
+        except Exception:
+            # 예외 문자열에 입력이 섞일 수 있어 기록하지 않는다.
+            return LlmReview("unavailable")
 
     async def _model_outcome(self, data: AnalysisInput) -> ModelOutcome:
         if data.input_type == "url":
@@ -119,15 +147,35 @@ class CompositeAnalyzer:
         except Exception:
             # 예외 문자열에 입력이 섞일 수 있어 기록하지 않는다.
             return "error"
-        return "flagged" if score >= model.threshold else "not_flagged"
+        if score >= model.threshold:
+            return "flagged"
+        # 정상 임계값이 있는 모델만: 교차검증에서 어떤 사기 문자의 점수보다도 낮은 구간.
+        normal_threshold = getattr(model, "normal_threshold", None)
+        return "clear" if normal_threshold is not None and score < normal_threshold else "not_flagged"
 
     async def analyze(self, data: AnalysisInput) -> AnalysisResult:
         result, outcome = await asyncio.gather(self.rules.analyze(data), self._model_outcome(data))
-        level, reason, explanation = combine_model(result.risk_level, result.policy_reason, result.explanation, outcome)
+        reputation_stage = next(stage.status for stage in result.analysis_stages if stage.name == "url_reputation")
+        eligible = normal_eligible(result.risk_level, result.input_assessment.status, {e.rule_id for e in result.evidence},
+                                   bool(result.urls), reputation_stage)
+        level, reason, explanation = combine_model(result.risk_level, result.policy_reason, result.explanation, outcome, eligible)
+        actions = result.action_guidance
+        if level == RiskLevel.NORMAL and not result.evidence:
+            actions = NORMAL_ACTIONS
         limitations = [BASE_LIMITATION, MODEL_LIMITATIONS[outcome], *(text for text in result.limitations if text != RULES_ONLY_LIMITATION)]
         stages = [stage if stage.name != "lightweight_model" else AnalysisStage(name="lightweight_model", status=STAGE_STATUS[outcome])
                   for stage in result.analysis_stages]
+        # 조건부 추가 검토: 규칙과 모델을 모두 본 뒤, 판단하기 어려운 경우에만 호출한다. 실패해도 앞의 결과와 근거는 그대로다.
+        review = None
+        has_normal_band = getattr(self.model_state.model, "normal_threshold", None) is not None
+        if self.llm is not None and should_review(level, outcome, result.input_assessment.status, bool(result.evidence),
+                                                  self.llm_scope, has_normal_band):
+            review = await self._llm_review(data)
+            level, reason, explanation = combine_llm(level, reason, explanation, review)
+            limitations += [SENT_NOTICE, limitation_for(review)]
+        stages.append(AnalysisStage(name="llm_review", status=stage_status(self.llm is not None, review)))
         return result.model_copy(update={
+            "action_guidance": actions,
             "risk_level": level, "policy_reason": reason, "explanation": explanation,
             "limitations": limitations, "analysis_version": self.VERSION, "analysis_stages": stages,
         })

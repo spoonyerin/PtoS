@@ -18,6 +18,7 @@ const readPage = (): Page =>
 export default function App() {
   const [page, setPage] = useState<Page>(readPage)
   const [content, setContent] = useState('')
+  const [senderNumber, setSenderNumber] = useState('')
   const [panel, setPanel] = useState<'guide' | 'settings' | 'notice' | null>(
     null,
   )
@@ -32,6 +33,7 @@ export default function App() {
       analysis.reset()
       // 뒤로/앞으로 이동으로 다른 확인 화면에 원문이 넘어가지 않게 지운다.
       setContent('')
+      setSenderNumber('')
     }
     window.addEventListener('hashchange', change)
     window.addEventListener('popstate', change)
@@ -51,6 +53,7 @@ export default function App() {
   function navigate(next: Page) {
     analysis.reset()
     setContent('')
+    setSenderNumber('')
     history.pushState(
       null,
       '',
@@ -238,6 +241,11 @@ export default function App() {
                   setContent(value)
                   analysis.reset()
                 }}
+                senderNumber={senderNumber}
+                onSenderNumberChange={(value) => {
+                  setSenderNumber(value)
+                  analysis.reset()
+                }}
                 onReset={analysis.reset}
                 onOcrSubmit={(text) => {
                   void analysis.submit({
@@ -247,7 +255,12 @@ export default function App() {
                   })
                 }}
                 onSubmit={() => {
-                  void analysis.submit({ input_type: page, content })
+                  const sender = senderNumber.trim()
+                  void analysis.submit(
+                    page === 'text' && sender
+                      ? { input_type: page, content, sender_number: sender }
+                      : { input_type: page, content },
+                  )
                 }}
               />
             </div>

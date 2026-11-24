@@ -93,6 +93,8 @@ class EvalRow:
     review_status: str
     # 직접 채운 이진 라벨(scam/legit). 비어 있으면 None.
     expected_binary: str | None = None
+    # 출처 메모. 학습에서 뺄 출처를 고를 때만 쓰고 리포트에는 넣지 않는다.
+    source: str = field(default="", repr=False)
 
 
 def binary_label(row: EvalRow) -> tuple[str | None, str | None]:
@@ -173,6 +175,7 @@ def load_rows(path: Path) -> list[EvalRow]:
                 campaign_id=(record["campaign_id"] or "").strip(),
                 review_status=(record["review_status"] or "").strip(),
                 expected_binary=binary or None,
+                source=(record["source"] or "").strip(),
             ))
     return rows
 
@@ -503,13 +506,20 @@ def _binary_section(title: str, outcomes: list[Outcome]) -> list[str]:
         "",
         f"- 사기 경고율 (scam 중 의심·위험): {_rate(m.scam_warned, m.scam_total)} (분모에 오류 {m.scam_errors}건 포함)",
         f"- 사기 놓침 (scam 중 정보 부족·정상): {m.scam_missed}건",
+        f"- 사기 → 정상 판정 (가장 나쁜 오류, 위 놓침에 포함): {m.confusion['scam'][RiskLevel.NORMAL.value]}건"
+        f" / 정상 → 정상 판정: {_rate(m.confusion['legit'][RiskLevel.NORMAL.value], m.legit_total)}",
         f"- 정상 오탐률 (legit 중 의심·위험): {_rate(m.legit_flagged, m.legit_total)} (분모에 오류 {m.legit_errors}건 포함)",
         f"- 정상 → 위험 (심각한 오탐): {m.legit_dangerous}건",
         f"- 사기 중 위험 판정 비율: {_rate(m.scam_dangerous, m.scam_total)}",
         f"- 정보 부족 판정 비율: {_rate(m.insufficient_predicted, m.total)}",
         f"- 오류 (입력 오류·시간 초과·분석 오류, 경고 없음으로 합치지 않음): {m.errors}건",
-        "",
     ]
+    if m.errors:
+        # 오류 행을 분모에서 뺀 값도 함께 적는다. 위 비율(오류 포함)을 대체하지 않는다.
+        lines.append(
+            f"- 오류 행 제외 시: 사기 경고율 {_rate(m.scam_warned, m.scam_total - m.scam_errors)}, "
+            f"정상 오탐률 {_rate(m.legit_flagged, m.legit_total - m.legit_errors)}")
+    lines.append("")
     return lines
 
 

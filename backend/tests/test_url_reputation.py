@@ -76,7 +76,7 @@ def test_ready_reports_only_whether_lookups_are_live(env, expected, monkeypatch)
     with TestClient(create_app()) as client:
         response = client.get("/api/v1/health/ready")
     # Only on/off: no key, timeout, provider name or provider state. No external call is made for ready.
-    assert response.json() == {"status": "ready", "mode": "rules", "url_reputation": expected}
+    assert response.json() == {"status": "ready", "mode": "rules", "url_reputation": expected, "llm_review": "off"}
     assert KEY not in response.text and "timeout" not in response.text and "google" not in response.text.lower()
 
 

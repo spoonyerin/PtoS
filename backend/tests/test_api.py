@@ -33,7 +33,7 @@ def test_input_drives_rule_results(client, text, level):
     assert body["explanation"] and body["action_guidance"]
     assert "규칙 기반 개발 버전" in body["limitations"][0]
     assert "규칙 결과만" in body["limitations"][1]
-    assert body["analysis_version"] == "rules-model-dev-v3"
+    assert body["analysis_version"] == "rules-model-dev-v8"
     assert body["analysis_stages"][1] == {"name": "lightweight_model", "status": "not_connected"}
     for evidence in body["evidence"]:
         assert text[evidence["start"]:evidence["end"]] == evidence["snippet"]
@@ -110,7 +110,7 @@ def test_malformed_json_and_health(client):
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "INVALID_INPUT"
     assert client.get("/api/v1/health/live").json() == {"status": "ok"}
-    assert client.get("/api/v1/health/ready").json() == {"status": "ready", "mode": "rules", "url_reputation": "off"}
+    assert client.get("/api/v1/health/ready").json() == {"status": "ready", "mode": "rules", "url_reputation": "off", "llm_review": "off"}
 
 
 def test_direct_idn_url_contract(client):

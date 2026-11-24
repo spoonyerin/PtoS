@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from uuid import uuid4
@@ -10,6 +11,8 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
 from .analyzers import Analyzer, CompositeAnalyzer, RuleBasedAnalyzer
+from .llm_review import LlmSetup, create_llm_reviewer
+from .sender_check import load_official_numbers
 from .model_adapter import ModelState, load_configured_model
 from .contracts import (
     AnalysisInput,
@@ -51,16 +54,19 @@ def create_app(
     ocr_timeout: float = 15.0,
     model_loader: Callable[[], ModelState] = load_configured_model,
     model_timeout: float = 1.0,
+    llm_setup: Callable[[], LlmSetup] | None = None,
 ) -> FastAPI:
     reputation_provider = None
+    llm_reviewer = None
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         yield
         # 실제 전송기의 HTTP 연결을 정리한다. 미연결 공급자에는 aclose가 없다.
-        close = getattr(reputation_provider, "aclose", None)
-        if close is not None:
-            await close()
+        for resource in (reputation_provider, llm_reviewer):
+            close = getattr(resource, "aclose", None)
+            if close is not None:
+                await close()
 
     app = FastAPI(title="PtoS 규칙·URL·OCR 개발 API", version="0.5.0", lifespan=lifespan)
     # App-scoped shared in-memory cache/budget, never per-request keys.
@@ -69,7 +75,15 @@ def create_app(
         # 모델은 앱 생성 시 한 번만 로드한다. 실패해도 서버는 뜨고 규칙 결과만 낸다.
         # 모델 제한 시간(개발 제안 1초)은 전체 분석 제한보다 짧아 모델 지연이 504가 되지 않는다.
         model_state = model_loader()
-        analyzer_factory = lambda: CompositeAnalyzer(RuleBasedAnalyzer(reputation_provider), model_state, model_timeout)
+        # 조건부 추가 검토는 키·모드·주소·모델 이름이 모두 있을 때만 켠다. 로그에는 고정 코드만 남긴다.
+        setup = (llm_setup or (lambda: create_llm_reviewer(dict(os.environ))))()
+        llm_reviewer = setup.reviewer
+        logger.info("LLM_REVIEW state=%s", setup.reason)
+        # 공식 번호 목록(선택). 없거나 잘못됐으면 번호 형태만 비교한다. 로그에는 고정 코드만 남긴다.
+        official_numbers, numbers_state = load_official_numbers(dict(os.environ))
+        logger.info("SENDER_NUMBERS state=%s", numbers_state)
+        analyzer_factory = lambda: CompositeAnalyzer(RuleBasedAnalyzer(reputation_provider, official_numbers), model_state, model_timeout,
+                                                     llm=llm_reviewer)
     ocr_lock = asyncio.Lock()
 
     def error_response(request: Request, status: int, code: str, message: str, retryable: bool):
@@ -97,6 +111,8 @@ def create_app(
         # 기본 422 응답은 검증 오류에 원문을 포함하므로 별도 응답을 사용한다.
         too_long = any(e["type"] == "string_too_long" for e in exc.errors())
         for error in exc.errors():
+            if error["type"] == "INVALID_SENDER_NUMBER":
+                return error_response(request, 422, error["type"], "보낸 번호는 숫자와 +, -만 입력해주세요.", False)
             if error["type"] == "OCR_CONFIRMATION_REQUIRED":
                 return error_response(request, 422, error["type"], "추출한 문자와 URL을 확인한 뒤 분석해주세요.", False)
             if error["type"] in PUBLIC_ERRORS:
@@ -118,7 +134,7 @@ def create_app(
     async def ready():
         # 화면이 "주소의 일부 정보(해시)가 Google로 전송돼요" 안내를 켜거나 끄는 데만 쓴다.
         live = isinstance(reputation_provider, SafeBrowsingV5Provider)
-        return ReadyResponse(url_reputation="live" if live else "off")
+        return ReadyResponse(url_reputation="live" if live else "off", llm_review="live" if llm_reviewer is not None else "off")
 
     @app.post("/api/v1/ocr/review", response_model=OcrReviewResponse, responses=error_responses(422))
     async def review_ocr(body: OcrReviewRequest, request: Request):
@@ -183,7 +199,8 @@ def create_app(
         try:
             async with asyncio.timeout(analysis_timeout):
                 analyzer = analyzer_factory()
-                result = await analyzer.analyze(AnalysisInput(input_type=body.input_type, content=body.content, ocr_confirmed=body.ocr_confirmed))
+                result = await analyzer.analyze(AnalysisInput(input_type=body.input_type, content=body.content, ocr_confirmed=body.ocr_confirmed,
+                                                              sender_number=body.sender_number))
         except TimeoutError:
             return error_response(request, 504, "ANALYSIS_TIMEOUT", "분석 시간이 길어지고 있어요. 잠시 후 다시 시도해주세요.", True)
         return AnalysisResponse(**result.model_dump(), request_id=request.state.request_id)
