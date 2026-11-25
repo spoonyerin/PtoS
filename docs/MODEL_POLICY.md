@@ -205,7 +205,7 @@ dev에서 규칙+선택 모델이 놓친 사기 38건은 **모두 주소가 있�
 ### 링크·광고 형식 정상 문자를 더한 재학습 (2026-11-26, 임시, 팀 확정 필요)
 
 - **이유:** test-2를 dev로 옮겨 보니 실제 정상 문자 점수 중간값이 0.998이었다. 학습 세트 정상 문자에 링크·(광고)·수신거부 표기가 거의 없어 이 표기가 사기 쪽으로 쏠려 있었다(링크 있는 행 사기 985 / 정상 269).
-- **학습 세트:** `finetune-v3` = finetune-v2 + 합성 정상 문자 v2 1,591행(`tools/gen_synthetic_legit_links.py`, 저장소 밖). 설정은 이전과 같다(KoELECTRA-small 미세조정, 2 epoch, 최대 128토큰, `number_masking: true`). test 겹침 제거는 사용자가 실행한다(HANDOVER 9절).
+- **학습 세트:** `finetune-v3` = finetune-v2 + 합성 정상 문자 v2 1,591행(`tools/gen_synthetic_legit_links.py`, 저장소 밖). 설정은 이전과 같다(KoELECTRA-small 미세조정, 2 epoch, 최대 128토큰, `number_masking: true`). test 겹침 제거는 사용자가 실행했다(eval-v2.1 test와 비슷한 합성 2행 제외). 모델은 제외 전 세트로 학습했고, 사용자가 다시 학습하지 않기로 했다(HANDOVER 9절).
 - **임계값:** `dev-v3-combined.csv`(eval-v2.1 dev + 실제 문자 dev `real-dev-v2.csv`, 627행) 점수에서 정상 신호 2% 허용으로 골랐다. 신호 0.99938, 정상 0.000469.
 - **서버 모델 폴더(사용자 결정, 2026-11-26):** 버전 `koelectra-small-ft-v3`, `C:/_Coding/ptos-eval/ptos-eval/models/koelectra-small-ft-v3/`. 규칙 v9와 함께 dev(in-sample): eval-v2.1 dev 사기 경고 249/258, 정상 오탐 12/241, 정상 → 정상 75 / 실제 문자 dev 사기 경고 45/46, 정상 오탐 9/66, 정상 → 정상 11. 사기 → 정상 0, 정상 → 위험 0. 실제 문자 dev AUC 0.848(r2) → 0.914. 규칙·합성 정상 유형·임계값을 모두 같은 dev를 보고 정해 수치가 부풀려져 있다. 성능 주장은 test-3로 한다.
 - 이전 서버 모델 `koelectra-small-ft-v1-r2`는 비교용으로 남겨 둔다.
