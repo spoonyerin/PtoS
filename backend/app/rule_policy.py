@@ -55,4 +55,13 @@ def decide(scan: RuleScan) -> tuple[RiskLevel, str]:
     # 3차(임시): 가족 호칭 + 휴대폰 사정 + 답장·메신저 추가 요청. 금전·링크 요구가 없어도 의심으로 본다(위험으로 올리지 않는다).
     if any(f.kind == "contact" for f in scan.findings):
         return RiskLevel.SUSPICIOUS, "FAMILY_DEVICE_CONTACT"
+    # v9(임시): 안부·재회 표현과 함께 해외 메신저 아이디로 연락 유도. 위험으로 올리지 않는다.
+    if any(f.kind == "messenger" for f in scan.findings):
+        return RiskLevel.SUSPICIOUS, "MESSENGER_ID_CONTACT"
+    # v9(임시): 위반·처벌 통지서를 보냈다며 주소를 준다(주소가 있을 때만 근거가 생긴다).
+    if any(f.kind == "penalty_notice" for f in scan.findings):
+        return RiskLevel.SUSPICIOUS, "PENALTY_NOTICE_LINK"
+    # v9(임시): 무직자·소득 증빙 없이·신용 무관 같은 자격 조건을 없앤 대출 권유.
+    if any(f.kind == "loan_lure" for f in scan.findings):
+        return RiskLevel.SUSPICIOUS, "LOAN_LURE"
     return RiskLevel.INSUFFICIENT_INFORMATION, "ANALYSIS_INCOMPLETE"

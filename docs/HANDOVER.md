@@ -619,7 +619,7 @@ e5는 추가 데이터를 넣으면 신호 임계값이 올라가(0.631 → 0.81
 
 | 항목 | 값 |
 | --- | --- |
-| 브랜치 | `feat/real-dev-v2`(규칙 v9는 커밋 `515afa8`에 들어 있음) |
+| 브랜치 | `feat/real-dev-v2` |
 | `analysis_version` | `rules-reputation-dev-v9`(`RuleBasedAnalyzer`) / `rules-model-dev-v9`(API 응답). API 스키마는 v7과 같다 |
 | 규칙 버전 | `rules-dev-v9`(`docs/RULE_POLICY.md`, 임시, 팀 확정 필요) |
 | 서버 모델 폴더 | `koelectra-small-ft-v3`(finetune-v3로 미세조정, 저장소 밖 `C:/_Coding/ptos-eval/ptos-eval/models/`). 쓰려면 `backend/requirements-embedding.txt` 설치 후 `PTOS_MODEL_PATH`에 이 폴더를 준다. 모델 파일은 커밋하지 않고 팀 내부로만 공유한다 |

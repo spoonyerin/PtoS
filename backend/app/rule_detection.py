@@ -103,7 +103,7 @@ BRACKET = re.compile(r"\[[^\]\r\n]{1,20}\]")
 HEADER_SECTOR = re.compile(
     r"은행|뱅크|카드|캐피탈|금융|증권|저축|보험|공단|공사|법원|검찰|경찰|우체국|우정|우편|택배|배송|통운|물류|로지스"
     r"|통신|텔레콤|국세|세무|관세|연금|정부|시청|구청|군청|도로|하이패스|민원|센터|보안|통지|통보|고지|위반|채용|계정"
-    r"|그룹|주식회사|㈜|\(주\)|[청부처]\]$")
+    r"|그룹|주식회사|㈜|\(주\)|(?<!거)[청부처]\]$")  # v9: "[무료수신거부]"의 "부]"는 기관이 아니다.
 # 임시: 줄 첫머리에서 부모·조부모를 부르고 바로 1인칭으로 말하거나 휴대폰 고장·분실을 설명하는 말투.
 FAMILY_CALL = r"(?:엄마|아빠|어머니|아버지|어머님|아버님|할머니|할아버지)"
 FAMILY = re.compile(
@@ -134,6 +134,22 @@ NOT_YOU = re.compile(r"본인\s*(?:요청\s*|사용\s*|결제\s*)?(?:이\s*)?아
 # rules-dev-v6(임시): 과도한 혜택·당첨. 단독으로는 약한 근거다.
 BENEFIT = re.compile(r"당첨|무료\s*(?:쿠폰|증정|지급|제공|나눔)|환급금|지원금|보조금|장려금|경품|사은품|상금|수익\s*보장|고수익")
 BENEFIT_PRESSURE = re.compile(r"미수령|소멸|환수|임박|마감|선착순|기한")
+# rules-dev-v9(임시): 해외 메신저 아이디로 연락을 유도하는 안부·지인 사칭형. 아이디 + (안부·재회 표현 또는 [국제발신])이 모두 있을 때만.
+MESSENGER_ID = re.compile(
+    r"(?:LINE|라인|텔레그램|텔레|telegram|위챗|wechat|왓츠앱|whatsapp)\s*(?:아이디|ID)?\s*[:：]?\s*['\"]?[A-Za-z][A-Za-z0-9_.]{2,}",
+    re.IGNORECASE)
+MESSENGER_GREETING = re.compile(r"오랜만|기억\s*(?:나|해|하|하시)|보고\s*싶|동창|만나(?:자|요|서)|연락처가?\s*(?:없어|사라|바뀌|지워)|\[국제발신\]")
+# rules-dev-v9(임시): 위반·처벌 통지서를 보냈다며 주소를 주는 형태. 주소가 있을 때만 의심으로 본다(rule_policy).
+PENALTY_NOTICE = re.compile(
+    r"(?:위반|미준수|미정차|처벌|과태료|범칙금|벌점|단속)[^\n]{0,20}?(?P<notice>(?:통지서|고지서|통지|고지)[^\n]{0,10}?(?:발송|전송|도착|발부|송달))")
+# 근거 구간은 "통지서 … 발송" 부분만 잡는다(앞의 "과태료"는 기존 불이익 근거와 겹치지 않게).
+# rules-dev-v9(임시): 자격 조건을 없애 주는 대출 권유(무직자·소득 증빙 없이·신용 무관·미신청 재안내). 대출·한도 표현과 함께일 때만.
+LOAN_WORD = re.compile(r"대출|한도|마이너스\s*통장|정책\s*자금|자금\s*지원")
+LOAN_LURE = re.compile(
+    r"무직자|소득\s*증빙\s*(?:이\s*)?(?:없|확인되지\s*않|불필요|필요\s*없)|신용\s*(?:등급\s*)?(?:무관|상관\s*없)"
+    r"|미신청(?:으로|자로)?\s*확인|부채가\s*많")
+# rules-dev-v9(임시): "6자리 숫자 알려 줘"처럼 인증용 숫자를 넘기라는 요구. 대상어(인증번호)가 없어도 민감정보 요구로 본다.
+DIGITS_HANDOVER = re.compile(r"\d\s*자리\s*(?:숫자|번호|코드)\s*(?:를|을)?\s*(?:좀\s*)?(?:알려|보내|불러|말해)")
 # rules-dev-v6(임시): 비밀 유지 요구. 인증번호·비밀번호를 남에게 알리지 말라는 보안 안내는 같은 구절의 대상어로 구분해 제외한다.
 SECRECY = re.compile(
     r"(?:아무(?:에게|한테)도|누구(?:에게|한테)도|다른\s*사람(?:에게|한테)(?:는|도)?|(?:가족|엄마|아빠|부모님?|주변)(?:에게|한테|에)(?:는|도)?)"
@@ -206,7 +222,8 @@ class RuleScan:
 
 # rules-dev-v4 2차 E(임시): 정상 인증번호 안내 예외. 번호를 직접 보여 주고 공유 금지를 경고하며, 주소·다른 요구·제3자 확인
 # 언급이 없을 때만 "입력" 요구 근거를 뺀다. 발신처가 공식인지는 확인하지 않는다.
-CODE_SHOWN = re.compile(r"(?:인증\s*번호|OTP|인증\s*코드)\s*(?:는|은|:|：)?\s*(?:\[[^\]\r\n]{1,10}\]|(?<!\d)\d{4,8}(?!\d))", re.IGNORECASE)
+# rules-dev-v9(임시): 번호를 괄호로 감싼 형식("인증번호(583920)", "인증번호([인증번호])")도 번호를 보여 준 것으로 본다.
+CODE_SHOWN = re.compile(r"(?:인증\s*번호|OTP|인증\s*코드)\s*(?:는|은|:|：)?\s*\(?\s*(?:\[[^\]\r\n]{1,10}\]|(?<!\d)\d{4,8}(?!\d))", re.IGNORECASE)
 # rules-dev-v8(임시): 번호가 대상어 앞에 오는 형식("[123456] 본인확인 인증번호"). 대괄호 머리말([가상은행])과 헷갈리지 않게
 # 앞쪽 번호는 숫자 4~8자리(대괄호 있어도 됨)나 가린 표시([인증번호])만 인정하고, 사이에는 짧은 낱말 두 개까지만 둔다.
 CODE_SHOWN_BEFORE = re.compile(r"(?:\[\s*(?:\d{4,8}|인증\s*번호)\s*\]|(?<![\d\w])\d{4,8}(?!\d))\s*(?:[가-힣]{1,6}\s*){0,2}?"
@@ -423,6 +440,22 @@ def scan_rules(text: str, *, url_spans: list[tuple[int, int]] | None = None) -> 
     benefit_pressure = bool(BENEFIT_PRESSURE.search(prose))
     for match in BENEFIT.finditer(prose):
         add(FactorCode.BENEFIT_LURE, *match.span(), "benefit_pressure" if benefit_pressure else "benefit", "")
+    # v9(임시): 해외 메신저 아이디 연락 유도, 위반 통지서 + 주소, 자격 조건을 없앤 대출 권유, 숫자 넘기기 요구.
+    if MESSENGER_GREETING.search(prose):
+        for match in MESSENGER_ID.finditer(prose):
+            if not overlaps(*match.span(), ignored):
+                add(FactorCode.CONTACT_REQUEST, *match.span(), "messenger", "messenger")
+    if urls:
+        for match in PENALTY_NOTICE.finditer(prose):
+            if not overlaps(*match.span(), ignored):
+                add(FactorCode.URGENCY_THREAT, *match.span("notice"), "penalty_notice", "notice-link")
+    if LOAN_WORD.search(prose):
+        for match in LOAN_LURE.finditer(prose):
+            if not overlaps(*match.span(), ignored):
+                add(FactorCode.BENEFIT_LURE, *match.span(), "loan_lure", "loan")
+    for match in DIGITS_HANDOVER.finditer(prose):
+        if not overlaps(*match.span(), ignored):
+            add(FactorCode.CREDENTIAL_REQUEST, *match.span(), rule="digits")
     for match in SECRECY.finditer(prose):
         # 인증번호·비밀번호를 남에게 알리지 말라는 보안 안내는 대상어가 같은 문장이나 바로 앞 문장에 있다.
         if not SECRECY_SAFE_TARGET.search(prose, max(0, match.start() - 60), match.end()):

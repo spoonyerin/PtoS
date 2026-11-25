@@ -97,12 +97,30 @@ def test_quoted_warning_does_not_enable_input_only_exception():
     assert result.risk_level.value == "suspicious"
 
 
-# 알려진 한계(현재 판정 기록용): 번호를 괄호로 보여 주는 형식("인증번호(583920)")은 E·v8 모두 "번호를 보여 줌"으로
-# 보지 않아 경고 없는 입력 안내가 suspicious로 남는다. 바꾸면 이 기대값을 함께 고친다.
-def test_known_limitation_parenthesized_code():
-    result = analyze("[가상게임] 본인확인 인증번호(583920)를 입력해 주세요.")
-    assert F.CREDENTIAL_REQUEST in codes(result)
-    assert result.risk_level.value == "suspicious"
+# v9: 번호를 괄호로 보여 주는 형식도 짧은 입력 안내 예외에 들어간다.
+@pytest.mark.parametrize("text", [
+    "[가상게임] 본인확인 인증번호(583920)를 입력해 주세요.",
+    "[가상서비스] 본인확인 인증번호([인증번호])를 입력해주세요",
+])
+def test_parenthesized_code(text):
+    result = analyze(text)
+    assert F.CREDENTIAL_REQUEST not in codes(result)
+    assert result.risk_level.value == "insufficient_information"
+
+
+# v9: 괄호 형식이어도 알려 달라는 요구나 주소가 있으면 예외가 아니다.
+@pytest.mark.parametrize("text", [
+    "[가상은행] 인증번호(583920)를 회신해 주세요.",
+    "[가상은행] 인증번호(583920)를 입력하세요. http://example.invalid/a",
+])
+def test_parenthesized_code_not_exempted(text):
+    assert F.CREDENTIAL_REQUEST in codes(analyze(text))
+
+
+# v9: "[무료수신거부]"는 기관 머리말이 아니다. "[행정안전부]"처럼 부처 이름은 계속 머리말이다.
+def test_opt_out_bracket_is_not_header():
+    assert F.IMPERSONATION not in codes(analyze("[무료수신거부] 0808880702"))
+    assert F.IMPERSONATION in codes(analyze("[행정안전부] 안내 말씀드립니다."))
 
 
 # 예외가 적용돼도 정상(normal)은 아니다. 규칙만으로는 정보 부족이다.
