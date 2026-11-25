@@ -6,6 +6,9 @@ const readySchema: z.ZodType<ReadyResponse> = z.object({
   mode: z.literal('rules'),
   url_reputation: z.enum(['live', 'off']),
   llm_review: z.enum(['live', 'off']),
+  // 가족 보호(발표 시연 한정). 예전 서버는 이 값을 보내지 않으므로 꺼짐으로 본다.
+  family: z.enum(['live', 'off']).default('off'),
+  push: z.enum(['live', 'off']).default('off'),
 })
 
 // URL 평판 조회와 조건부 추가 검토가 켜져 있는지만 확인한다. 실패하면 호출한 쪽이 '확인 못 함'으로 처리한다.

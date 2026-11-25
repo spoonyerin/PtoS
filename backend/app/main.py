@@ -28,6 +28,8 @@ from .ocr import OcrEngine, TesseractOcr, OcrError, OCR_ERRORS, MAX_IMAGE_BYTES,
 from .contracts import OcrResponse, OcrReviewRequest, OcrReviewResponse, MAX_CONTENT_LENGTH
 from .urls import UrlInputError
 from .url_reputation import configured_reputation_provider
+from .family_api import register_family_routes
+from .family_push import FamilySetup, create_family
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +57,13 @@ def create_app(
     model_loader: Callable[[], ModelState] = load_configured_model,
     model_timeout: float = 1.0,
     llm_setup: Callable[[], LlmSetup] | None = None,
+    family_setup: Callable[[], FamilySetup] | None = None,
 ) -> FastAPI:
     reputation_provider = None
     llm_reviewer = None
+    # 가족 보호(발표 시연 한정)는 PTOS_FAMILY_DB_PATH가 있을 때만 켠다. 로그에는 고정 코드만 남긴다.
+    family = (family_setup or (lambda: create_family(dict(os.environ))))()
+    logger.info("FAMILY state=%s", family.reason)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -134,7 +140,9 @@ def create_app(
     async def ready():
         # 화면이 "주소의 일부 정보(해시)가 Google로 전송돼요" 안내를 켜거나 끄는 데만 쓴다.
         live = isinstance(reputation_provider, SafeBrowsingV5Provider)
-        return ReadyResponse(url_reputation="live" if live else "off", llm_review="live" if llm_reviewer is not None else "off")
+        return ReadyResponse(url_reputation="live" if live else "off", llm_review="live" if llm_reviewer is not None else "off",
+                             family="live" if family.store is not None else "off",
+                             push="live" if family.store is not None and family.sender is not None else "off")
 
     @app.post("/api/v1/ocr/review", response_model=OcrReviewResponse, responses=error_responses(422))
     async def review_ocr(body: OcrReviewRequest, request: Request):
@@ -204,6 +212,8 @@ def create_app(
         except TimeoutError:
             return error_response(request, 504, "ANALYSIS_TIMEOUT", "분석 시간이 길어지고 있어요. 잠시 후 다시 시도해주세요.", True)
         return AnalysisResponse(**result.model_dump(), request_id=request.state.request_id)
+
+    register_family_routes(app, family, error_response)
 
     return app
 

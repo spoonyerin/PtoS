@@ -188,7 +188,8 @@ def test_app_turns_review_on_only_with_every_setting_and_never_exposes_them(monk
         monkeypatch.setenv(name, value)
     with TestClient(create_app()) as client:
         response = client.get("/api/v1/health/ready")
-    assert response.json() == {"status": "ready", "mode": "rules", "url_reputation": "off", "llm_review": "live"}
+    assert response.json() == {"status": "ready", "mode": "rules", "url_reputation": "off", "llm_review": "live",
+                               "family": "off", "push": "off"}
     for secret in (FAKE_KEY, "llm.example.invalid", "fake-model"):
         assert secret not in response.text
 

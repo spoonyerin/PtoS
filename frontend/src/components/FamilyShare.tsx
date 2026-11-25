@@ -1,30 +1,61 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { AnalysisResponse } from '../api/types'
+import { useFamily } from '../hooks/useFamily'
 import { buildShareText } from '../shareResult'
+import { FamilySendSheet, factorCodes } from './family/FamilySendSheet'
 import { Icon } from './Icons'
 
-export function FamilyShare({ result, large }: { result: AnalysisResponse; large: boolean }) {
-  const [open, setOpen] = useState(false)
+export function FamilyShare({ result, large, go }: { result: AnalysisResponse; large: boolean; go: (hash: string) => void }) {
+  const family = useFamily()
+  const [open, setOpen] = useState<false | 'family' | 'share'>(false)
   const trigger = useRef<HTMLButtonElement>(null)
   const wasOpen = useRef(false)
+  // 가족 보호(시연용 프리미엄)로 연결한 가족이 있으면 앱 안에서 보내고, 아니면 공유 앱·복사로 보낸다.
+  const inApp = family.available && !!family.summary?.premium && family.summary.links.some(link => link.role === 'guardian')
   useEffect(() => {
     // Restore after the modal is removed; focusing outside an open modal is blocked.
     if (!open && wasOpen.current) trigger.current?.focus()
-    wasOpen.current = open
+    wasOpen.current = !!open
   }, [open])
   function close() {
     setOpen(false)
   }
   return <>
-    <button className="primary-button" ref={trigger} onClick={() => setOpen(true)}>
+    <button className="primary-button" ref={trigger} onClick={() => setOpen(inApp ? 'family' : 'share')}>
       <Icon name="share" />가족에게 공유
     </button>
-    {open && createPortal(
+    {open === 'family' && createPortal(
+      <FamilySendSheet key={result.request_id} result={result} large={large} onClose={close} go={go}
+        onOtherShare={() => setOpen('share')} />,
+      document.body,
+    )}
+    {open === 'share' && createPortal(
       <ShareSheet key={result.request_id} text={buildShareText(result)} large={large} onClose={close} />,
       document.body,
     )}
   </>
+}
+
+// 같은 결과를 두 번 자동으로 보내지 않도록 이번 화면에서 보낸 결과만 메모리에 기억한다(저장하지 않음).
+const autoSent = new Set<string>()
+
+// 사용자가 동의해 켠 경우에만, '위험' 결과를 고른 가족에게 자동으로 보낸다. 위험 단계와 위험 요소 코드만 보낸다.
+export function FamilyAutoAlert({ result }: { result: AnalysisResponse }) {
+  const family = useFamily()
+  const [message, setMessage] = useState('')
+  const auto = family.summary?.auto_alert
+  const target = family.summary?.links.find(link => link.id === auto?.link_id)
+  useEffect(() => {
+    if (!family.available || !family.summary?.premium || !auto?.enabled || !auto.link_id || !target) return
+    if (result.risk_level !== 'dangerous' || autoSent.has(result.request_id)) return
+    autoSent.add(result.request_id)
+    family.actions.sendRequests({ link_ids: [auto.link_id], risk_level: result.risk_level, factor_codes: factorCodes(result), auto: true })
+      .then(() => setMessage(`자동 알림이 켜져 있어 ${target.name} 님에게 위험 단계와 위험 요소를 보냈어요. 원문과 링크 주소는 보내지 않았어요.`))
+      .catch(() => setMessage('자동 알림을 보내지 못했어요. "가족에게 공유"로 직접 보내 주세요.'))
+  }, [family.available, family.summary?.premium, auto?.enabled, auto?.link_id, target, result, family.actions])
+  if (!message) return null
+  return <p className="family-auto-notice" role="status">{message}</p>
 }
 
 function ShareSheet({ text, large, onClose }: { text: string; large: boolean; onClose: () => void }) {

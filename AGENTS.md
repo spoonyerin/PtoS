@@ -105,6 +105,7 @@
 - 공식 번호 목록의 출처·이용 조건·갱신 기준(보낸 번호 확인에 쓸 목록은 저장소에 없다).
 - TTS, 사용자 선택 가족 공유, 공식 기관 목록 대조, 신고 연결·상황별 대응 안내는 별도 채택이 필요하다.
 - 가족 계정·자동 알림·장기 분석 이력·결제는 최종 MVP에서도 제외한다. DB는 MVP 필수가 아니다.
+- **예외(발표 시연 한정, 2026-11-25, 팀 확정 필요):** 가족 보호(`docs/FAMILY_SHARE.md`)는 `PTOS_FAMILY_DB_PATH`가 있을 때만 켜지고, 서버 SQLite에 가족 연결(호칭·관계)과 확인 요청(위험 단계·위험 요소 코드, 7일 보관)·의견을 저장하며, 브라우저에는 기기 열쇠 하나만 localStorage에 둔다. 원문·이미지·URL·보낸 번호·근거 구절은 보내지도 저장하지도 않는다. 결제는 없고(시연용 가입), 웹 푸시는 `PTOS_PUSH_MODE=live-webpush`와 VAPID 키가 모두 있을 때만 켜지며 고정 문장만 보낸다. 에이전트는 이 변수를 켜지 않고, 자동 테스트는 가짜 푸시 전송기만 쓴다. 배포는 `docs/DEPLOY_ORACLE.md`(비상업 시연, 공개 운영 아님).
 
 ## 주요 파일
 
@@ -127,6 +128,7 @@
 | `backend/app/model_adapter.py` | TextRiskModel, 모델 manifest·SHA-256 확인과 로드, 모델 입력 전처리 |
 | `backend/app/model_policy.py` | 규칙 결과와 모델 신호의 임시 종합, 모델 단계 표시 문장 |
 | `backend/app/sender_check.py` | 보낸 번호 비교: 번호 정리, 공식 번호 목록(선택) 로드, 불일치 근거와 임시 종합 (`docs/SENDER_CHECK.md`) |
+| `backend/app/family_store.py`, `backend/app/family_api.py`, `backend/app/family_push.py` | 가족 보호(발표 시연 한정): SQLite 저장소·보관 기간, `/api/v1/family` 경로, 켜는 조건과 웹 푸시 어댑터 (`docs/FAMILY_SHARE.md`) |
 | `backend/app/llm_review.py`, `backend/app/llm_policy.py` | 조건부 추가 검토(LLM) 어댑터·가리기·켜는 조건, 호출 조건과 임시 종합, 단계 상태. 앱에 연결돼 있고 **기본 꺼짐** (`docs/LLM_POLICY.md`) |
 | `backend/app/embedding_encoder.py`, `backend/evaluation/embedding_models.py`, `backend/requirements-embedding.txt` | 임베딩 모델(선택): 로컬 인코더로 문장 임베딩, 고정 임베딩 + 로지스틱 회귀 후보의 비교·학습. torch·transformers는 선택 의존성이고 인코더는 저장소 밖 로컬 폴더에서만 읽는다 (`docs/MODEL_POLICY.md`) |
 | `backend/app/ocr.py` | 이미지 검증, OcrEngine |
@@ -140,6 +142,8 @@
 | `scripts/convert_kr_mob_smishing.py` | KR-MOB-SMISHING v1 zip → 라벨링 전용 CSV와 별도 case_type 매핑 (데이터는 저장소 밖) |
 | `docs/EVALUATION.md` | 평가셋 스키마, 저장 위치와 개인정보 가리기, 실행·학습·측정 방법 |
 | `docs/MODEL_POLICY.md` | 경량 모델 연결, 임시 종합 정책, 학습·임계값 기준 |
+| `frontend/src/components/family`, `frontend/src/hooks/useFamily.tsx`, `frontend/src/api/family.ts`, `frontend/public/sw.js` | 가족 보호 화면, 상태·요청, 응답 검증, 알림 전용 서비스 워커(캐시 없음) |
+| `deploy/oracle/`, `docs/DEPLOY_ORACLE.md` | 발표 시연 서버(Oracle Always Free) 설치 스크립트·Caddy·systemd 설정 |
 | `frontend/src/components` | 입력, OCR 확인, 결과 화면 |
 | `frontend/src/hooks` | 요청 상태, 취소, 편집 후 결과 해제 |
 | `frontend/src/api` | HTTP 요청, 응답 검증, 생성 타입 |

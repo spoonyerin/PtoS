@@ -11,7 +11,7 @@ test('e2e 백엔드는 URL 평판 외부 조회를 하지 않는다', async ({ r
   expect(body.urls[0].reputation.provider).toBeNull()
   expect(body.analysis_stages[2]).toEqual({ name: 'url_reputation', status: 'not_connected' })
   const ready = await request.get('/api/v1/health/ready')
-  expect(await ready.json()).toEqual({ status: 'ready', mode: 'rules', url_reputation: 'off', llm_review: 'off' })
+  expect(await ready.json()).toMatchObject({ status: 'ready', mode: 'rules', url_reputation: 'off', llm_review: 'off', push: 'off' })
 })
 
 const NOTICE = '주소에서 만든 일부 정보(해시)만 Google로 전송돼요.'

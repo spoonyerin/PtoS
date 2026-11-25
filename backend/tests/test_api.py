@@ -110,7 +110,7 @@ def test_malformed_json_and_health(client):
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "INVALID_INPUT"
     assert client.get("/api/v1/health/live").json() == {"status": "ok"}
-    assert client.get("/api/v1/health/ready").json() == {"status": "ready", "mode": "rules", "url_reputation": "off", "llm_review": "off"}
+    assert client.get("/api/v1/health/ready").json() == {"status": "ready", "mode": "rules", "url_reputation": "off", "llm_review": "off", "family": "off", "push": "off"}
 
 
 def test_direct_idn_url_contract(client):

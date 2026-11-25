@@ -1,0 +1,28 @@
+# PtoS 발표 시연용 Caddy 설정 (docs/DEPLOY_ORACLE.md)
+# PTOS_DOMAIN은 /etc/caddy/caddy.env 또는 systemd 환경에서 준다. 예: 140-238-1-2.sslip.io
+# Caddy가 Let's Encrypt 인증서를 자동으로 받고 http를 https로 돌린다.
+# access log(log 지시어)를 켜지 않는다. 요청 주소·본문을 파일에 남기지 않는다.
+
+{$PTOS_DOMAIN} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	handle {
+		root * /opt/ptos/frontend/dist
+		try_files {path} /index.html
+		file_server
+	}
+
+	# 서비스 워커와 화면 진입 파일은 항상 새로 받게 한다(배포 후 옛 화면이 남지 않게).
+	@fresh path /sw.js /index.html / /manifest.webmanifest
+	header @fresh Cache-Control "no-cache"
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+}

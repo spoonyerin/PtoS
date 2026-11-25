@@ -5,8 +5,8 @@ import { requestServiceStatus } from '../api/client'
 export type ServiceFlag = 'live' | 'off' | 'unknown'
 export type UrlReputationStatus = ServiceFlag
 
-type ServiceStatus = { urlReputation: ServiceFlag; llmReview: ServiceFlag }
-const UNKNOWN: ServiceStatus = { urlReputation: 'unknown', llmReview: 'unknown' }
+type ServiceStatus = { urlReputation: ServiceFlag; llmReview: ServiceFlag; family: ServiceFlag; push: ServiceFlag }
+const UNKNOWN: ServiceStatus = { urlReputation: 'unknown', llmReview: 'unknown', family: 'unknown', push: 'unknown' }
 
 const StatusContext = createContext<ServiceStatus>(UNKNOWN)
 
@@ -19,6 +19,12 @@ export function useLlmReviewStatus(): ServiceFlag {
   return useContext(StatusContext).llmReview
 }
 
+// 가족 보호(발표 시연 한정) 저장소와 웹 푸시가 켜져 있는지.
+export function useFamilyStatus(): { family: ServiceFlag; push: ServiceFlag } {
+  const { family, push } = useContext(StatusContext)
+  return { family, push }
+}
+
 // 페이지를 열 때 한 번만 확인한다. 결과를 브라우저 저장소에 남기지 않는다.
 export function ServiceStatusProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<ServiceStatus>(UNKNOWN)
@@ -27,7 +33,7 @@ export function ServiceStatusProvider({ children }: { children: ReactNode }) {
     const timer = window.setTimeout(() => controller.abort(), 5_000)
     requestServiceStatus(controller.signal)
       .then(ready => {
-        if (!controller.signal.aborted) setStatus({ urlReputation: ready.url_reputation, llmReview: ready.llm_review })
+        if (!controller.signal.aborted) setStatus({ urlReputation: ready.url_reputation, llmReview: ready.llm_review, family: ready.family, push: ready.push })
       })
       .catch(() => { if (!controller.signal.aborted) setStatus(UNKNOWN) })
       .finally(() => window.clearTimeout(timer))

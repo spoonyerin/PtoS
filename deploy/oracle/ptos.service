@@ -1,0 +1,23 @@
+# PtoS 백엔드 (발표 시연용, docs/DEPLOY_ORACLE.md)
+# 프로세스 하나만 띄운다(--workers 없음). 평판 캐시·호출 예산·OCR 동시 1개가 프로세스 안에 있다.
+[Unit]
+Description=PtoS backend (demo)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ptos
+Group=ptos
+WorkingDirectory=/opt/ptos/backend
+EnvironmentFile=/etc/ptos/ptos.env
+ExecStart=/opt/ptos/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-access-log
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/ptos
+
+[Install]
+WantedBy=multi-user.target

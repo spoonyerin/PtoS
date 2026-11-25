@@ -10,3 +10,5 @@ scikit-learn==1.9.1
 numpy==2.5.4
 scipy==1.18.1
 joblib==1.6.0
+# 가족 보호(발표 시연 한정) 웹 푸시. PTOS_PUSH_MODE=live-webpush와 VAPID 키가 있을 때만 외부로 보낸다.
+pywebpush==2.5.0

@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnalysisForm } from './components/AnalysisForm'
 import { AnalysisResult } from './components/AnalysisResult'
-import { FamilyShare } from './components/FamilyShare'
+import { FamilyAutoAlert, FamilyShare } from './components/FamilyShare'
+import { FamilyPages, parseFamilyRoute } from './components/family/FamilyPages'
+import { FamilyHomeTile, FamilyNews } from './components/family/FamilyHomeTile'
+import { useFamily } from './hooks/useFamily'
 import { Icon } from './components/Icons'
 import { useAnalysis } from './hooks/useAnalysis'
 import type { InputType } from './api/types'
@@ -10,13 +13,17 @@ import {
   developmentNoteText,
 } from './components/DevelopmentNote'
 import { useUrlReputationStatus } from './hooks/useServiceStatus'
-type Page = 'home' | InputType
+type Page = 'home' | InputType | 'family'
 const readPage = (): Page =>
   ['text', 'url', 'ocr_text'].includes(location.hash.slice(1))
     ? (location.hash.slice(1) as InputType)
-    : 'home'
+    : parseFamilyRoute(location.hash)
+      ? 'family'
+      : 'home'
 export default function App() {
   const [page, setPage] = useState<Page>(readPage)
+  const [hash, setHash] = useState(location.hash)
+  const family = useFamily()
   const [content, setContent] = useState('')
   const [senderNumber, setSenderNumber] = useState('')
   const [panel, setPanel] = useState<'guide' | 'settings' | 'notice' | null>(
@@ -30,6 +37,7 @@ export default function App() {
   useEffect(() => {
     const change = () => {
       setPage(readPage())
+      setHash(location.hash)
       analysis.reset()
       // 뒤로/앞으로 이동으로 다른 확인 화면에 원문이 넘어가지 않게 지운다.
       setContent('')
@@ -60,12 +68,25 @@ export default function App() {
       next === 'home' ? location.pathname + location.search : '#' + next,
     )
     setPage(next)
+    setHash(location.hash)
+  }
+  // 가족 보호 화면 이동. hash가 비어 있으면 홈으로 간다.
+  function go(next: string, replace = false) {
+    analysis.reset()
+    setContent('')
+    setSenderNumber('')
+    const url = next ? '#' + next : location.pathname + location.search
+    if (replace) history.replaceState(null, '', url)
+    else history.pushState(null, '', url)
+    setPage(readPage())
+    setHash(location.hash)
   }
   const titles = {
     text: '문자 확인하기',
     url: '링크 확인하기',
     ocr_text: '사진으로 확인하기',
     home: '',
+    family: '',
   }
   return (
     <div className={`app-shell${large ? ' large-text' : ''}`}>
@@ -79,7 +100,9 @@ export default function App() {
       >
         본문 바로가기
       </a>
-      {page === 'home' ? (
+      {page === 'family' ? (
+        <FamilyPages route={parseFamilyRoute(hash) ?? { name: 'protect' }} go={go} />
+      ) : page === 'home' ? (
         <>
           <header className="home-header">
             <div className="brand" aria-label="PtoS">
@@ -150,29 +173,58 @@ export default function App() {
                 fetchPriority="high"
               />
             </section>
+            <FamilyNews go={go} />
             <nav className="home-menu" aria-label="확인 방법 선택">
-              <button
-                className="guide-button"
-                onClick={() => setPanel('guide')}
-              >
-                <span className="menu-symbol help-symbol">
-                  <img
-                    src="/assets/icon_questionmark.png"
-                    width="22"
-                    height="36"
-                    alt=""
-                  />
-                </span>
-                <span>
-                  <strong>이용하는 방법</strong>
-                  <small>
-                    처음 이용하시나요? 간단한 방법을
-                    <br />
-                    안내해 드립니다.
-                  </small>
-                </span>
-                <Icon name="chevron" />
-              </button>
+              {family.available ? (
+                <div className="home-tiles">
+                  <FamilyHomeTile go={go} />
+                  <button
+                    className="guide-button"
+                    onClick={() => setPanel('guide')}
+                  >
+                    <span className="menu-symbol help-symbol">
+                      <img
+                        src="/assets/icon_questionmark.png"
+                        width="22"
+                        height="36"
+                        alt=""
+                      />
+                    </span>
+                    <span>
+                      <strong>이용하는 방법</strong>
+                      <small>
+                        처음 이용하시나요? 간단한 방법을
+                        <br />
+                        안내해 드립니다.
+                      </small>
+                    </span>
+                    <Icon name="chevron" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="guide-button"
+                  onClick={() => setPanel('guide')}
+                >
+                  <span className="menu-symbol help-symbol">
+                    <img
+                      src="/assets/icon_questionmark.png"
+                      width="22"
+                      height="36"
+                      alt=""
+                    />
+                  </span>
+                  <span>
+                    <strong>이용하는 방법</strong>
+                    <small>
+                      처음 이용하시나요? 간단한 방법을
+                      <br />
+                      안내해 드립니다.
+                    </small>
+                  </span>
+                  <Icon name="chevron" />
+                </button>
+              )}
               {(['text', 'ocr_text', 'url'] as InputType[]).map((mode) => (
                 <button
                   className="menu-button"
@@ -219,7 +271,11 @@ export default function App() {
               <>
                 <AnalysisResult result={analysis.result}>
                   <div className="result-buttons">
-                    <FamilyShare result={analysis.result} large={large} />
+                    <FamilyShare
+                      result={analysis.result}
+                      large={large}
+                      go={go}
+                    />
                     <button
                       className="primary-button"
                       onClick={() => navigate('home')}
@@ -228,6 +284,7 @@ export default function App() {
                       홈으로
                     </button>
                   </div>
+                  <FamilyAutoAlert result={analysis.result} />
                 </AnalysisResult>
               </>
             )}

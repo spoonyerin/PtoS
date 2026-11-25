@@ -11,13 +11,13 @@ import socket
 
 import pytest
 
-from app import llm_review, sender_check
+from app import family_push, llm_review, sender_check
 from app.url_reputation import API_KEY_ENV, MODE_ENV, TIMEOUT_ENV
 
 # 추가 검토(LLM) 설정도 테스트에는 전달하지 않는다. 테스트는 가짜 전송기를 직접 넣는다.
 LLM_ENV = (llm_review.API_KEY_ENV, llm_review.MODE_ENV, llm_review.BASE_URL_ENV, llm_review.MODEL_ENV,
            llm_review.TIMEOUT_ENV, llm_review.DAILY_LIMIT_ENV,
-           sender_check.PATH_ENV)
+           sender_check.PATH_ENV, *family_push.ALL_ENV)
 
 for _name in (API_KEY_ENV, MODE_ENV, TIMEOUT_ENV, *LLM_ENV):
     os.environ.pop(_name, None)

@@ -21,7 +21,8 @@ export default defineConfig({
       // 기본 e2e는 모델 없이 규칙 결과를 검증한다. 모델을 켠 서버를 재사용하면 기대값이 달라진다.
       // URL 평판은 항상 꺼서 e2e가 실제 Google을 호출하지 않게 한다. 이미 떠 있는 서버를 재사용하면
       // 이 값이 적용되지 않으므로 e2e/reputation.spec.ts가 평판 미연결을 따로 확인한다.
-      env: { PTOS_MODEL_PATH: '', PTOS_SAFE_BROWSING_MODE: '' },
+      // 가족 보호는 서버를 끄면 사라지는 메모리 저장소로 켜고, 웹 푸시는 끈다(외부 푸시 서비스를 호출하지 않는다).
+      env: { PTOS_MODEL_PATH: '', PTOS_SAFE_BROWSING_MODE: '', PTOS_FAMILY_DB_PATH: ':memory:', PTOS_PUSH_MODE: '' },
       reuseExistingServer: !process.env.CI,
     },
     {

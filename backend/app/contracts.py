@@ -191,6 +191,144 @@ class ReadyResponse(BaseModel):
     mode: Literal["rules"] = "rules"
     url_reputation: Literal["live", "off"]
     llm_review: Literal["live", "off"]
+    # 2026-11-25 계약 추가(발표 시연 한정, 팀 확정 필요): 가족 보호 저장소와 웹 푸시가 켜졌는지만 알린다.
+    family: Literal["live", "off"]
+    push: Literal["live", "off"]
+
+
+# ---- 가족 보호 (2026-11-25 계약 추가, 발표 시연 한정, 팀 확정 필요, docs/FAMILY_SHARE.md) ----
+# 원문·URL·보낸 번호·근거 구절은 요청과 응답 어디에도 없다. 확인 요청은 위험 단계와 위험 요소 코드만 담는다.
+
+FamilyRelation = Literal["child", "spouse", "sibling", "other"]
+FamilyReplyChoice = Literal["looks_dangerous", "looks_fine", "custom"]
+
+
+class FamilyDeviceResponse(BaseModel):
+    device_token: str
+
+
+class FamilyLink(BaseModel):
+    id: str
+    # guardian: 나를 지켜 주는 가족(내가 초대함), protected: 내가 지켜 주는 가족(내가 초대를 받음)
+    role: Literal["guardian", "protected"]
+    name: str
+    relation: FamilyRelation | None
+    status: Literal["pending", "connected"]
+    invite_expires_at: datetime | None
+
+
+class FamilyAutoAlert(BaseModel):
+    enabled: bool
+    link_id: str | None
+
+
+class FamilySummary(BaseModel):
+    premium: bool
+    auto_alert: FamilyAutoAlert
+    links: list[FamilyLink]
+    push_subscribed: bool
+    waiting_requests: int
+    new_replies: int
+    server_time: datetime
+
+
+class FamilyPremiumRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    active: bool
+
+
+class FamilyInviteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=40)
+    relation: FamilyRelation
+
+
+class FamilyInviteResponse(BaseModel):
+    link_id: str
+    invite_token: str
+    expires_at: datetime
+
+
+class FamilyInviteTokenRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    token: str = Field(min_length=1, max_length=128)
+
+
+class FamilyInvitePreview(BaseModel):
+    guardian_name: str
+    relation: FamilyRelation
+    expires_at: datetime
+
+
+class FamilyAcceptRequest(FamilyInviteTokenRequest):
+    name: str = Field(min_length=1, max_length=40)
+
+
+class FamilyAutoAlertRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    link_id: str | None
+
+
+class FamilyShareRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    link_ids: list[str] = Field(min_length=1, max_length=5)
+    risk_level: RiskLevel
+    factor_codes: list[FactorCode] = Field(max_length=len(FactorCode))
+    auto: bool = False
+
+
+class FamilyShareResponse(BaseModel):
+    request_ids: list[str]
+
+
+class FamilyReply(BaseModel):
+    choice: FamilyReplyChoice
+    text: str | None
+    replied_at: datetime
+
+
+class FamilyRequestItem(BaseModel):
+    id: str
+    box: Literal["sent", "received"]
+    name: str
+    risk_level: RiskLevel
+    factor_codes: list[FactorCode]
+    auto: bool
+    created_at: datetime
+    expires_at: datetime
+    viewed_at: datetime | None
+    reply: FamilyReply | None
+
+
+class FamilyRequestList(BaseModel):
+    items: list[FamilyRequestItem]
+
+
+class FamilyReplyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    choice: FamilyReplyChoice
+    text: str | None = Field(default=None, max_length=200)
+
+
+class FamilyPushKey(BaseModel):
+    public_key: str | None
+
+
+class FamilyPushKeys(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    p256dh: str = Field(min_length=1, max_length=200)
+    auth: str = Field(min_length=1, max_length=100)
+
+
+class FamilyPushSubscription(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    endpoint: str = Field(min_length=9, max_length=1024, pattern=r"^https://")
+    keys: FamilyPushKeys
+
+
+class FamilyPushRemove(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    endpoint: str | None = Field(default=None, max_length=1024)
 
 
 class ErrorDetail(BaseModel):
