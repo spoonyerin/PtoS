@@ -594,11 +594,44 @@ e5는 추가 데이터를 넣으면 신호 임계값이 올라가(0.631 → 0.81
 - test-1(합성 정상 중심, 정상 오탐 9/91)보다 정상 오탐이 크게 높다. 합성 정상 문장으로는 실제 정상 문자의 오탐을 과소평가했다는 뜻이다. 실제 정상 문자의 오탐 줄이기가 다음 과제다.
 - 이 시험지는 이제 본 시험지다. 이 결과로 규칙·모델·임계값을 고치지 않는다. 고친 뒤의 성능은 새 시험지로만 주장한다.
 
-### 현재 상태 (2026-11-24, 이번 단계 마무리)
+### test-2를 dev로 옮기고 규칙 v9·모델 재학습 (dev, 2026-11-26)
+
+**(dev 문자, 임계값을 같은 dev에서 고른 in-sample 수치, 탐지 성능 주장 아님. Windows 11 / Git Bash, CPU, GPU 없음, 미커밋 변경)** test-2는 1회 실행으로 소진됐으므로 사용자 결정으로 dev로 옮겼다. 앞으로 성능 주장은 새 test-3로만 한다.
+
+- **실제 문자 dev(저장소 밖, 커밋 안 함):** `real-dev-v2.csv` 112행 = `real-received-dev-v1.csv` 33 + `eval-test2-v1.csv` 79(split을 dev로), 사기 46 / 정상 66, 80묶음, SHA-256 `1a908a6c…`. 모델 비교·임계값용 합본 `dev-v3-combined.csv` 627행(eval-v2.1 dev + real-dev-v2, `a645229d…`). 원본 파일은 바꾸지 않았다.
+- **틀린 행 원인(고치기 전):** 모델 점수가 1 근처에 몰려 실제 정상 문자 점수 중간값이 0.998이었다(실제 문자 dev AUC 0.848). 학습 세트 정상 문자에 링크가 거의 없어(사기 985 / 정상 269, 정상 쪽은 택배 안내뿐) 링크·(광고)·고객님 표기가 사기 쪽으로 쏠려 있었다. 규칙 쪽은 링크 요구 하나만으로 의심(정상 7건), `[무료수신거부]` 머리말 오인, 괄호 인증번호 안내(정상 2건). 놓친 사기 12건은 규칙에 없는 유형(해외 메신저 아이디, 대출 권유, 위반 통지서 + 주소 등)이었다.
+- **규칙 `rules-dev-v9`:** [RULE_POLICY.md](RULE_POLICY.md) “v9”. 버그 2개 수정과 새 의심 신호 4개(`MESSENGER_ID_CONTACT`, `PENALTY_NOTICE_LINK`, `LOAN_LURE`, 숫자 넘기기 요구). 링크 단독 의심 규칙은 그대로 둔다. API 스키마는 같고 `analysis_version`만 v9다.
+- **학습 세트 `finetune-v3`(저장소 밖):** finetune-v2(봉인 완료본) + 합성 정상 문자 v2 1,591행(`tools/gen_synthetic_legit_links.py`, 광고·포인트 소멸·카드 배송·학교 설문·투표·알림톡·약관·인증번호 등 링크·광고 형식, 평가 문장을 베끼지 않음, dev와 비슷한 9행 제외, `tools/make_finetune_v3.py`). `finetune-v3-devchecked-train.csv` 16,073행(사기 6,589 / 정상 9,484, `33ffec87…`), `-val.csv` 1,792행(`4b8e1b2c…`). **test 겹침 제거(`--seal-eval`)는 사용자가 직접 실행한다.** 결과 SHA-256이 같으면 아래 모델을 그대로 쓴다.
+- **모델 `koelectra-small-ft-v3`(저장소 밖 `models/`):** 같은 설정(KoELECTRA-small 미세조정, 2 epoch, 최대 128토큰, 숫자 가리기)으로 finetune-v3에서 학습(CPU 62분). 임계값은 `dev-v3-combined.csv` 점수에서 정상 신호 2% 허용으로 골랐다: 신호 0.99938, 정상 0.000469. 실제 문자 dev AUC 0.848 → 0.914, 실제 정상 점수 중간값 0.998 → 0.0017.
+
+| 구성 (규칙 v9) | eval-v2.1 dev 사기 경고 | 정상 오탐 | 정상 → 정상 | 실제 문자 dev 사기 경고 | 정상 오탐 | 정상 → 정상 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `rules` | 203/258 | 9/241 | 0 | 13/46 | 7/66 | 0 |
+| `rules+model` `koelectra-small-ft-v1-r2` | 231/258 | 12/241 | 63 | 42/46 | 16/66 | 3 |
+| `rules+model` `koelectra-small-ft-v3` | **249/258** | 12/241 | 75 | **45/46** | **9/66** | 11 |
+
+- 모든 구성에서 사기 → 정상 0건, 정상 → 위험 0건. 고치기 전 같은 실제 문자 dev(규칙 v8 + r2)는 사기 경고 34/46, 정상 오탐 18/66이었다.
+- **수치가 부풀려진 이유:** 규칙 v9는 실제 문자 dev의 틀린 행을 보고 만들었고, 합성 정상 v2의 유형도 그 행을 보고 골랐으며, 임계값도 같은 dev에서 골랐다. test-3에서는 이보다 낮게 나올 것으로 본다.
+- **사용자가 서버 모델을 `koelectra-small-ft-v3`로 바꾸기로 했다(2026-11-26, 임시, 팀 확정 필요).** `PTOS_MODEL_PATH`를 이 폴더로 준다.
+
+### 현재 상태 (2026-11-26)
 
 | 항목 | 값 |
 | --- | --- |
-| 브랜치 | `feat/model-retrain`(main에 아직 병합 안 함) |
+| 브랜치 | `feat/real-dev-v2`(규칙 v9는 커밋 `515afa8`에 들어 있음) |
+| `analysis_version` | `rules-reputation-dev-v9`(`RuleBasedAnalyzer`) / `rules-model-dev-v9`(API 응답). API 스키마는 v7과 같다 |
+| 규칙 버전 | `rules-dev-v9`(`docs/RULE_POLICY.md`, 임시, 팀 확정 필요) |
+| 서버 모델 폴더 | `koelectra-small-ft-v3`(finetune-v3로 미세조정, 저장소 밖 `C:/_Coding/ptos-eval/ptos-eval/models/`). 쓰려면 `backend/requirements-embedding.txt` 설치 후 `PTOS_MODEL_PATH`에 이 폴더를 준다. 모델 파일은 커밋하지 않고 팀 내부로만 공유한다 |
+| 임계값 | 신호 0.99938, 정상 0.000469(dev-v3-combined 점수, 정상 신호 2% 허용). 임시, 팀 확정 필요 |
+| Safe Browsing / 추가 검토(LLM) | 기본 꺼짐 / 기본 꺼짐 |
+| 최종 시험 | test-2는 소진되어 dev로 옮겼다. 다음 성능 주장은 test-3 |
+| 다음 단계 | finetune-v3 봉인 실행(사용자) → 팀원들이 보낸 실제 문자로 test-3 고정 → 1회 실행(사용자) |
+
+### 이전 상태 (2026-11-24, 이번 단계 마무리)
+
+| 항목 | 값 |
+| --- | --- |
+| 브랜치 | `feat/model-retrain`(main에 병합함, PR #8) |
 | `analysis_version` | `rules-reputation-dev-v8`(`RuleBasedAnalyzer`) / `rules-model-dev-v8`(API 응답). API 스키마는 v7과 같다 |
 | 규칙 버전 | `rules-dev-v8`(`docs/RULE_POLICY.md`, 임시, 팀 확정 필요) |
 | 서버 모델 폴더 | `koelectra-small-ft-v1-r2`(학습 전용 세트 finetune-v2로 미세조정, 저장소 밖 `C:/_Coding/ptos-eval/ptos-eval/models/`). 쓰려면 `backend/requirements-embedding.txt` 설치 후 백엔드 환경 변수 `PTOS_MODEL_PATH`에 이 폴더를 준다. 모델 파일은 학습 데이터 조건(CC BY-NC 4.0 등) 때문에 커밋하지 않으며 팀 내부로만 공유한다. 모델이 없으면 규칙만으로 판정하고 정상은 반환하지 않는다 |

@@ -1,6 +1,6 @@
 # 경량 모델 연결과 임시 종합 정책 · rules-model-dev-v2
 
-> 2026-11-09: 문자 규칙 `rules-dev-v4` 반영을 구분하려고 API 응답 `analysis_version`을 `rules-model-dev-v2`로 올렸다. 2026-11-11: 문자 규칙 v4 2차 보강을 구분하려고 `rules-model-dev-v3`로 올렸다. 2026-11-17: 문자 규칙 `rules-dev-v5`(v4 3차 보강 + 문장 중간 줄바꿈 처리)를 구분하려고 `rules-model-dev-v4`로 올렸다. 2026-11-17: 정상 반환 조건을 더해 종합 정책을 v2로 바꾸고 API 응답을 `rules-model-dev-v5`로 올렸다(아래 “정상 반환”). 모델 신호로 정보 부족을 의심으로 올리는 부분은 v1과 같다. 2026-11-17(계약 브랜치): 문자 규칙 `rules-dev-v6`을 구분하려고 API 응답을 `rules-model-dev-v6`으로 올렸다. 종합 정책은 v2 그대로다. 2026-11-17: 문자 규칙 `rules-dev-v7`(위험 조합 하나 추가)을 구분하려고 `rules-model-dev-v7`로 올렸다. 종합 정책은 v2 그대로다. 2026-11-24: 문자 규칙 `rules-dev-v8`(정상 인증번호 안내 예외 확장)을 구분하려고 `rules-model-dev-v8`로 올렸다. 종합 정책은 v2 그대로다.
+> 2026-11-09: 문자 규칙 `rules-dev-v4` 반영을 구분하려고 API 응답 `analysis_version`을 `rules-model-dev-v2`로 올렸다. 2026-11-11: 문자 규칙 v4 2차 보강을 구분하려고 `rules-model-dev-v3`로 올렸다. 2026-11-17: 문자 규칙 `rules-dev-v5`(v4 3차 보강 + 문장 중간 줄바꿈 처리)를 구분하려고 `rules-model-dev-v4`로 올렸다. 2026-11-17: 정상 반환 조건을 더해 종합 정책을 v2로 바꾸고 API 응답을 `rules-model-dev-v5`로 올렸다(아래 “정상 반환”). 모델 신호로 정보 부족을 의심으로 올리는 부분은 v1과 같다. 2026-11-17(계약 브랜치): 문자 규칙 `rules-dev-v6`을 구분하려고 API 응답을 `rules-model-dev-v6`으로 올렸다. 종합 정책은 v2 그대로다. 2026-11-17: 문자 규칙 `rules-dev-v7`(위험 조합 하나 추가)을 구분하려고 `rules-model-dev-v7`로 올렸다. 종합 정책은 v2 그대로다. 2026-11-24: 문자 규칙 `rules-dev-v8`(정상 인증번호 안내 예외 확장)을 구분하려고 `rules-model-dev-v8`로 올렸다. 2026-11-26: 문자 규칙 `rules-dev-v9`(실제 문자 dev 보강)를 구분하려고 `rules-model-dev-v9`로 올렸다. 종합 정책은 v2 그대로다.
 
 > **임시, 팀 확정 필요.** 모델 신호의 반영 방식, 임계값 기준, 학습 라벨 매핑은 중간점검 시연을 위한 개발용 정책이다. PRD가 확정한 판정 경계·정확도·신뢰도·임계값이 아니다 (AGENTS.md "결정 필요" 1~3).
 
@@ -201,6 +201,14 @@ dev에서 규칙+선택 모델이 놓친 사기 38건은 **모두 주소가 있�
 - 모델 신호는 정보 부족을 의심으로만 올리므로 늘어난 오탐은 모두 의심이다(위험 아님). 원문 근거가 없는 경고라는 점은 같다.
 - 서버 모델 폴더: 버전 `koelectra-small-ft-v1-r2`, `C:/_Coding/ptos-eval/ptos-eval/models/koelectra-small-ft-v1-r2/`(가중치는 `koelectra-small-ft-v1`과 같음). 신호 임계값 0.999505, 정상 임계값 0.000294. 하네스 dev 이진(in-sample): 사기 경고 231/258, 정상 오탐 13/241, 사기 → 정상 0, 정상 → 정상 63, 모델 단계 499건 모두 완료.
 - 리포트: `reports/v2.1-ai/retrain/dev-analysis-threshold-misses.md`(집계·id만).
+
+### 링크·광고 형식 정상 문자를 더한 재학습 (2026-11-26, 임시, 팀 확정 필요)
+
+- **이유:** test-2를 dev로 옮겨 보니 실제 정상 문자 점수 중간값이 0.998이었다. 학습 세트 정상 문자에 링크·(광고)·수신거부 표기가 거의 없어 이 표기가 사기 쪽으로 쏠려 있었다(링크 있는 행 사기 985 / 정상 269).
+- **학습 세트:** `finetune-v3` = finetune-v2 + 합성 정상 문자 v2 1,591행(`tools/gen_synthetic_legit_links.py`, 저장소 밖). 설정은 이전과 같다(KoELECTRA-small 미세조정, 2 epoch, 최대 128토큰, `number_masking: true`). test 겹침 제거는 사용자가 실행한다(HANDOVER 9절).
+- **임계값:** `dev-v3-combined.csv`(eval-v2.1 dev + 실제 문자 dev `real-dev-v2.csv`, 627행) 점수에서 정상 신호 2% 허용으로 골랐다. 신호 0.99938, 정상 0.000469.
+- **서버 모델 폴더(사용자 결정, 2026-11-26):** 버전 `koelectra-small-ft-v3`, `C:/_Coding/ptos-eval/ptos-eval/models/koelectra-small-ft-v3/`. 규칙 v9와 함께 dev(in-sample): eval-v2.1 dev 사기 경고 249/258, 정상 오탐 12/241, 정상 → 정상 75 / 실제 문자 dev 사기 경고 45/46, 정상 오탐 9/66, 정상 → 정상 11. 사기 → 정상 0, 정상 → 위험 0. 실제 문자 dev AUC 0.848(r2) → 0.914. 규칙·합성 정상 유형·임계값을 모두 같은 dev를 보고 정해 수치가 부풀려져 있다. 성능 주장은 test-3로 한다.
+- 이전 서버 모델 `koelectra-small-ft-v1-r2`는 비교용으로 남겨 둔다.
 
 **선택한 모델(신호 0% 기준 폴더, 서버에는 위 `-r2` 폴더를 쓴다):** 버전 `koelectra-small-ft-v1`, 폴더 `C:/_Coding/ptos-eval/ptos-eval/models/koelectra-small-ft-v1/`(`export_external_model.py`로 만듦, 미세조정 가중치 `model.safetensors` SHA-256 `d6419791…a722`, `config.json` SHA-256 `e9e1a373…9860`, 토크나이저 파일 포함, 최대 128토큰, `number_masking: true`). 신호 임계값 0.99956, 정상 임계값 0.00029(dev 전체 점수로 고름). 서버가 쓰려면 사용자가 `PTOS_MODEL_PATH`를 이 폴더로 바꾸고 `requirements-embedding.txt`를 설치한다. 하네스 `rules+model` dev 이진 평가(임계값을 같은 dev에서 골라 in-sample): 사기 경고 220/258, 정상 오탐 10/241(입력 오류 16건 제외), 사기 → 정상 0, 정상 → 정상 63. 모델 단계는 499건 모두 `completed`(1초 제한 안).
 
