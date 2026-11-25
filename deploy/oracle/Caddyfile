@@ -20,9 +20,15 @@
 	@fresh path /sw.js /index.html / /manifest.webmanifest
 	header @fresh Cache-Control "no-cache"
 
+	# CSP는 frontend/vite.config.ts의 PTOS_CSP와 같게 유지한다(바깥 스크립트·글꼴·연결 없음, 스크린샷 미리보기는 blob:).
+	# HSTS는 sslip.io 같은 빌린 주소에서도 문제없게 하루만 두고 하위 도메인에 넓히지 않는다.
 	header {
 		X-Content-Type-Options nosniff
 		Referrer-Policy no-referrer
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; font-src 'self'; manifest-src 'self'; worker-src 'self'; media-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+		Strict-Transport-Security "max-age=86400"
+		X-Frame-Options DENY
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 		-Server
 	}
 }

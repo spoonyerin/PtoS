@@ -72,6 +72,10 @@ sudo bash /opt/ptos/deploy/oracle/setup_server.sh 140-238-1-2.sslip.io
 
 스크립트가 하는 일: Python·Tesseract·Caddy 설치, `ptos` 실행 계정, 가상환경과 패키지, OCR 언어 데이터(SHA-256 확인),
 `ptos.service`·Caddy 등록, 서버 안 방화벽(iptables)에서 80·443 열기.
+
+Caddy는 보안 헤더를 붙여요: CSP(이 서버의 파일·API만 허용, 스크린샷 미리보기용 `blob:`), HSTS(하루), `X-Frame-Options: DENY`,
+`Referrer-Policy: no-referrer`. 같은 CSP를 `frontend/vite.config.ts`의 `PTOS_CSP`(빌드 화면 미리보기, 10절 예비)에도 두었고, 두 곳을 함께 고쳐요.
+빌드한 화면에서 `npx vite preview`를 띄우고 `npx playwright test`를 돌리면 CSP 아래에서 전체 흐름을 확인할 수 있어요(`e2e/csp.spec.ts`는 위반 기록이 없는지도 봐요).
 `/etc/ptos/ptos.env`가 없으면 예시 파일로 만들어요(권한 600).
 
 ## 6. VAPID 키 만들고 환경 변수 채우기 (직접)
