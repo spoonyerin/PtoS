@@ -25,6 +25,11 @@
      "Out of capacity"가 나오면 시간을 두고 다시 시도하거나 OCPU를 줄여 보세요. **발표 직전이 아니라 미리** 만들어 두세요.
    - SSH 키: "Generate a key pair"로 내려받아 안전한 곳에 보관해요(저장소에 넣지 않아요).
    - Public IPv4 주소 할당을 켜요.
+   - A1이 계속 "Out of capacity"이면 **VM.Standard.E2.1.Micro**(AMD, 1GB, 무료 2대)로 먼저 만들어도 돼요.
+     설치 스크립트가 메모리를 보고 스왑 2GB를 만들고 모델 설치를 건너뛰어요. 결과는 규칙으로만 나오고 OCR이 느려요.
+   - 네트워크는 "Create new public subnet"으로 골라도 공용 IP 스위치가 잠길 수 있어요. 이때는 VCN Wizard의
+     "Create VCN with Internet Connectivity"로 VCN을 먼저 만들어 고르거나, 만든 뒤 VNIC → IP administration →
+     Edit → Ephemeral public IP로 붙여요.
 4. 서버의 공인 IP를 확인해요. 예: `140.238.1.2`
 5. **VCN 방화벽 열기:** Networking → Virtual cloud networks → 서버의 VCN → Security Lists → Default → Add Ingress Rules
    - Source CIDR `0.0.0.0/0`, TCP, Destination port `80`

@@ -28,6 +28,16 @@ if [[ ! -f "$APP/frontend/dist/index.html" ]]; then
   exit 1
 fi
 
+MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+if (( MEM_MB < 3000 )) && [[ -z "$(swapon --show --noheadings)" ]]; then
+  echo "[0/6] 메모리가 ${MEM_MB}MB라 스왑 2GB를 만들어요 (AMD Micro 1GB 서버용)"
+  fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
 echo "[1/6] 패키지 설치 (Python, Tesseract, Caddy, 방화벽 저장 도구)"
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y python3-venv python3-pip tesseract-ocr caddy iptables-persistent
@@ -45,7 +55,9 @@ echo "[3/6] Python 가상환경과 패키지"
 python3 -m venv "$APP/.venv"
 "$APP/.venv/bin/pip" install --upgrade pip
 "$APP/.venv/bin/pip" install -r "$APP/backend/requirements.txt"
-if grep -q '^PTOS_MODEL_PATH=' /etc/ptos/ptos.env; then
+if grep -q '^PTOS_MODEL_PATH=' /etc/ptos/ptos.env && (( MEM_MB < 3000 )); then
+  echo "  메모리가 ${MEM_MB}MB라 모델(torch)은 설치하지 않아요. /etc/ptos/ptos.env의 PTOS_MODEL_PATH 줄을 지워 주세요."
+elif grep -q '^PTOS_MODEL_PATH=' /etc/ptos/ptos.env; then
   echo "  모델을 쓰도록 설정돼 있어 torch·transformers(CPU)를 설치해요."
   "$APP/.venv/bin/pip" install -r "$APP/backend/requirements-embedding.txt" --extra-index-url https://download.pytorch.org/whl/cpu
 fi
