@@ -19,6 +19,8 @@ const guidance = [
 export function OfficialGuide({ onBack }: { onBack: () => void }) {
   const [category, setCategory] = useState<string | null>(null)
   const [carrier, setCarrier] = useState<string | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [selectedCarrier, setSelectedCarrier] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [added, setAdded] = useState(false)
   const dialog = useRef<HTMLDialogElement>(null)
@@ -31,10 +33,10 @@ export function OfficialGuide({ onBack }: { onBack: () => void }) {
     <main id="main" tabIndex={-1} className="official-guide-main">
       {!category ? <>
         <label className="sr-only" htmlFor="guide-search">기관·은행·택배사 검색하기</label><input id="guide-search" className="guide-search" placeholder="기관·은행·택배사 검색하기" value={search} onChange={e => setSearch(e.target.value)} />
-        <h2>어떤 분야인가요?</h2><div className="guide-category-grid">{categories.filter(([name, description]) => `${name} ${description} ${name === '택배사·우체국' ? carriers.join(' ') : ''}`.includes(search.trim())).map(([name, description, asset]) => <button key={name} onClick={() => { setCategory(name); setSearch('') }}><span className="guide-category-top"><span className="guide-category-icon">{asset ? <span style={{ maskImage: `url('/assets/${asset}')`, WebkitMaskImage: `url('/assets/${asset}')` }} /> : '•••'}</span><Icon name="chevron" /></span><strong>{name}</strong><small>{description}</small></button>)}</div>
+        <h2>어떤 분야인가요?</h2><div className="guide-category-grid">{categories.filter(([name, description]) => `${name} ${description} ${name === '택배사·우체국' ? carriers.join(' ') : ''}`.includes(search.trim())).map(([name, description, asset]) => <button key={name} aria-pressed={selectedCategory === name} onClick={() => { setSelectedCategory(name); setCategory(name); setSearch('') }}><span className="guide-category-top"><span className="guide-category-icon">{asset ? <span style={{ maskImage: `url('/assets/${asset}')`, WebkitMaskImage: `url('/assets/${asset}')` }} /> : '•••'}</span><Icon name="chevron" /></span><strong>{name}</strong><small>{description}</small></button>)}</div>
         {search && !categories.some(([name, desc]) => `${name} ${desc} ${name === '택배사·우체국' ? carriers.join(' ') : ''}`.includes(search.trim())) && <p>일치하는 분야가 없어요. 기관 추가를 요청해 주세요.</p>}
         <p className="guide-add">찾는 기관이 없나요? <button onClick={() => { setAdded(false); dialog.current?.showModal() }}>추가 요청하기</button></p>
-      </> : category === '택배사·우체국' && !carrier ? <><p className="guide-help">확인하고 싶은 택배사를 선택하세요.</p><div className="guide-carriers">{carriers.map(name => <button key={name} onClick={() => setCarrier(name)}>{name}<Icon name="chevron" /></button>)}</div></> : <>
+      </> : category === '택배사·우체국' && !carrier ? <><p className="guide-help">확인하고 싶은 택배사를 선택하세요.</p><div className="guide-carriers">{carriers.map(name => <button key={name} aria-pressed={selectedCarrier === name} onClick={() => { setSelectedCarrier(name); setCarrier(name) }}>{name}<Icon name="chevron" /></button>)}</div></> : <>
         <h2 className="guide-detail-title">{category === '택배사·우체국' ? <>의심되는 배송 문자,<br />이렇게 대응하세요</> : <>의심되는 안내 문자,<br />이렇게 확인하세요</>}</h2>
         <ul className="guide-advice">{guidance.map(([label, detail]) => <li key={label}><span className="guide-check" aria-hidden="true" /><div><strong>{category === '택배사·우체국' ? label : label.replace('배송은', '안내는')}</strong><p>{category === '택배사·우체국' ? detail : detail.replace('배송 확인', '본인 확인')}</p></div></li>)}</ul>
         <h2 className="guide-links-title">공식 경로로 바로 확인하기</h2>
