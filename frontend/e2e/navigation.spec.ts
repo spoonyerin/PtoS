@@ -26,7 +26,7 @@ test('모바일 홈에서 세 입력 화면으로 이동하고 뒤로 돌아온�
     })
     await page.getByRole('button', { name: '홈으로 돌아가기' }).click()
   }
-  await page.getByRole('button', { name: '이용하는 방법' }).click()
+  await page.getByRole('button', { name: /이용 방법/ }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog')).not.toBeVisible()

@@ -4,7 +4,6 @@ import { AnalysisResult } from './components/AnalysisResult'
 import { FamilyAutoAlert, FamilyShare } from './components/FamilyShare'
 import { FamilyPages, parseFamilyRoute } from './components/family/FamilyPages'
 import { FamilyHomeTile, FamilyNews } from './components/family/FamilyHomeTile'
-import { useFamily } from './hooks/useFamily'
 import { Icon } from './components/Icons'
 import { useAnalysis } from './hooks/useAnalysis'
 import type { InputType } from './api/types'
@@ -23,7 +22,6 @@ const readPage = (): Page =>
 export default function App() {
   const [page, setPage] = useState<Page>(readPage)
   const [hash, setHash] = useState(location.hash)
-  const family = useFamily()
   const [content, setContent] = useState('')
   const [senderNumber, setSenderNumber] = useState('')
   const [panel, setPanel] = useState<'guide' | 'settings' | 'notice' | null>(
@@ -175,56 +173,14 @@ export default function App() {
             </section>
             <FamilyNews go={go} />
             <nav className="home-menu" aria-label="확인 방법 선택">
-              {family.available ? (
-                <div className="home-feature-cards">
-                  <FamilyHomeTile go={go} />
-                  <button
-                    className="guide-button"
-                    onClick={() => setPanel('guide')}
-                  >
-                    <span className="menu-symbol help-symbol">
-                      <img
-                        src="/assets/icon_questionmark.png"
-                        width="22"
-                        height="36"
-                        alt=""
-                      />
-                    </span>
-                    <span>
-                      <strong>이용하는 방법</strong>
-                      <small>
-                        처음 이용하시나요? 간단한 방법을
-                        <br />
-                        안내해 드립니다.
-                      </small>
-                    </span>
-                    <Icon name="chevron" />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  className="guide-button"
-                  onClick={() => setPanel('guide')}
-                >
-                  <span className="menu-symbol help-symbol">
-                    <img
-                      src="/assets/icon_questionmark.png"
-                      width="22"
-                      height="36"
-                      alt=""
-                    />
-                  </span>
-                  <span>
-                    <strong>이용하는 방법</strong>
-                    <small>
-                      처음 이용하시나요? 간단한 방법을
-                      <br />
-                      안내해 드립니다.
-                    </small>
-                  </span>
-                  <Icon name="chevron" />
+              <div className="home-feature-cards">
+                <FamilyHomeTile go={go} />
+                <button className="guide-button" onClick={() => setPanel('guide')}>
+                  <span className="family-card-top" aria-hidden="true"><span className="menu-symbol help-symbol"><img src="/assets/icon_questionmark.png" width="22" height="36" alt="" /></span><Icon name="chevron" /></span>
+                  <strong>이용 방법</strong>
+                  <small>방법을 상세하게 안내해 드립니다.</small>
                 </button>
-              )}
+              </div>
               {(['text', 'ocr_text', 'url'] as InputType[]).map((mode) => (
                 <button
                   className="menu-button"

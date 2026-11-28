@@ -68,12 +68,15 @@ function server(handlers: Record<string, (init?: RequestInit) => Response>) {
   })
 }
 
-test('가족 보호가 꺼진 서버에서는 홈에 가족 보호 카드가 없고 요청도 보내지 않는다', async () => {
+test('가족 기능이 꺼져 있어도 카드는 유지하고 실제 가족 요청은 보내지 않는다', async () => {
   history.replaceState(null, '', '/')
   const fetchMock = vi.fn().mockResolvedValue(json({ status: 'ready', mode: 'rules', url_reputation: 'off', llm_review: 'off' }))
   renderApp(fetchMock)
   await waitFor(() => expect(fetchMock).toHaveBeenCalled())
-  expect(screen.queryByRole('button', { name: /가족 보호/ })).toBeNull()
+  const card = screen.getByRole('button', { name: /가족 보호/ })
+  expect(card).toBeInTheDocument()
+  await userEvent.click(card)
+  expect(await screen.findByText(/가족 보호 기능이 이 서버에서 꺼져 있어요/)).toBeInTheDocument()
   expect(fetchMock.mock.calls.every(([url]) => url === '/api/v1/health/ready')).toBe(true)
   expect(readDeviceToken()).toBeNull()
 })

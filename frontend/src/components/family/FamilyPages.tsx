@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type Ref } from 'react'
 import type { FamilyRelation } from '../../api/family'
+import { readDeviceToken } from '../../family/deviceToken'
+import { useFamilyStatus } from '../../hooks/useServiceStatus'
 import { useFamily } from '../../hooks/useFamily'
 import { relationLabels } from '../../family/labels'
 import { Icon } from '../Icons'
@@ -28,6 +30,7 @@ type Go = (hash: string, replace?: boolean) => void
 
 export function FamilyPages({ route, go }: { route: FamilyRoute; go: Go }) {
   const family = useFamily()
+  const status = useFamilyStatus()
   const title = useRef<HTMLHeadingElement>(null)
   const key = JSON.stringify(route)
   useEffect(() => { title.current?.focus(); window.scrollTo(0, 0) }, [key])
@@ -35,11 +38,15 @@ export function FamilyPages({ route, go }: { route: FamilyRoute; go: Go }) {
     return <>
       <FamilyHeader title="가족 보호" onBack={() => go('')} titleRef={title} />
       <main id="main" tabIndex={-1} className="flow-main family-main">
-        <p className="instruction-panel">가족 보호 기능이 이 서버에서 꺼져 있어요. 결과 화면의 "가족에게 공유"로 내용을 직접 보낼 수 있어요.</p>
+        <p className="instruction-panel">{status.family === 'unknown' ? '서버 연결 상태를 확인하지 못했어요. 연결을 확인한 뒤 다시 접속해 주세요.' : '가족 보호 기능이 이 서버에서 꺼져 있어요. 기능이 켜진 서버에서 이용해 주세요.'}</p>
         <button className="primary-button" onClick={() => go('')}><Icon name="home" />홈으로</button>
       </main>
     </>
   }
+  if (!family.summary && readDeviceToken() && !['invite', 'request'].includes(route.name)) return <>
+    <FamilyHeader title="가족 보호" onBack={() => go('')} titleRef={title} />
+    <main id="main" tabIndex={-1} className="flow-main family-main"><p role="status">{family.loading ? '가족 보호 정보를 확인하고 있어요.' : '이용 상태를 확인하지 못했어요. 다시 시도해 주세요.'}</p><button className="primary-button" disabled={family.loading} onClick={() => void family.refresh()}>다시 확인하기</button></main>
+  </>
   switch (route.name) {
     case 'official-guide': return <OfficialGuide onBack={() => go('family')} />
     case 'premium': return <PremiumPage go={go} titleRef={title} />
