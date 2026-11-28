@@ -1594,7 +1594,7 @@ dialog::backdrop {
 .history-responses p { display: flex; align-items: center; gap: 10px; margin: 0; font-size: .88em; }
 .history-responses p + p { margin-top: 12px; }
 .history-responses .family-avatar { width: 36px; height: 36px; flex-basis: 36px; font-size: 1.1em; }
-.history-responses p > span:not(.family-avatar):not(.history-response-check) { flex: 1; min-width: 0; font-size: .85em; color: #48566c; }
+.history-responses:not(.history-my-response) p > span:not(.family-avatar):not(.history-response-check):not(.history-plane) { flex: 1; min-width: 0; font-size: .85em; color: #48566c; }
 .history-response-check { display: block; width: 20px; height: 20px; flex: 0 0 20px; margin-left: auto; border-radius: 50%; background: #17723e; position: relative; }
 .history-response-check::after { content: ''; position: absolute; inset: 2px; background: white; mask: url('/assets/icon-check.svg') center / contain no-repeat; -webkit-mask: url('/assets/icon-check.svg') center / contain no-repeat; }
 .history-response-check.is-waiting { background: #999; }
@@ -1612,3 +1612,10 @@ dialog::backdrop {
 .guardian-send-icon { display: block; width: 28px; height: 28px; background: currentColor; mask: url('/assets/icon-sent.svg') center / contain no-repeat; -webkit-mask: url('/assets/icon-sent.svg') center / contain no-repeat; }
 .guardian-confirm .guardian-send-icon { width: 24px; height: 24px; }
 .history-plane { background: var(--navy); mask: url('/assets/icon-sent.svg') center / contain no-repeat; -webkit-mask: url('/assets/icon-sent.svg') center / contain no-repeat; filter: none; opacity: 1; }
+
+/* 받은 요청의 하단: 아이콘은 고정 폭, 작성자와 의견은 별도 열에 배치합니다. */
+.history-my-response { padding: 14px 22px; }
+.history-responses .history-my-reply { display: grid; grid-template-columns: 25px max-content minmax(0, 1fr); gap: 12px; align-items: center; line-height: 1.4; }
+.history-my-reply .history-plane { width: 25px; height: 25px; }
+.history-my-reply > strong { color: #48566c; }
+.history-responses .history-my-reply > .history-my-reply-text { color: #111; font-size: 1em; overflow-wrap: anywhere; }
