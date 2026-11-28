@@ -1,0 +1,351 @@
+import { useEffect, useRef, useState } from 'react'
+import { AnalysisForm } from './components/AnalysisForm'
+import { AnalysisResult } from './components/AnalysisResult'
+import { FamilyShare } from './components/FamilyShare'
+import { GuardianShare } from './components/GuardianShare'
+import { initialHistoryReplies, type HistoryBox } from './components/FamilyHistory'
+import { guardianPreview } from './guardianPreview'
+import { FamilyDevelopmentPanel, FamilyProtectionCard, initialFamilyPreview, type FamilyPreviewState } from './components/FamilyPreview'
+import { Icon } from './components/Icons'
+import { FamilyProtectionFlow } from './components/FamilyProtectionFlow'
+import { PremiumMembership } from './components/PremiumMembership'
+import { createFamilyModel } from './familyModel'
+import { useAnalysis } from './hooks/useAnalysis'
+import type { InputType } from './api/types'
+import {
+  DevelopmentNote,
+  developmentNoteText,
+} from './components/DevelopmentNote'
+import { useUrlReputationStatus } from './hooks/useServiceStatus'
+type Page = 'home' | 'family' | 'premium' | 'guardian' | InputType
+const readPage = (): Page =>
+  location.hash.startsWith('#family/share/') ? 'guardian' :
+  ['text', 'url', 'ocr_text', 'family', 'premium'].includes(location.hash.slice(1))
+    ? (location.hash.slice(1) as Page)
+    : 'home'
+export default function App() {
+  const [page, setPage] = useState<Page>(readPage)
+  const [routeHash, setRouteHash] = useState(location.hash)
+  const [content, setContent] = useState('')
+  const [shareOpen, setShareOpen] = useState(false)
+  const [panel, setPanel] = useState<'guide' | 'settings' | 'notice' | null>(
+    null,
+  )
+  const [large, setLarge] = useState(false)
+  const [familyPreview, setFamilyPreview] = useState<FamilyPreviewState>(initialFamilyPreview)
+  const premium = familyPreview !== 'free'
+  const [historyBox, setHistoryBox] = useState<HistoryBox>('sent')
+  const [historyReplies, setHistoryReplies] = useState<Record<string, string>>(initialHistoryReplies)
+  const saveHistoryReply = (id: string, reply: string) => setHistoryReplies(previous => ({ ...previous, [id]: reply }))
+  const [familyEntry, setFamilyEntry] = useState<'overview' | 'connect' | 'history'>('overview')
+  const [familyModel, setFamilyModel] = useState(() => createFamilyModel(initialFamilyPreview === 'paid-connected'))
+  const connectedMembers = familyModel.members.filter(member => member.status === 'connected')
+  const connectionSummary = connectedMembers.length ? `${connectedMembers[0].name} 님${connectedMembers.length > 1 ? ` 외 ${connectedMembers.length - 1}명과` : '과'} 연결 완료` : null
+  const analysis = useAnalysis()
+  useEffect(() => { setShareOpen(false) }, [page, analysis.result])
+  const urlReputation = useUrlReputationStatus()
+  const dialog = useRef<HTMLDialogElement>(null)
+  const title = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    const change = () => {
+      setPage(readPage())
+      setRouteHash(location.hash)
+      analysis.reset()
+      // 뒤로/앞으로 이동으로 다른 확인 화면에 원문이 넘어가지 않게 지운다.
+      setContent('')
+    }
+    window.addEventListener('hashchange', change)
+    window.addEventListener('popstate', change)
+    return () => {
+      window.removeEventListener('hashchange', change)
+      window.removeEventListener('popstate', change)
+    }
+  }, [analysis.reset])
+  useEffect(() => {
+    if (panel) dialog.current?.showModal()
+    else if (dialog.current?.open) dialog.current.close()
+  }, [panel])
+  useEffect(() => {
+    title.current?.focus()
+    window.scrollTo(0, 0)
+  }, [page, !!analysis.result])
+  function navigate(next: Page) {
+    analysis.reset()
+    setContent('')
+    history.pushState(
+      null,
+      '',
+      next === 'home' ? location.pathname + location.search : next === 'guardian' ? '#family/share/preview' : '#' + next,
+    )
+    setPage(next)
+    setRouteHash(location.hash)
+  }
+  const titles = {
+    text: '문자 확인하기',
+    url: '링크 확인하기',
+    ocr_text: '사진으로 확인하기',
+    home: '',
+  }
+  return (
+    <div className={`app-shell${large ? ' large-text' : ''}`}>
+      <a
+        href="#main"
+        className="skip-link"
+        onClick={(event) => {
+          event.preventDefault()
+          document.getElementById('main')?.focus()
+        }}
+      >
+        본문 바로가기
+      </a>
+      {page === 'guardian' ? (
+        <GuardianShare request={import.meta.env.DEV && routeHash === '#family/share/preview' ? guardianPreview : null} onBack={() => navigate('home')} initialReply={historyReplies.delivery} onReply={reply => saveHistoryReply('delivery', reply)} onHistory={() => { setHistoryBox('received'); setFamilyEntry('history'); navigate('family') }} />
+      ) : shareOpen && analysis.result && premium ? (
+        <FamilyShare mock result={analysis.result} members={familyModel.members} onBack={() => setShareOpen(false)} onHome={() => navigate('home')} onConnect={() => { setFamilyEntry('connect'); navigate('family') }} />
+      ) : page === 'premium' ? (
+        <PremiumMembership active={premium} onBack={() => navigate('home')} onActivate={() => {
+          if (!import.meta.env.DEV) return
+          setFamilyPreview('paid-unlinked')
+          setFamilyModel(createFamilyModel(false))
+        }} onConnect={() => { setFamilyEntry('connect'); navigate('family') }} />
+      ) : page === 'family' ? (
+        premium ? <FamilyProtectionFlow historyBox={historyBox} onChangeHistoryBox={setHistoryBox} historyReplies={historyReplies} onHistoryReply={saveHistoryReply} initialScreen={familyEntry} model={familyModel} setModel={setFamilyModel} onHome={() => navigate('home')} />
+          : <main id="main" className="flow-main"><h1>가족 보호</h1><p>프리미엄 이용권으로 사용할 수 있어요.</p><button className="primary-button" onClick={() => navigate('home')}>홈으로</button></main>
+      ) : page === 'home' ? (
+        <>
+          <header className="home-header">
+            <div className="brand" aria-label="PtoS">
+              {/* Crop the exported PNG's transparent padding without altering the original. */}
+              <svg
+                className="brand-image"
+                viewBox="408 113 1463 513"
+                role="img"
+                aria-label="PtoS"
+              >
+                <image
+                  href="/assets/PtoS_logo_rm.png"
+                  width="2271"
+                  height="755"
+                />
+              </svg>
+            </div>
+            <div className="header-tools">
+              <button
+                className="icon-button"
+                aria-label="알림"
+                onClick={() => setPanel('notice')}
+              >
+                <img
+                  className="header-asset-icon"
+                  src="/assets/icon_notification_rm.png"
+                  width="36"
+                  height="36"
+                  alt=""
+                />
+              </button>
+              <button
+                className="icon-button"
+                aria-label="설정"
+                onClick={() => setPanel('settings')}
+              >
+                <img
+                  className="header-asset-icon"
+                  src="/assets/icon_setting_rm.png"
+                  width="36"
+                  height="36"
+                  alt=""
+                />
+              </button>
+            </div>
+          </header>
+          <main id="main" tabIndex={-1} className="home-main">
+            <section className="hero">
+              <div className="hero-copy">
+                <p>스미는 사기, 미리 막는 습관</p>
+                <h1 ref={title} tabIndex={-1}>
+                  쉽게 확인하고
+                  <br />
+                  <em>안전하게</em> 대응하세요.
+                </h1>
+                <p>
+                  문자, 사진, 링크 속 위험을
+                  <br />
+                  PtoS가 알려드립니다.
+                </p>
+              </div>
+              <img
+                className="hero-art"
+                src="/assets/logo_main.png"
+                width="1254"
+                height="1254"
+                alt=""
+                fetchPriority="high"
+              />
+            </section>
+            <nav className="home-menu" aria-label="확인 방법 선택">
+              <div className="home-feature-cards">
+                <FamilyProtectionCard state={familyPreview} connectionSummary={connectionSummary} onOpen={() => { setFamilyEntry('overview'); navigate(premium ? 'family' : 'premium') }} />
+                <button className="guide-button" aria-label="이용하는 방법" onClick={() => setPanel('guide')}>
+                  <span className="family-card-top" aria-hidden="true">
+                    <span className="menu-symbol help-symbol">
+                      <img src="/assets/icon_questionmark.png" width="22" height="36" alt="" />
+                    </span>
+                    <Icon name="chevron" />
+                  </span>
+                  <strong>이용 방법</strong>
+                  <small>방법을 상세하게 안내해 드립니다.</small>
+                </button>
+              </div>
+              {(['text', 'ocr_text', 'url'] as InputType[]).map((mode) => (
+                <button
+                  className="menu-button"
+                  key={mode}
+                  onClick={() => navigate(mode)}
+                >
+                  <span className="menu-symbol">
+                    <img
+                      className="menu-asset-icon"
+                      src={`/assets/${mode === 'text' ? 'icon_message_rm.png' : mode === 'url' ? 'icon_link_rm.png' : 'icon_image_rm.png'}`}
+                      width="46"
+                      height="46"
+                      alt=""
+                    />
+                  </span>
+                  <strong>{titles[mode]}</strong>
+                  <Icon name="chevron" />
+                </button>
+              ))}
+            </nav>
+            <DevelopmentNote />
+          </main>
+        </>
+      ) : (
+        <>
+          <header
+            className={`page-header${analysis.result ? ' result-header' : ''}`}
+          >
+            <button
+              className="icon-button"
+              aria-label={analysis.result ? '다시 확인하기' : '홈으로 돌아가기'}
+              onClick={() =>
+                analysis.result ? analysis.reset() : navigate('home')
+              }
+            >
+              <Icon name="back" />
+            </button>
+            <h1 ref={title} tabIndex={-1}>
+              {analysis.result ? '분석 결과' : titles[page]}
+            </h1>
+          </header>
+          <main id="main" tabIndex={-1} className="flow-main">
+            {analysis.result && (
+              <>
+                <AnalysisResult result={analysis.result}>
+                  <div className="result-buttons">
+                    {premium ? <button className="primary-button" onClick={() => setShareOpen(true)}><Icon name="share" />가족에게 공유</button> : (
+                      <button type="button" className="primary-button locked-share" disabled
+                        aria-label="가족에게 공유" aria-describedby="share-lock-hint">
+                        <Icon name="lock" />가족에게 공유
+                      </button>
+                    )}
+                    <button
+                      className="primary-button"
+                      onClick={() => navigate('home')}
+                    >
+                      <Icon name="home" />
+                      홈으로
+                    </button>
+                  </div>
+                  {!premium && <span id="share-lock-hint" className="sr-only">프리미엄 이용권 활성화 후 사용할 수 있습니다.</span>}
+                </AnalysisResult>
+              </>
+            )}
+            <div hidden={!!analysis.result}>
+              <AnalysisForm
+                content={content}
+                inputType={page}
+                loading={analysis.status === 'loading'}
+                error={analysis.error}
+                onContentChange={(value) => {
+                  setContent(value)
+                  analysis.reset()
+                }}
+                onReset={analysis.reset}
+                onOcrSubmit={(text) => {
+                  void analysis.submit({
+                    input_type: 'ocr_text',
+                    content: text,
+                    ocr_confirmed: true,
+                  })
+                }}
+                onSubmit={() => {
+                  void analysis.submit({ input_type: page, content })
+                }}
+              />
+            </div>
+          </main>
+        </>
+      )}
+      <dialog
+        ref={dialog}
+        aria-labelledby="dialog-title"
+        onCancel={() => setPanel(null)}
+        onClose={() => setPanel(null)}
+      >
+        {panel && (
+          <>
+            <div className="dialog-heading">
+              <h2 id="dialog-title">
+                {panel === 'guide'
+                  ? '이용하는 방법'
+                  : panel === 'settings'
+                    ? '화면 설정'
+                    : '알림'}
+              </h2>
+              <button
+                className="icon-button"
+                aria-label="닫기"
+                onClick={() => setPanel(null)}
+              >
+                <Icon name="close" />
+              </button>
+            </div>
+            {panel === 'guide' ? (
+              <ol className="guide-list">
+                <li>문자, 사진, 링크 중 확인할 방법을 선택하세요.</li>
+                <li>
+                  개인정보를 가린 내용을 입력하세요. 사진은 읽어낸 글자를 원본과
+                  비교하고 확인해주세요.
+                </li>
+                <li>
+                  분석 결과의 위험 신호와 다음 행동을 살펴보세요. 결과가 안전을
+                  보장하지는 않아요.
+                </li>
+              </ol>
+            ) : panel === 'settings' ? (
+              <><label className="font-setting">
+                <input
+                  type="checkbox"
+                  checked={large}
+                  onChange={(e) => setLarge(e.target.checked)}
+                />
+                글씨 크게 보기
+              </label>
+              <button type="button" className="premium-settings-link" onClick={() => { setPanel(null); navigate('premium') }}>가족 보호 프리미엄<Icon name="chevron" /></button></>
+            ) : (
+              <p>
+                규칙 기반 개발 버전입니다. {developmentNoteText(urlReputation)}
+              </p>
+            )}
+          </>
+        )}
+      </dialog>
+      {import.meta.env.DEV && <FamilyDevelopmentPanel historyBox={historyBox} onHistoryBoxChange={setHistoryBox} onOpenHistory={() => { setFamilyEntry('history'); navigate('family') }} onOpenGuardian={() => navigate('guardian')} state={familyPreview} onChange={state => {
+        setFamilyPreview(state)
+        setFamilyModel(createFamilyModel(state === 'paid-connected'))
+        if (page === 'family' && state === 'free') navigate('home')
+        setPanel(null)
+      }} />}
+    </div>
+  )
+}
