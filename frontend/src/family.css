@@ -680,3 +680,62 @@
   min-height: 60px;
   font-size: 1.1em;
 }
+
+/* Latest UI on live API state; no synthetic records in these screens. */
+.family-main { padding: 12px 24px 36px; }
+.family-panel { border-radius: 14px; box-shadow: none; padding: 18px; }
+.family-section-heading h2,.family-section>h2 { font-size: 1.28rem; color: #080808; }
+.family-link-list { padding: 0; margin: 0; list-style: none; }
+.family-link-list li { padding: 16px 0; min-height: 88px; border-bottom: 1px solid #ddd; }
+.family-link-list li:last-child { border-bottom: none; }
+.family-avatar { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%; background: #e4ddf4; color: #8052d8; font-size: 1.5rem; font-weight: 600; }
+.family-row { padding: 22px 12px; min-height: 96px; }
+.family-row strong { font-size: 1.18rem; color: #080808; }
+.family-row small { line-height: 1.45; }
+.family-choice-grid .family-choice { display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 10px; min-height: 52px; }
+.family-choice.selected { background: #171c78; color: white; border-color: #171c78; }
+.family-tabs { border-bottom: 1px solid #ddd; border-radius: 0; background: white; }
+.family-tabs button { flex: 1; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: white; padding: 16px 4px; }
+.family-tabs button.selected { border-color: #171c78; color: #171c78; background: white; font-weight: 700; }
+.live-history .history-date-group>h2 { font-size: 1rem; color: #4d607a; }
+.live-history .history-subject strong { font-size: 1.05rem; }
+.live-history .history-subject small { display: block; color: #4d607a; }
+.live-history .history-meta { flex-wrap: wrap; }
+.live-history .history-meta small { font-size: .82rem; }
+.live-history .family-risk-chip { font-size: .8rem; }
+.live-history .family-risk-chip>span { display: none; }
+.live-requester-copy { flex: 1; margin: 0; font-size: 1rem; }
+.live-requester-copy small { display: block; margin-top: 4px; }
+.guardian-requester { box-shadow: none; }
+.family-result .family-result-banner { padding: 18px; border-radius: 10px; background: #f2f3f6; }
+.family-result .evidence-list { background: transparent; padding: 0; }
+.family-result .evidence-item { background: transparent; padding: 8px 0; }
+.family-result .evidence-title { font-size: 1.08rem; gap: 10px; }
+.family-result .evidence-item>p { margin-left: 42px; color: #4d607a; font-size: .94rem; }
+.family-result .factor-symbol { width: 30px; height: 30px; }
+.family-result .factor-symbol img { width: 68%; height: 68%; }
+.family-reply-form .family-option { border: none; background: none; padding: 6px 0; min-height: 34px; }
+.family-reply-form .family-option input { accent-color: #171c78; }
+.live-share-page { position: fixed; inset: 0; margin: 0 auto; width: min(100%, 480px); height: 100dvh; max-height: 100dvh; border-radius: 0; }
+.live-share-page .share-sheet-content { padding: 24px; }
+.live-share-recipients .family-option { min-height: 92px; border-radius: 12px; gap: 12px; }
+.live-share-recipients .family-option.selected { border: 2px solid #171c78; background: white; }
+.live-share-recipients .family-option.disabled { background: #f6f6f6; }
+.family-timeline { background: #f2f3f6; border-radius: 16px; padding: 24px; }
+.family-step strong { font-size: 1.12rem; }
+@media(max-width:360px) { .family-main { padding-inline:16px; } .live-share-page .share-sheet-content { padding:16px; } }
+.family-protection-card.family-tile { position: relative; display: flex; flex-direction: column; align-items: stretch; text-align: left; padding: 18px; }
+.family-protection-card.family-tile .family-card-top { display: flex; justify-content: space-between; align-items: center; }
+.family-protection-card.family-tile small { color: #4d607a; }
+.live-requester-copy { min-width: 0; }
+.family-result.dangerous .family-result-banner { background: #f6dada; }
+.family-result.suspicious .family-result-banner { background: #fff0be; }
+.family-result.normal .family-result-banner { background: #dcf0e2; }
+.live-share-page { --risk: #48566c; --tint: #e0e5ec; }
+.live-share-page.dangerous { --risk: #ad2a25; --tint: #f5d9d9; }
+.live-share-page.suspicious { --risk: #966200; --tint: #ffefbf; }
+.live-share-page.normal { --risk: #19733f; --tint: #dcf0e2; }
+.guardian-requester .live-requester-copy { word-break: keep-all; }
+.guardian-requester .family-avatar { background: #ccebd7; color: #149d39; }
+
+.family-tabs button { box-shadow: none; }

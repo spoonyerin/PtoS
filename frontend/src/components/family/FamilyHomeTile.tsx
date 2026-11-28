@@ -11,11 +11,10 @@ export function FamilyHomeTile({ go }: { go: (hash: string) => void }) {
   const detail = !active ? '프리미엄 이용권으로 사용할 수 있어요.'
     : connected.length ? `✓ ${connected[0].name} 님${connected.length > 1 ? ` 외 ${connected.length - 1}명` : ''}과 연결 완료`
       : protecting ? '✓ 가족을 지켜 주고 있어요' : '가족을 연결해 보세요.'
-  return <button className={`family-tile${active ? ' active' : ''}`} onClick={() => go(active ? 'family' : 'family/premium')}>
-    <span className="family-tile-icon" aria-hidden="true"><Icon name="people" />{!active && <span className="family-lock">🔒</span>}</span>
+  return <button className={`family-protection-card family-tile${active ? ' active' : ''}`} onClick={() => go(active ? 'family' : 'family/premium')}>
+    <span className="family-card-top" aria-hidden="true"><span className="family-card-icon"><span className="family-people-glyph" />{!active && <span className="family-card-lock">🔒</span>}</span><Icon name="chevron" /></span>
     <strong>가족 보호</strong>
     <small>{detail}</small>
-    <Icon name="chevron" />
   </button>
 }
 

@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState, type FormEvent, type Ref } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent, type Ref } from 'react'
 import type { FamilyReplyChoice, FamilyRequestItem } from '../../api/family'
 import { useFamily } from '../../hooks/useFamily'
 import { factorLabels, formatTime, replyLabels, replyText } from '../../family/labels'
+import { Avatar } from './FamilyParts'
+import { riskLevels } from '../../riskLevels'
 import { Icon } from '../Icons'
 import { FactorList, FamilyHeader, ReplyCard, RequestTimeline, RiskChip, WaitWarning } from './FamilyParts'
 
@@ -12,11 +14,6 @@ function errorText(error: unknown) {
   return error instanceof Error ? error.message : '요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.'
 }
 
-function statusText(item: FamilyRequestItem): string {
-  if (item.box === 'received') return item.reply ? `보낸 의견: ${replyText(item.reply)}` : '아직 의견을 보내지 않았어요.'
-  if (item.reply) return `의견 도착: ${replyText(item.reply)}`
-  return item.viewed_at ? '가족이 확인했어요. 의견을 기다리는 중이에요.' : '가족이 아직 확인하지 않았어요.'
-}
 
 export function RecordsPage({ box, go, titleRef }: Props & { box: 'sent' | 'received' }) {
   const family = useFamily()
@@ -31,9 +28,20 @@ export function RecordsPage({ box, go, titleRef }: Props & { box: 'sent' | 'rece
       .catch(e => { if (active) setError(errorText(e)) })
     return () => { active = false }
   }, [box, family.actions])
+  useEffect(() => {
+    let active = true
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return
+      family.actions.listRequests(box).then(list => { if (active) { setItems(list); setError('') } }).catch(e => { if (active) setError(errorText(e)) })
+    }
+    const timer = window.setInterval(refresh, 4_000)
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refresh)
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh) }
+  }, [box, family.actions])
   const tabs = [
-    { box: 'sent' as const, label: '보낸 요청', count: family.summary?.new_replies ?? 0 },
     { box: 'received' as const, label: '받은 요청', count: family.summary?.waiting_requests ?? 0 },
+    { box: 'sent' as const, label: '보낸 요청', count: family.summary?.new_replies ?? 0 },
   ]
   return <>
     <FamilyHeader title="가족 보호 기록" onBack={() => go('family')} titleRef={titleRef} />
@@ -48,21 +56,18 @@ export function RecordsPage({ box, go, titleRef }: Props & { box: 'sent' | 'rece
       {error && <p className="error-message" role="alert">{error}</p>}
       {!items && !error && <p role="status">기록을 불러오고 있어요.</p>}
       {items?.length === 0 && <p className="family-empty">아직 기록이 없어요.</p>}
-      <ul className="family-record-list">
-        {items?.map(item => <li key={item.id}>
-          <button className="family-record" onClick={() => go(`family/request/${encodeURIComponent(item.id)}`)}>
-            <span className="family-record-top">
-              <strong>{item.box === 'sent' ? `${item.name} 님에게` : `${item.name} 님이 요청`}</strong>
-              <RiskChip level={item.risk_level} />
-            </span>
-            <small>{formatTime(item.created_at)}{item.auto ? ' · 자동 알림' : ''}</small>
-            <span className="family-record-factors">{item.factor_codes.map(code => factorLabels[code]).join(', ') || '확인된 위험 요소 없음'}</span>
-            <span className={`family-record-status${(item.box === 'received' && !item.reply) || (item.box === 'sent' && item.reply) ? ' highlight' : ''}`}>
-              {statusText(item)}
-            </span>
-          </button>
-        </li>)}
-      </ul>
+      <div className="live-history">
+        {items?.map(item => <section className="history-date-group" key={item.id}>
+          <h2>{new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' }).format(new Date(item.created_at))}</h2>
+          <article className={`history-request${box === 'received' && !item.reply ? ' is-pending' : ''}`}>
+            <button className="history-open" aria-label={`${item.name} 님${box === 'received' ? '이 요청' : '에게 보낸 요청'} 확인하기`} onClick={() => go(`family/request/${encodeURIComponent(item.id)}`)}>
+              <span className="history-meta"><RiskChip level={item.risk_level} /><small>{formatTime(item.created_at)}{item.auto ? ' · 자동 알림' : ''}</small><Icon name="chevron" /></span>
+              <span className="history-subject"><Avatar name={item.name} /><span><small>{item.name}</small><strong>{item.factor_codes.map(code => factorLabels[code]).join(' · ') || '분석 결과 확인 요청'}</strong></span></span>
+            </button>
+            <div className="history-responses history-my-response"><p className="history-my-reply"><span className="history-plane" aria-hidden="true" /><strong>{box === 'received' ? '나' : item.name}</strong><span className="history-my-reply-text">{item.reply ? replyText(item.reply) : ''}</span></p></div>
+          </article>
+        </section>)}
+      </div>
     </main>
   </>
 }
@@ -118,12 +123,14 @@ function ReceivedRequest({ item, onReplied }: { item: FamilyRequestItem; onRepli
   const [text, setText] = useState('')
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
+  const confirmation = useRef<HTMLDialogElement>(null)
   async function submit(event: FormEvent) {
     event.preventDefault()
     setPending(true)
     setError('')
     try {
       onReplied(await family.actions.reply(item.id, choice, choice === 'custom' ? text : undefined))
+      confirmation.current?.showModal()
     } catch (e) {
       setError(errorText(e))
     } finally {
@@ -131,14 +138,14 @@ function ReceivedRequest({ item, onReplied }: { item: FamilyRequestItem; onRepli
     }
   }
   return <>
-    <p className="family-request-head panel">
-      <strong>{item.name} 님이 확인을 요청했어요.</strong>
+    <div className="guardian-requester"><Avatar name={item.name} /><p className="live-requester-copy">
+      <span><strong>{item.name}</strong> 님이 확인을 요청했어요.</span>
       <small>{formatTime(item.created_at)}{item.auto ? ' · 위험 결과 자동 알림' : ''}</small>
-    </p>
-    <section className={`result-card ${item.risk_level} family-result`} aria-labelledby="family-result-title">
-      <div className="family-result-banner">
-        <h2 id="family-result-title"><RiskChip level={item.risk_level} /></h2>
-        <p>PtoS가 이 문자를 이렇게 분석했어요. 사기 여부를 확정하거나 안전을 보장하지 않아요.</p>
+    </p><button className="guardian-history" aria-label="가족 보호 기록 보기" onClick={() => { location.hash = 'family/records/received' }}><span aria-hidden="true" />기록</button></div>
+    <section className={`result-card ${item.risk_level} family-result guardian-analysis`} aria-labelledby="family-result-title">
+      <div className="family-result-banner guardian-risk">
+        <span className="guardian-risk-icon" aria-hidden="true"><img src={`/assets/status-${item.risk_level === 'dangerous' ? 'danger' : item.risk_level === 'suspicious' ? 'suspicious' : item.risk_level === 'normal' ? 'normal' : 'insufficient'}.svg`} alt="" /></span>
+        <div><h2 id="family-result-title">{riskLevels[item.risk_level].label}{item.risk_level !== 'insufficient_information' && <> <small>단계</small></>}</h2><p>PtoS 분석 결과이며 안전을 보장하지 않아요.</p></div>
       </div>
       <h3 className="family-subtitle">발견된 위험 요소</h3>
       <FactorList codes={item.factor_codes} level={item.risk_level} />
@@ -164,8 +171,9 @@ function ReceivedRequest({ item, onReplied }: { item: FamilyRequestItem; onRepli
       </>}
       {error && <p className="error-message" role="alert">{error}</p>}
       <button className="primary-button family-submit" disabled={pending || (choice === 'custom' && !text.trim())}>
-        <Icon name="share" />의견 보내기
+        <span className="guardian-send-icon" aria-hidden="true" />의견 보내기
       </button>
     </form>}
+    <dialog ref={confirmation} className="guardian-confirm" aria-labelledby="live-opinion-title"><div><h2 id="live-opinion-title"><span className="guardian-send-icon" aria-hidden="true" />의견 보내기</h2><p>의견이 정상적으로 전송됐어요!<br />자세한 내역은 가족 보호 기록에서 확인할 수 있어요.</p></div><button onClick={() => confirmation.current?.close()}>확인</button></dialog>
   </>
 }

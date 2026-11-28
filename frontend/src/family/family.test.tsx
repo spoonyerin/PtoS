@@ -117,9 +117,9 @@ test('받은 확인 요청에 의견을 보내고, 원문 없이 위험 단계�
     },
   })
   renderApp(fetchMock)
-  expect(await screen.findByText('엄마 님이 확인을 요청했어요.')).toBeInTheDocument()
+  expect(await screen.findByText((_, node) => node?.tagName === 'SPAN' && node.textContent === '엄마 님이 확인을 요청했어요.')).toBeInTheDocument()
   expect(screen.getByText('링크 클릭·접속 요구')).toBeInTheDocument()
-  expect(screen.getAllByText(/위험 단계/).length).toBeGreaterThan(0)
+  expect(screen.getByRole('heading', { name: '위험 단계' })).toBeInTheDocument()
   await userEvent.click(screen.getByRole('radio', { name: '직접 입력하기' }))
   await userEvent.type(screen.getByRole('textbox', { name: '보낼 메시지' }), '전화할게요')
   await userEvent.click(screen.getByRole('button', { name: '의견 보내기' }))

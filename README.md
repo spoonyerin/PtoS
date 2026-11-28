@@ -1,6 +1,6 @@
 # PtoS · 규칙 분석·URL 평판 어댑터·스크린샷 OCR
 
-> **`feat/family-share-ui` 화면 확인:** 개발 서버는 기본으로 `dev_week13`의 최신 UI와 모의 데이터를 사용합니다. 백엔드 없이 실행할 수 있으며, 기존 API 연동 화면과 전환하는 방법은 [UI 통합 미리보기 안내](docs/FAMILY_SHARE_UI_PREVIEW.md)를 보세요. 아래의 API 기능 설명은 **API 연동 모드** 기준입니다.
+> **`feat/family-share-ui` 화면 확인:** 기본 화면에 최신 UI와 실제 API를 연결했습니다. 백엔드가 필요하며, 상단 모드 선택의 **UI 미리보기**에서는 서버 없이 모의 동작을 확인할 수 있습니다. [통합 안내](docs/FAMILY_SHARE_UI_PREVIEW.md)를 보세요.
 
 문자 또는 URL을 입력하면 FastAPI가 규칙 기반 위험 신호와 URL 형식·평판 연결 상태를 반환합니다. 스크린샷은 **미리보기 → OCR → 사용자 확인·수정 → 명시적인 확인 후 분석**을 거칩니다. OCR 직후 자동 위험 분석하지 않습니다. React/TypeScript 화면과 Python/FastAPI 분석기를 한 저장소에서 관리합니다.
 

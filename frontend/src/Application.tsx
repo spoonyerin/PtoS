@@ -24,7 +24,7 @@ export default function Application() {
   const [preview] = useState(() => {
     const requested = new URLSearchParams(location.search).get('mode')
     return import.meta.env.DEV && requested !== 'connected'
-      && (requested === 'preview' || import.meta.env.VITE_UI_PREVIEW_DEFAULT !== 'connected')
+      && (requested === 'preview' || import.meta.env.VITE_UI_PREVIEW_DEFAULT === 'preview')
   })
 
   function change(mode: string) {
@@ -41,7 +41,7 @@ export default function Application() {
       <p>미리보기는 합성 데이터로 동작하며 실제 분석·전송·결제를 하지 않습니다. 모드를 바꾸면 화면 상태가 초기화됩니다.</p>
       <label>화면 모드 <select value={preview ? 'preview' : 'connected'} onChange={event => change(event.target.value)}>
         <option value="preview">dev_week13 UI 미리보기</option>
-        <option value="connected">feat/family-share API 연동 화면</option>
+        <option value="connected">최신 UI · API 연동 화면</option>
       </select></label>
     </details>}
     {preview && Preview

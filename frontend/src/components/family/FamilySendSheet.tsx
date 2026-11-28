@@ -3,6 +3,7 @@ import type { FactorCode, FamilyRequestItem } from '../../api/family'
 import type { AnalysisResponse } from '../../api/types'
 import { useFamily } from '../../hooks/useFamily'
 import { factorLabels, relationLabels } from '../../family/labels'
+import { factorDisplay } from '../../resultPresentation'
 import { Icon } from '../Icons'
 import { Avatar, ReplyCard, RequestTimeline, RiskChip, WaitWarning } from './FamilyParts'
 
@@ -53,7 +54,7 @@ export function FamilySendSheet({ result, large, onClose, onOtherShare, go }: {
     }
   }
   const names = sent?.map(item => item.name).join(', ')
-  return <dialog ref={dialog} className={`share-sheet family-sheet${large ? ' share-sheet-large' : ''}`} aria-labelledby="family-send-title"
+  return <dialog ref={dialog} className={`share-sheet family-sheet live-share-page ${result.risk_level}${large ? ' share-sheet-large' : ''}`} aria-labelledby="family-send-title"
     onCancel={event => { event.preventDefault(); onClose() }}>
     <div className="share-sheet-content">
       <header className="share-sheet-header">
@@ -62,15 +63,15 @@ export function FamilySendSheet({ result, large, onClose, onOtherShare, go }: {
       </header>
       {!sent ? <>
         <p><strong>가족에게 이렇게 보내요.</strong><br />보낼 내용을 먼저 확인해 주세요.</p>
-        <section className="family-preview" aria-label="보낼 내용">
+        <section className="family-share-preview" aria-label="보낼 내용">
           <p className="family-request-head"><strong>PtoS 분석 결과</strong><RiskChip level={result.risk_level} /></p>
           <h3>발견된 위험 요소</h3>
           {codes.length
-            ? <ul>{codes.map(code => <li key={code}>{factorLabels[code]}</li>)}</ul>
+            ? <ul className="family-share-factors">{codes.map(code => <li key={code}><span className="factor-symbol"><img src={`/assets/${factorDisplay[code]?.icon ?? 'risk-people'}.svg`} alt="" /></span><strong>{factorLabels[code]}</strong></li>)}</ul>
             : <p>확인된 위험 신호가 없어요. 정상이라는 뜻은 아니에요.</p>}
           <p className="hint">입력한 문자 원문, 링크 주소, 보낸 번호는 보내지 않아요.</p>
         </section>
-        <fieldset className="family-fieldset">
+        <fieldset className="family-fieldset live-share-recipients">
           <legend className="field-label">누구에게 보낼까요?</legend>
           {guardians.map(link => {
             const disabled = link.status !== 'connected'
@@ -93,7 +94,7 @@ export function FamilySendSheet({ result, large, onClose, onOtherShare, go }: {
         <button type="button" className="text-button" onClick={onOtherShare}>다른 앱으로 공유하거나 복사하기</button>
       </> : <>
         <div className="family-hero compact">
-          <span className="family-hero-icon" aria-hidden="true">⏱</span>
+          <span className="family-share-clock" aria-hidden="true" />
           <p role="status"><strong>{names} 님에게 결과를 보냈어요.</strong><br />
             {family.summary?.push_subscribed ? '가족이 의견을 보내면 알림으로 알려드릴게요.' : '가족의 의견은 이 창이나 가족 보호 기록에서 볼 수 있어요.'}</p>
         </div>

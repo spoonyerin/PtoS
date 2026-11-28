@@ -24,6 +24,7 @@ test.beforeEach(async ({ page }) => {
       },
     })
 
+    for (const method of ['pause', 'resume']) Object.defineProperty(speechSynthesis, method, { configurable: true, value: () => {} })
     Object.defineProperty(speechSynthesis, 'cancel', {
       configurable: true,
       value: () => {},
@@ -74,14 +75,18 @@ for (const [level, label] of [
       await expect.poll(() => icon.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true)
     }
     for (const icon of await page.locator('.factor-symbol img').all()) {
-      await expect(icon).toHaveCSS('filter', 'none')
+      const image = await icon.boundingBox()
+      const disc = await icon.locator('..').boundingBox()
+      expect(Math.abs(image!.x + image!.width / 2 - disc!.x - disc!.width / 2)).toBeLessThan(1)
+      expect(Math.abs(image!.y + image!.height / 2 - disc!.y - disc!.height / 2)).toBeLessThan(1)
     }
+    await page.locator('.result-findings').screenshot({ path: `test-results/findings-${level}.png` })
     await page.screenshot({ path: `test-results/result-${level}.png`, fullPage: true })
-    const listen = page.getByRole('button', { name: '음성안내 듣기', exact: true })
+    const listen = page.getByRole('button', { name: '분석 결과와 대처 방법 듣기', exact: true })
     await expect(listen).toHaveAttribute('aria-pressed', 'false')
     await page.screenshot({ path: `test-results/voice-${level}-before.png`, fullPage: true })
     await listen.click()
-    const stop = page.getByRole('button', { name: '음성안내 멈춤', exact: true })
+    const stop = page.getByRole('button', { name: '음성 안내 일시정지', exact: true })
     await expect(stop).toHaveAttribute('aria-pressed', 'true')
     expect(await page.locator('.voice-disc').evaluate(el => getComputedStyle(el, '::before').animationName)).toBe('voice-pulse')
     // Freeze a visible animation frame for a reproducible UI preview.
@@ -95,7 +100,12 @@ for (const [level, label] of [
     await page.emulateMedia({ reducedMotion: 'reduce' })
     expect(await page.locator('.voice-disc').evaluate(el => getComputedStyle(el, '::before').animationName)).toBe('none')
     await stop.click()
-    await expect(listen).toBeVisible()
+    await expect(page.getByRole('button', { name: '음성 안내 계속 듣기', exact: true })).toBeVisible()
+    await page.screenshot({ path: `test-results/voice-${level}-paused.png`, fullPage: true })
+    await page.getByRole('button', { name: '음성 안내 계속 듣기', exact: true }).click()
+    await expect(stop).toBeVisible()
+    await expect(page.getByRole('button', { name: '음성 안내 종료', exact: true })).toHaveCount(0)
+    await expect(page.locator('.voice-controls button')).toHaveCount(1)
     await expect(page.getByRole('status')).toHaveCount(0)
     await page.emulateMedia({ reducedMotion: 'no-preference' })
     await page.setViewportSize({ width: 320, height: 740 })
@@ -105,6 +115,9 @@ for (const [level, label] of [
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     const banner = page.locator('.result-banner')
     expect(await banner.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+    for (const card of await page.locator('.evidence-item, .empty-evidence').all()) {
+      expect(await card.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+    }
     await expect(page.locator('.result-status-copy')).toHaveCSS('text-align', 'left')
     await expect(page.locator('.result-banner p span')).toHaveCount(2)
     await page.screenshot({ path: `test-results/result-${level}-large.png`, fullPage: true })

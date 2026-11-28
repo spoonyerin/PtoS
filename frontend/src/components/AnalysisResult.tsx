@@ -151,7 +151,7 @@ export function AnalysisResult({
         </div>
       </details>
       <p className="result-disclaimer">
-        규칙 기반 개발 버전 · 결과는 안전을 보장하지 않아요.
+        결과는 안전을 보장하지 않아요.
       </p>
     </section>
   )

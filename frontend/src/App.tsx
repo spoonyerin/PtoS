@@ -176,7 +176,7 @@ export default function App() {
             <FamilyNews go={go} />
             <nav className="home-menu" aria-label="확인 방법 선택">
               {family.available ? (
-                <div className="home-tiles">
+                <div className="home-feature-cards">
                   <FamilyHomeTile go={go} />
                   <button
                     className="guide-button"

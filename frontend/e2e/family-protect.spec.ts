@@ -23,6 +23,7 @@ test('초대 → 수락 → 확인 요청 → 의견 → 자동 알림 흐름', 
   // 고령자: 시연용 프리미엄 시작, 가족 초대 만들기
   await page.goto(`${BASE}/`)
   await page.getByRole('button', { name: /가족 보호.*프리미엄 이용권/ }).click()
+  await page.screenshot({ path: 'test-results/live-premium.png', fullPage: true })
   await page.getByRole('button', { name: '프리미엄 시작하기 (시연용)' }).click()
   await expect(page.getByText('프리미엄이 시작됐어요!')).toBeVisible()
   await page.getByRole('button', { name: '지금 가족 연결하기' }).click()
@@ -60,6 +61,7 @@ test('초대 → 수락 → 확인 요청 → 의견 → 자동 알림 흐름', 
 
   // 고령자: 분석 결과를 앱 안에서 가족에게 보낸다.
   await analyze(page)
+  await page.screenshot({ path: 'test-results/live-result.png', fullPage: true })
   await page.getByRole('button', { name: '가족에게 공유', exact: true }).click()
   const sheet = page.getByRole('dialog', { name: '가족에게 공유하기' })
   await expect(sheet.getByRole('checkbox', { name: /우리 딸/ })).toBeChecked()
@@ -73,6 +75,7 @@ test('초대 → 수락 → 확인 요청 → 의견 → 자동 알림 흐름', 
   // 보호자: 홈 알림 → 받은 요청 → 의견 보내기. 원문·URL·번호는 보이지 않는다.
   await guardian.goto(`${BASE}/`)
   await guardian.getByRole('button', { name: /가족이 문자 확인을 요청했어요 \(1건\)/ }).click()
+  await guardian.screenshot({ path: 'test-results/live-records.png', fullPage: true })
   await guardian.getByRole('button', { name: /엄마 님이 요청/ }).click()
   await expect(guardian.getByText('엄마 님이 확인을 요청했어요.')).toBeVisible()
   await expect(guardian.getByText('인증번호·개인정보 요구')).toBeVisible()
@@ -88,6 +91,10 @@ test('초대 → 수락 → 확인 요청 → 의견 → 자동 알림 흐름', 
   await page.screenshot({ path: 'test-results/family-reply-arrived.png' })
   await sheet.getByRole('button', { name: '닫기', exact: true }).click()
 
+  await guardian.getByRole('dialog', { name: '의견 보내기' }).getByRole('button', { name: '확인', exact: true }).click()
+  await guardian.getByRole('button', { name: '가족 보호 기록 보기', exact: true }).click()
+  await expect(guardian.locator('.history-my-reply-text').first()).toHaveText('위험해 보여요.')
+
   // 고령자: 자동 알림 동의 → '위험' 결과가 나오면 자동으로 보낸다.
   await page.goto(`${BASE}/#family/auto-alert`)
   await expect(page.getByText('입력한 문자 원문과 사진')).toBeVisible()
@@ -98,7 +105,7 @@ test('초대 → 수락 → 확인 요청 → 의견 → 자동 알림 흐름', 
 
   // 보호자: 기록에 자동 알림으로 들어온다.
   await guardian.goto(`${BASE}/#family/records/received`)
-  await expect(guardian.getByText(/자동 알림/).first()).toBeVisible()
+  await expect(guardian.getByText(/자동 알림/).first()).toBeVisible({ timeout: 12_000 })
   await expect(guardian.getByRole('button', { name: /엄마 님이 요청/ })).toHaveCount(2)
   await guardianContext.close()
 })

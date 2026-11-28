@@ -3,11 +3,13 @@ import type { FamilyRelation } from '../../api/family'
 import { useFamily } from '../../hooks/useFamily'
 import { relationLabels } from '../../family/labels'
 import { Icon } from '../Icons'
+import { OfficialGuide } from '../OfficialGuide'
+import { PremiumMembership } from '../PremiumMembership'
 import { Avatar, FamilyHeader, PushToggle } from './FamilyParts'
 import { RecordsPage, RequestPage } from './FamilyRequests'
 
 export type FamilyRoute =
-  | { name: 'protect' } | { name: 'premium' } | { name: 'connect' } | { name: 'auto-alert' }
+  | { name: 'official-guide' } | { name: 'protect' } | { name: 'premium' } | { name: 'connect' } | { name: 'auto-alert' }
   | { name: 'records'; box: 'sent' | 'received' } | { name: 'request'; id: string } | { name: 'invite'; token: string }
 
 export function parseFamilyRoute(hash: string): FamilyRoute | null {
@@ -15,7 +17,7 @@ export function parseFamilyRoute(hash: string): FamilyRoute | null {
   if (parts[0] !== 'family') return null
   const [, page, value] = parts
   if (!page) return { name: 'protect' }
-  if (page === 'premium' || page === 'connect' || page === 'auto-alert') return { name: page }
+  if (page === 'premium' || page === 'connect' || page === 'auto-alert' || page === 'official-guide') return { name: page }
   if (page === 'records') return { name: 'records', box: value === 'received' ? 'received' : 'sent' }
   if (page === 'request' && value) return { name: 'request', id: decodeURIComponent(value) }
   if (page === 'invite' && value) return { name: 'invite', token: decodeURIComponent(value) }
@@ -39,6 +41,7 @@ export function FamilyPages({ route, go }: { route: FamilyRoute; go: Go }) {
     </>
   }
   switch (route.name) {
+    case 'official-guide': return <OfficialGuide onBack={() => go('family')} />
     case 'premium': return <PremiumPage go={go} titleRef={title} />
     case 'connect': return <ConnectPage go={go} titleRef={title} />
     case 'auto-alert': return <AutoAlertPage go={go} titleRef={title} />
@@ -55,11 +58,6 @@ function errorText(error: unknown) {
   return error instanceof Error ? error.message : '요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.'
 }
 
-const features = [
-  { title: '가족에게 확인 요청', text: '버튼 하나로 분석 결과를 연결된 가족에게 보내요.' },
-  { title: '위험 메시지 자동 알림', text: "'위험'이 나오면 동의한 가족에게 자동으로 알려요." },
-  { title: '가족 보호 기록', text: '가족과 함께 확인한 내용을 7일 동안 모아 봐요.' },
-]
 
 function PremiumPage({ go, titleRef }: PageProps) {
   const family = useFamily()
@@ -72,32 +70,8 @@ function PremiumPage({ go, titleRef }: PageProps) {
     try { await family.actions.setPremium(true) } catch (e) { setError(errorText(e)) } finally { setPending(false) }
   }
   return <>
-    <FamilyHeader title="가족 보호 프리미엄" onBack={() => go('')} titleRef={titleRef} />
-    <main id="main" tabIndex={-1} className="flow-main family-main">
-      <div className="family-hero">
-        <span className={`family-hero-icon${started ? ' done' : ''}`} aria-hidden="true">{started ? '✓' : <Icon name="people" />}</span>
-        <h2>{started ? '프리미엄이 시작됐어요!' : '가족과 함께 사기를 막아요!'}</h2>
-        <p>{started ? '바로 가족을 연결해 보세요. 위험한 문자를 함께 확인할 수 있어요.'
-          : '위험한 문자가 오면 가족에게 바로 물어보고, 가족의 의견을 받아 볼 수 있어요.'}</p>
-      </div>
-      <section className="family-panel" aria-labelledby="premium-features">
-        <h3 id="premium-features">{started ? '지금부터 사용할 수 있어요' : '프리미엄 기능'}</h3>
-        <ul className="family-feature-list">
-          {features.map(feature => <li key={feature.title}>
-            <span className="family-feature-icon" aria-hidden="true">✓</span>
-            <span><strong>{feature.title}</strong>{!started && <small>{feature.text}</small>}</span>
-          </li>)}
-        </ul>
-      </section>
-      {!started && <div className="family-price">
-        <span>이용 금액</span><strong>시연용 · 실제 결제 없음</strong>
-      </div>}
-      {error && <p className="error-message" role="alert">{error}</p>}
-      {started
-        ? <button className="primary-button" onClick={() => go('family/connect')}>지금 가족 연결하기</button>
-        : <button className="primary-button" disabled={pending} onClick={start}>프리미엄 시작하기 (시연용)</button>}
-      <p className="hint family-note">발표 시연용 기능이에요. 결제 정보를 받지 않고, 가입 여부는 이 서버에만 기록돼요.</p>
-    </main>
+    <PremiumMembership active={started} pending={pending} onBack={() => go('')} onActivate={() => void start()} onConnect={() => go('family/connect')} />
+    {error && <p className="error-message" role="alert">{error}</p>}
   </>
 }
 
@@ -123,7 +97,7 @@ function ProtectPage({ go, titleRef }: PageProps) {
     <main id="main" tabIndex={-1} className="flow-main family-main">
       {summary?.premium && <section className="family-section" aria-labelledby="guardians-title">
         <div className="family-section-heading">
-          <h2 id="guardians-title">나를 지켜 주는 가족</h2>
+          <h2 id="guardians-title">연결된 가족</h2>
           {guardians.length > 0 && <button type="button" className="text-button" onClick={() => setEditing(!editing)}>
             {editing ? '완료' : '수정하기'}</button>}
         </div>
@@ -168,6 +142,7 @@ function ProtectPage({ go, titleRef }: PageProps) {
               <span className="family-badge">새 소식 {(summary?.waiting_requests ?? 0) + (summary?.new_replies ?? 0)}</span>}
             <Icon name="chevron" />
           </button>
+          <button className="family-row" onClick={() => go('family/official-guide')}><span><strong>공식 확인 가이드</strong><small>기관 및 은행의 공식 대응 방법을 확인할 수 있습니다.</small></span><Icon name="chevron" /></button>
           <PushToggle />
         </div>
       </section>
@@ -237,7 +212,7 @@ function ConnectPage({ go, titleRef }: PageProps) {
           <div className="family-choice-grid">
             {relations.map(value => <label key={value} className={`family-choice${relation === value ? ' selected' : ''}`}>
               <input type="radio" name="relation" value={value} checked={relation === value} onChange={() => setRelation(value)} />
-              {relation === value && <span aria-hidden="true">✓ </span>}{relationLabels[value]}
+              {relation === value && <span className="family-relation-check" aria-hidden="true" />}{relationLabels[value]}
             </label>)}
           </div>
         </fieldset>
@@ -246,7 +221,7 @@ function ConnectPage({ go, titleRef }: PageProps) {
           placeholder="예: 우리 딸" onChange={e => setName(e.target.value)} />
         <p className="hint">이름만 저장해요. 전화번호와 연락처 목록은 받지 않아요.</p>
         {error && <p className="error-message" role="alert">{error}</p>}
-        <button className="primary-button family-submit" disabled={pending || !name.trim()}><Icon name="share" />초대 링크 만들기</button>
+        <button className="primary-button family-submit" disabled={pending || !name.trim()}><img className="family-send-icon" src="/assets/icon-sent.svg" alt="" />초대 링크 만들기</button>
       </form> : <section className="family-panel" aria-labelledby="invite-ready">
         <h2 id="invite-ready">{invite.name} 님에게 보낼 초대가 준비됐어요</h2>
         <p>아래 버튼으로 카카오톡이나 문자에 보내 주세요. 링크는 24시간 안에 한 번만 쓸 수 있어요.</p>
@@ -353,15 +328,9 @@ function AutoAlertPage({ go, titleRef }: PageProps) {
         <h2>위험한 결과가 나오면 가족에게 자동으로 알릴까요?</h2>
         <p>분석 결과가 '위험'이면 공유 버튼을 누르지 않아도 고른 가족에게 바로 알려요.</p>
       </section>
-      <section className="family-panel family-consent" aria-labelledby="send-title">
-        <h3 id="send-title">가족에게 보내는 내용</h3>
-        <ul><li><span aria-hidden="true">✓</span> 위험 단계</li><li><span aria-hidden="true">✓</span> 발견된 위험 요소의 이름</li></ul>
-        <h3>보내지 않는 내용</h3>
-        <ul className="not-sent">
-          <li><span aria-hidden="true">✕</span> 입력한 문자 원문과 사진</li>
-          <li><span aria-hidden="true">✕</span> 링크 주소와 보낸 번호</li>
-          <li><span aria-hidden="true">✕</span> 내 위치와 연락처 목록</li>
-        </ul>
+      <section className="family-disclosure" aria-labelledby="send-title">
+        <div><h2 id="send-title">가족에게 보내는 내용</h2><ul>{['위험 단계', '발견된 위험 요소의 이름'].map(text => <li key={text}><span className="family-disclosure-check" aria-hidden="true"><img src="/assets/icon-check.svg" alt="" /></span>{text}</li>)}</ul></div>
+        <div><h2>보내지 않는 내용</h2><ul>{['입력한 문자 원문과 사진', '링크 주소와 보낸 번호', '내 위치와 연락처 목록'].map(text => <li key={text}><span className="family-disclosure-no" aria-hidden="true"><Icon name="close" /></span>{text}</li>)}</ul></div>
       </section>
       {guardians.length === 0 ? <>
         <p className="instruction-panel">먼저 가족을 연결하고, 가족이 초대를 수락해야 켤 수 있어요.</p>
@@ -380,6 +349,7 @@ function AutoAlertPage({ go, titleRef }: PageProps) {
           ? <button className="secondary-button family-submit" disabled={pending} onClick={() => save(null)}>자동 알림 끄기</button>
           : <button className="primary-button family-submit" disabled={pending || !choice} onClick={() => save(choice)}>동의하고 자동 알림 켜기</button>}
       </>}
+      <button className="family-outline-button" onClick={() => go('family/connect')}>＋ 가족 추가하기</button>
       <p className="family-feedback" role="status">{message}</p>
     </main>
   </>
