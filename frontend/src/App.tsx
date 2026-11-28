@@ -3,6 +3,7 @@ import { AnalysisForm } from './components/AnalysisForm'
 import { AnalysisResult } from './components/AnalysisResult'
 import { FamilyShare } from './components/FamilyShare'
 import { GuardianShare } from './components/GuardianShare'
+import { initialHistoryReplies, type HistoryBox } from './components/FamilyHistory'
 import { guardianPreview } from './guardianPreview'
 import { FamilyDevelopmentPanel, FamilyProtectionCard, initialFamilyPreview, type FamilyPreviewState } from './components/FamilyPreview'
 import { Icon } from './components/Icons'
@@ -33,6 +34,9 @@ export default function App() {
   const [large, setLarge] = useState(false)
   const [familyPreview, setFamilyPreview] = useState<FamilyPreviewState>(initialFamilyPreview)
   const premium = familyPreview !== 'free'
+  const [historyBox, setHistoryBox] = useState<HistoryBox>('sent')
+  const [historyReplies, setHistoryReplies] = useState<Record<string, string>>(initialHistoryReplies)
+  const saveHistoryReply = (id: string, reply: string) => setHistoryReplies(previous => ({ ...previous, [id]: reply }))
   const [familyEntry, setFamilyEntry] = useState<'overview' | 'connect' | 'history'>('overview')
   const [familyModel, setFamilyModel] = useState(() => createFamilyModel(initialFamilyPreview === 'paid-connected'))
   const connectedMembers = familyModel.members.filter(member => member.status === 'connected')
@@ -95,7 +99,7 @@ export default function App() {
         본문 바로가기
       </a>
       {page === 'guardian' ? (
-        <GuardianShare request={import.meta.env.DEV && routeHash === '#family/share/preview' ? guardianPreview : null} onBack={() => navigate('home')} onHistory={() => { setFamilyEntry('history'); navigate('family') }} />
+        <GuardianShare request={import.meta.env.DEV && routeHash === '#family/share/preview' ? guardianPreview : null} onBack={() => navigate('home')} initialReply={historyReplies.delivery} onReply={reply => saveHistoryReply('delivery', reply)} onHistory={() => { setHistoryBox('received'); setFamilyEntry('history'); navigate('family') }} />
       ) : shareOpen && analysis.result && premium ? (
         <FamilyShare result={analysis.result} members={familyModel.members} onBack={() => setShareOpen(false)} onHome={() => navigate('home')} onConnect={() => { setFamilyEntry('connect'); navigate('family') }} />
       ) : page === 'premium' ? (
@@ -105,7 +109,7 @@ export default function App() {
           setFamilyModel(createFamilyModel(false))
         }} onConnect={() => { setFamilyEntry('connect'); navigate('family') }} />
       ) : page === 'family' ? (
-        premium ? <FamilyProtectionFlow initialScreen={familyEntry} model={familyModel} setModel={setFamilyModel} onHome={() => navigate('home')} />
+        premium ? <FamilyProtectionFlow historyBox={historyBox} onChangeHistoryBox={setHistoryBox} historyReplies={historyReplies} onHistoryReply={saveHistoryReply} initialScreen={familyEntry} model={familyModel} setModel={setFamilyModel} onHome={() => navigate('home')} />
           : <main id="main" className="flow-main"><h1>가족 보호</h1><p>프리미엄 이용권으로 사용할 수 있어요.</p><button className="primary-button" onClick={() => navigate('home')}>홈으로</button></main>
       ) : page === 'home' ? (
         <>
@@ -336,7 +340,7 @@ export default function App() {
           </>
         )}
       </dialog>
-      {import.meta.env.DEV && <FamilyDevelopmentPanel onOpenGuardian={() => navigate('guardian')} state={familyPreview} onChange={state => {
+      {import.meta.env.DEV && <FamilyDevelopmentPanel historyBox={historyBox} onHistoryBoxChange={setHistoryBox} onOpenHistory={() => { setFamilyEntry('history'); navigate('family') }} onOpenGuardian={() => navigate('guardian')} state={familyPreview} onChange={state => {
         setFamilyPreview(state)
         setFamilyModel(createFamilyModel(state === 'paid-connected'))
         if (page === 'family' && state === 'free') navigate('home')

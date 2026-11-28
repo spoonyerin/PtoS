@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { Icon } from './Icons'
+import { OfficialGuide } from './OfficialGuide'
+import { FamilyHistory, type HistoryBox } from './FamilyHistory'
 import type { FamilyModel, FamilyMember } from '../familyModel'
 
 type Screen = 'overview' | 'auto' | 'connect' | 'history' | 'official-guide'
 type Dialog = 'contacts' | 'recipient' | null
-export function FamilyProtectionFlow({ model, setModel, onHome, initialScreen = 'overview' }: {
-  model: FamilyModel; setModel: Dispatch<SetStateAction<FamilyModel>>; onHome: () => void; initialScreen?: 'overview' | 'connect' | 'history'
+export function FamilyProtectionFlow({ model, setModel, onHome, initialScreen = 'overview', historyBox = 'sent', onChangeHistoryBox = () => {}, historyReplies = {}, onHistoryReply = () => {} }: {
+  model: FamilyModel; setModel: Dispatch<SetStateAction<FamilyModel>>; onHome: () => void; initialScreen?: 'overview' | 'connect' | 'history'; historyBox?: HistoryBox; onChangeHistoryBox?: (box: HistoryBox) => void; historyReplies?: Record<string, string>; onHistoryReply?: (id: string, reply: string) => void
 }) {
   const [screen, setScreen] = useState<Screen>(initialScreen)
   const [editing, setEditing] = useState(false)
@@ -37,6 +39,8 @@ export function FamilyProtectionFlow({ model, setModel, onHome, initialScreen = 
     }))
     setNotice('미리보기에서 가족을 삭제했어요. 실제 연결에는 영향을 주지 않습니다.')
   }
+  if (screen === 'official-guide') return <OfficialGuide onBack={() => go('overview')} />
+  if (screen === 'history') return <FamilyHistory box={historyBox} onChangeBox={onChangeHistoryBox} replies={historyReplies} onReply={onHistoryReply} onBack={() => go('overview')} />
   return <>
     <header className="page-header family-flow-header">
       <button className="icon-button" aria-label={screen === 'overview' ? '홈으로 돌아가기' : '가족 보호로 돌아가기'} onClick={() => screen === 'overview' ? onHome() : go('overview')}><Icon name="back" /></button>
@@ -96,8 +100,6 @@ export function FamilyProtectionFlow({ model, setModel, onHome, initialScreen = 
         {error && <p id="family-phone-error" role="alert" className="error-message">{error}</p>}
         <button className="primary-button family-primary family-send" type="submit"><img className="family-send-icon" src="/assets/icon-sent.svg" width="28" height="28" alt="" />초대 보내기</button>
       </form>}
-      {screen === 'history' && <section className="family-alert-intro"><h2>아직 보호 기록이 없어요.</h2><p>기록 화면은 준비 중입니다. 분석 결과나 원문을 저장하지 않습니다.</p></section>}
-      {screen === 'official-guide' && <section className="family-alert-intro"><h2>공식 확인 가이드를 준비하고 있어요.</h2><p>기관 및 은행의 공식 대응 방법과 확인 경로를 안내할 예정입니다.</p></section>}
       {notice && <p role="status" className="family-flow-notice">{notice}</p>}
     </main>
     <dialog ref={dialog} aria-labelledby="family-choice-title" onCancel={() => setModal(null)} onClose={() => setModal(null)}>
